@@ -1,0 +1,535 @@
+// OpenIM 用户管理协议定义
+// 定义用户相关的数据结构和 gRPC 服务接口
+syntax = "proto3";
+package openim.user;
+
+// 导入依赖的 proto 文件
+import "conversation/conversation.proto";
+import "sdkws/sdkws.proto";
+import "wrapperspb/wrapperspb.proto";
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/user";
+
+// ================================ 用户管理 ================================
+
+// 获取所有用户ID请求
+message getAllUserIDReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+}
+
+// 获取所有用户ID响应
+message getAllUserIDResp {
+  int32 total = 1;           // 总数
+  repeated string userIDs = 2; // 用户ID列表
+}
+
+// 账号检查请求
+message accountCheckReq {
+  repeated string checkUserIDs = 1;  // 需要检查的用户ID列表
+}
+
+// 账号检查响应
+message accountCheckResp {
+  // 单个用户状态
+  message singleUserStatus {
+    string userID = 1;        // 用户ID
+    int32 accountStatus = 2;  // 账号状态(0-正常, 1-禁用)
+  }
+  repeated singleUserStatus results = 1;  // 检查结果列表
+}
+
+// 获取指定用户信息请求
+message getDesignateUsersReq {
+  repeated string userIDs = 1;  // 用户ID列表
+}
+
+// 获取指定用户信息响应
+message getDesignateUsersResp {
+  repeated openim.sdkws.UserInfo usersInfo = 1;  // 用户信息列表
+}
+
+// 更新用户信息请求
+message updateUserInfoReq {
+  openim.sdkws.UserInfo userInfo = 1;  // 用户信息
+}
+
+// 更新用户信息响应
+message updateUserInfoResp {}
+
+// 更新用户信息(扩展)请求
+message updateUserInfoExReq {
+  openim.sdkws.UserInfoWithEx userInfo = 1;  // 用户信息(带可选字段)
+}
+
+// 更新用户信息(扩展)响应
+message updateUserInfoExResp {}
+
+// 设置全局消息接收选项请求
+message setGlobalRecvMessageOptReq {
+  string userID = 1;              // 用户ID
+  int32 globalRecvMsgOpt = 3;     // 全局消息接收选项(0-接收, 1-不接收, 2-接收但不通知)
+}
+
+// 设置全局消息接收选项响应
+message setGlobalRecvMessageOptResp {}
+
+// 设置会话请求
+message setConversationReq {
+  openim.conversation.Conversation conversation = 1;  // 会话信息
+  int32 notificationType = 2;                          // 通知类型
+  string operationID = 3;                              // 操作ID
+}
+
+// 设置会话响应
+message setConversationResp {}
+
+// 设置消息接收选项请求
+message setRecvMsgOptReq {
+  string ownerUserID = 1;      // 所有者ID
+  string conversationID = 2;   // 会话ID
+  int32 recvMsgOpt = 3;        // 消息接收选项
+  int32 notificationType = 4;  // 通知类型
+  string operationID = 5;      // 操作ID
+}
+
+// 设置消息接收选项响应
+message setRecvMsgOptResp {}
+
+// 获取会话请求
+message getConversationReq {
+  string conversationID = 1;  // 会话ID
+  string ownerUserID = 2;     // 所有者ID
+  string operationID = 3;     // 操作ID
+}
+
+// 获取会话响应
+message getConversationResp {
+  openim.conversation.Conversation conversation = 2;  // 会话信息
+}
+
+// 获取多个会话请求
+message getConversationsReq {
+  string ownerUserID = 1;              // 所有者ID
+  repeated string conversationIDs = 2; // 会话ID列表
+  string operationID = 3;              // 操作ID
+}
+
+// 获取多个会话响应
+message getConversationsResp {
+  repeated openim.conversation.Conversation conversations = 2; // 会话列表
+}
+
+// 获取所有会话请求
+message getAllConversationsReq {
+  string ownerUserID = 1;  // 所有者ID
+  string operationID = 2;  // 操作ID
+}
+
+// 获取所有会话响应
+message getAllConversationsResp {
+  repeated openim.conversation.Conversation conversations = 2; // 会话列表
+}
+
+// 批量设置会话请求
+message batchSetConversationsReq {
+  repeated openim.conversation.Conversation conversations = 1; // 会话列表
+  string OwnerUserID = 2;                                     // 所有者ID
+  int32 notificationType = 3;                                  // 通知类型
+  string OperationID = 4;                                      // 操作ID
+}
+
+// 批量设置会话响应
+message batchSetConversationsResp {
+  repeated string Success = 2;  // 成功的会话ID列表
+  repeated string Failed = 3;   // 失败的会话ID列表
+}
+
+// 分页获取用户请求
+message getPaginationUsersReq {
+  openim.sdkws.RequestPagination pagination = 2;  // 分页参数
+  string userID = 3;                              // 用户ID(可选，用于精确查找)
+  string nickName = 4;                            // 昵称(可选，用于模糊搜索)
+}
+
+// 分页获取用户响应
+message getPaginationUsersResp {
+  int32 total = 1;                              // 总数
+  repeated openim.sdkws.UserInfo users = 2;      // 用户信息列表
+}
+
+// 用户注册请求
+message userRegisterReq {
+  repeated openim.sdkws.UserInfo users = 1;  // 用户信息列表
+}
+
+// 用户注册响应
+message userRegisterResp {}
+
+// 获取全局消息接收选项请求
+message getGlobalRecvMessageOptReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取全局消息接收选项响应
+message getGlobalRecvMessageOptResp {
+  int32 globalRecvMsgOpt = 1;  // 全局消息接收选项
+}
+
+// 用户注册统计请求
+message userRegisterCountReq {
+  int64 start = 1;  // 开始时间戳
+  int64 end = 2;    // 结束时间戳
+}
+
+// 用户注册统计响应
+message userRegisterCountResp {
+  int64 total = 1;            // 总用户数
+  int64 before = 2;           // 开始时间前的用户数
+  map<string, int64> count = 3; // 时间段内每日注册数
+}
+
+// 订阅或取消订阅用户状态请求
+message subscribeOrCancelUsersStatusReq {
+  string userID = 1;           // 当前用户ID
+  repeated string userIDs = 2; // 目标用户ID列表
+  int32 genre = 3;             // 操作类型(1-订阅, 2-取消订阅)
+}
+
+// 订阅或取消订阅用户状态响应
+message subscribeOrCancelUsersStatusResp {
+  repeated onlineStatus statusList = 1;  // 用户在线状态列表
+}
+
+// 获取订阅用户状态请求
+message getSubscribeUsersStatusReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取订阅用户状态响应
+message getSubscribeUsersStatusResp {
+  repeated onlineStatus statusList = 1;  // 用户在线状态列表
+}
+
+// 用户在线状态
+message onlineStatus {
+  string userID = 1;           // 用户ID
+  int32 status = 2;            // 在线状态(1-在线, 0-离线)
+  repeated int32 platformIDs = 3; // 在线平台ID列表
+}
+
+// 获取用户状态请求
+message getUserStatusReq {
+  string userID = 1;           // 当前用户ID
+  repeated string userIDs = 2; // 目标用户ID列表
+}
+
+// 获取用户状态响应
+message getUserStatusResp {
+  repeated onlineStatus statusList = 1;  // 用户在线状态列表
+}
+
+// 设置用户状态请求(网关使用)
+message setUserStatusReq {
+  string userID = 1;      // 用户ID
+  int32 status = 2;       // 在线状态
+  int32 platformID = 3;   // 平台ID
+  string connID = 4;      // 连接ID
+  bool isBackground = 5;  // 是否后台运行
+}
+
+// 设置用户状态响应
+message setUserStatusResp {}
+
+// 用户在线状态信息
+message userOnlineStatus {
+  string userID = 1;           // 用户ID
+  string connID = 2;           // 连接ID
+  repeated int32 online = 3;   // 上线平台列表
+  repeated int32 offline = 4;  // 下线平台列表
+}
+
+// 批量设置用户在线状态请求
+message setUserOnlineStatusReq {
+  repeated userOnlineStatus status = 1;  // 用户在线状态列表
+}
+
+// 批量设置用户在线状态响应
+message setUserOnlineStatusResp {}
+
+// ================================ 用户命令处理 ================================
+
+// 添加用户命令请求
+message processUserCommandAddReq {
+  string userID = 1;                               // 用户ID
+  int32 type = 2;                                  // 命令类型
+  string uuid = 3;                                 // 命令唯一标识
+  openim.wrapperspb.StringValue value = 4;         // 命令值(可选)
+  openim.wrapperspb.StringValue ex = 5;            // 扩展字段(可选)
+}
+
+// 添加用户命令响应
+message processUserCommandAddResp {}
+
+// 删除用户命令请求
+message processUserCommandDeleteReq {
+  string userID = 1;  // 用户ID
+  int32 type = 2;     // 命令类型
+  string uuid = 3;    // 命令唯一标识
+}
+
+// 删除用户命令响应
+message processUserCommandDeleteResp {}
+
+// 更新用户命令请求
+message processUserCommandUpdateReq {
+  string userID = 1;                               // 用户ID
+  int32 type = 2;                                  // 命令类型
+  string uuid = 3;                                 // 命令唯一标识
+  openim.wrapperspb.StringValue value = 4;         // 命令值(可选)
+  openim.wrapperspb.StringValue ex = 5;            // 扩展字段(可选)
+}
+
+// 更新用户命令响应
+message processUserCommandUpdateResp {}
+
+// 获取用户命令请求
+message processUserCommandGetReq {
+  string userID = 1;  // 用户ID
+  int32 type = 2;     // 命令类型
+}
+
+// 命令信息响应
+message CommandInfoResp {
+  int32 type = 1;      // 命令类型
+  int64 createTime = 2; // 创建时间戳
+  string uuid = 3;     // 命令唯一标识
+  string value = 4;    // 命令值
+  string ex = 5;       // 扩展字段
+}
+
+// 获取用户命令响应
+message processUserCommandGetResp {
+  repeated CommandInfoResp CommandResp = 1;  // 命令列表
+}
+
+// 获取所有用户命令请求
+message processUserCommandGetAllReq {
+  string userID = 1;  // 用户ID
+}
+
+// 所有命令信息响应
+message AllCommandInfoResp {
+  int32 type = 1;      // 命令类型
+  int64 createTime = 2; // 创建时间戳
+  string uuid = 3;     // 命令唯一标识
+  string value = 4;    // 命令值
+  string ex = 5;       // 扩展字段
+}
+
+// 获取所有用户命令响应
+message processUserCommandGetAllResp {
+  repeated AllCommandInfoResp CommandResp = 1;  // 命令列表
+}
+
+// ================================ 通知账户管理 ================================
+
+// 添加通知账户请求
+message addNotificationAccountReq {
+  string userID = 1;           // 用户ID
+  string nickName = 2;         // 昵称
+  string faceURL = 3;          // 头像URL
+  int32 appMangerLevel = 4;    // 应用管理员级别
+}
+
+// 添加通知账户响应
+message addNotificationAccountResp {
+  string userID = 1;           // 用户ID
+  string faceURL = 2;          // 头像URL
+  string nickName = 3;         // 昵称
+  int32 appMangerLevel = 4;    // 应用管理员级别
+}
+
+// 更新通知账户信息请求
+message updateNotificationAccountInfoReq {
+  string userID = 1;      // 用户ID
+  string faceURL = 2;     // 头像URL
+  string nickName = 3;    // 昵称
+}
+
+// 更新通知账户信息响应
+message updateNotificationAccountInfoResp {}
+
+// 搜索通知账户请求
+message searchNotificationAccountReq {
+  string keyword = 1;                            // 搜索关键词
+  optional int32 appManagerLevel = 2;            // 应用管理员级别(可选)
+  openim.sdkws.RequestPagination pagination = 3; // 分页参数
+}
+
+// 通知账户信息
+message notificationAccountInfo {
+  string userID = 1;           // 用户ID
+  string faceURL = 2;          // 头像URL
+  string nickName = 3;         // 昵称
+  int32 appMangerLevel = 4;    // 应用管理员级别
+}
+
+// 搜索通知账户响应
+message searchNotificationAccountResp {
+  int64 total = 1;                               // 总数
+  repeated notificationAccountInfo notificationAccounts = 2; // 通知账户列表
+}
+
+// 获取通知账户请求
+message getNotificationAccountReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取通知账户响应
+message getNotificationAccountResp {
+    notificationAccountInfo account = 1;  // 通知账户信息
+}
+
+// ================================ 排序查询 ================================
+
+// 排序查询请求
+message sortQueryReq {
+  bool asc = 1;                           // 是否升序
+  map<string, string> userIDName = 2;     // 用户ID和名称映射
+}
+
+// 排序查询响应
+message sortQueryResp {
+  repeated openim.sdkws.UserInfo users = 2; // 用户信息列表
+}
+
+// ================================ 在线用户管理 ================================
+
+// 获取所有在线用户请求
+message getAllOnlineUsersReq {
+  uint64 cursor = 1;  // 游标位置
+}
+
+// 获取所有在线用户响应
+message getAllOnlineUsersResp {
+  repeated onlineStatus StatusList = 1;  // 在线状态列表
+  uint64 nextCursor = 2;                 // 下一页游标
+}
+
+// ================================ 客户端配置 ================================
+
+// 获取用户客户端配置请求
+message getUserClientConfigReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取用户客户端配置响应
+message getUserClientConfigResp {
+  map<string,string> configs = 2;  // 配置键值对
+}
+
+// 设置用户客户端配置请求
+message setUserClientConfigReq {
+  string userID = 1;               // 用户ID
+  map<string,string> configs = 2;  // 配置键值对
+}
+
+// 设置用户客户端配置响应
+message setUserClientConfigResp {
+}
+
+// 删除用户客户端配置请求
+message delUserClientConfigReq {
+  string userID = 1;           // 用户ID
+  repeated string keys = 2;    // 要删除的配置键列表
+}
+
+// 删除用户客户端配置响应
+message delUserClientConfigResp {
+}
+
+// 分页获取用户客户端配置请求
+message pageUserClientConfigReq {
+  string userID = 1;                                // 用户ID
+  string key = 2;                                   // 配置键(可选，用于模糊匹配)
+  openim.sdkws.RequestPagination pagination = 3;    // 分页参数
+}
+
+// 分页获取用户客户端配置响应
+message pageUserClientConfigResp {
+  int64 total = 1;            // 总数
+  repeated clientConfig configs = 2; // 配置列表
+}
+
+// 客户端配置信息
+message clientConfig {
+  string key = 1;    // 配置键
+  string userID = 2; // 用户ID
+  string value = 3;  // 配置值
+}
+
+// ================================ 服务定义 ================================
+
+// 用户管理服务
+service user {
+  // 获取指定用户信息(完整字段)
+  rpc getDesignateUsers(getDesignateUsersReq) returns (getDesignateUsersResp);
+  // 更新用户信息
+  rpc updateUserInfo(updateUserInfoReq) returns (updateUserInfoResp);
+  // 更新用户信息(扩展)
+  rpc updateUserInfoEx(updateUserInfoExReq) returns (updateUserInfoExResp);
+  // 设置用户全局消息接收选项
+  rpc setGlobalRecvMessageOpt(setGlobalRecvMessageOptReq) returns (setGlobalRecvMessageOptResp);
+  // 获取用户全局消息接收选项(未找到时不报错)
+  rpc getGlobalRecvMessageOpt(getGlobalRecvMessageOptReq) returns (getGlobalRecvMessageOptResp);
+  // 检查用户ID是否存在
+  rpc accountCheck(accountCheckReq) returns (accountCheckResp);
+  // 分页获取用户信息(或按用户ID、昵称查询)
+  rpc getPaginationUsers(getPaginationUsersReq) returns (getPaginationUsersResp);
+  // 用户注册
+  rpc userRegister(userRegisterReq) returns (userRegisterResp);
+  // 获取所有用户ID
+  rpc getAllUserID(getAllUserIDReq) returns (getAllUserIDResp);
+  // 获取指定时间段内的用户总数和增量
+  rpc userRegisterCount(userRegisterCountReq) returns (userRegisterCountResp);
+  // 订阅或取消订阅用户在线状态
+  rpc subscribeOrCancelUsersStatus(subscribeOrCancelUsersStatusReq) returns (subscribeOrCancelUsersStatusResp);
+  // 获取订阅用户的在线状态
+  rpc getSubscribeUsersStatus(getSubscribeUsersStatusReq) returns (getSubscribeUsersStatusResp);
+  // 获取用户在线状态
+  rpc getUserStatus(getUserStatusReq) returns (getUserStatusResp);
+  // 网关同步用户在线状态到Redis
+  rpc setUserStatus(setUserStatusReq) returns (setUserStatusResp);
+  // 添加用户命令
+  rpc processUserCommandAdd(processUserCommandAddReq) returns (processUserCommandAddResp);
+  // 更新用户命令
+  rpc processUserCommandUpdate(processUserCommandUpdateReq) returns (processUserCommandUpdateResp);
+  // 删除用户命令
+  rpc processUserCommandDelete(processUserCommandDeleteReq) returns (processUserCommandDeleteResp);
+  // 获取用户命令
+  rpc processUserCommandGet(processUserCommandGetReq) returns (processUserCommandGetResp);
+  // 获取所有用户命令
+  rpc processUserCommandGetAll(processUserCommandGetAllReq) returns (processUserCommandGetAllResp);
+  // 添加系统通知账户
+  rpc addNotificationAccount(addNotificationAccountReq) returns (addNotificationAccountResp);
+  // 更新系统通知账户信息
+  rpc updateNotificationAccountInfo(updateNotificationAccountInfoReq) returns (updateNotificationAccountInfoResp);
+  // 搜索系统通知账户
+  rpc searchNotificationAccount(searchNotificationAccountReq) returns (searchNotificationAccountResp);
+  // 按用户ID获取通知账户
+  rpc getNotificationAccount(getNotificationAccountReq) returns (getNotificationAccountResp);
+  // 排序查询用户
+  rpc sortQuery(sortQueryReq) returns (sortQueryResp);
+  // 批量设置用户在线状态
+  rpc setUserOnlineStatus(setUserOnlineStatusReq) returns (setUserOnlineStatusResp);
+  // 获取所有在线用户
+  rpc getAllOnlineUsers(getAllOnlineUsersReq) returns (getAllOnlineUsersResp);
+  // 获取用户客户端配置
+  rpc getUserClientConfig(getUserClientConfigReq) returns (getUserClientConfigResp);
+  // 设置用户客户端配置
+  rpc setUserClientConfig(setUserClientConfigReq) returns (setUserClientConfigResp);
+  // 删除用户客户端配置
+  rpc delUserClientConfig(delUserClientConfigReq) returns (delUserClientConfigResp);
+  // 分页获取用户客户端配置
+  rpc pageUserClientConfig(pageUserClientConfigReq) returns (pageUserClientConfigResp);
+}

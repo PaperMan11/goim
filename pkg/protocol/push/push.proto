@@ -1,0 +1,26 @@
+syntax = "proto3";
+package openim.push;
+
+import "sdkws/sdkws.proto";
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/push";
+
+message PushMsgReq {
+  openim.sdkws.MsgData msgData = 1;
+  string conversationID = 2;
+  repeated string userIDs = 3;
+}
+
+message PushMsgResp {}
+
+message DelUserPushTokenReq {
+  string userID = 1;
+  int32 platformID = 2;
+}
+
+message DelUserPushTokenResp {}
+
+service PushMsgService {
+  rpc PushMsg(PushMsgReq) returns (PushMsgResp);
+  rpc DelUserPushToken(DelUserPushTokenReq) returns (DelUserPushTokenResp);
+}

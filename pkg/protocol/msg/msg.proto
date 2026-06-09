@@ -1,0 +1,572 @@
+syntax = "proto3";
+package openim.msg;
+
+import "conversation/conversation.proto";
+import "sdkws/sdkws.proto";
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/msg";
+
+// ================================ MQ消息数据结构 ================================
+
+// 发送到MQ的消息数据
+message MsgDataToMQ {
+  string token = 1;                      // 用户Token
+  openim.sdkws.MsgData msgData = 2;      // 消息数据
+}
+
+// 写入数据库的消息数据
+message MsgDataToDB {
+  openim.sdkws.MsgData msgData = 1;      // 消息数据
+}
+
+// 推送消息到MQ
+message PushMsgDataToMQ {
+  openim.sdkws.MsgData msgData = 1;      // 消息数据
+  string conversationID = 2;             // 会话ID
+}
+
+// 通过MQ写入Mongo的消息数据
+message MsgDataToMongoByMQ {
+  int64 lastSeq = 1;                     // 最后消息序列号
+  string conversationID = 2;             // 会话ID
+  repeated openim.sdkws.MsgData msgData = 3; // 消息数据列表
+}
+
+// ================================ 序列号管理 ================================
+
+// 获取最大最小序列号请求
+message GetMaxAndMinSeqReq {
+  string UserID = 1;  // 用户ID
+}
+
+// 获取最大最小序列号响应
+message GetMaxAndMinSeqResp {
+  int64 MaxSeq = 1;   // 最大序列号
+  int64 MinSeq = 2;   // 最小序列号
+}
+
+// ================================ 消息发送 ================================
+
+// 发送消息请求
+message SendMsgReq {
+  openim.sdkws.MsgData msgData = 3;  // 消息数据
+}
+
+// 发送消息响应
+message SendMsgResp {
+  string serverMsgID = 1;            // 服务端消息ID
+  string clientMsgID = 2;            // 客户端消息ID
+  int64 sendTime = 3;                // 发送时间戳
+  openim.sdkws.MsgData modify = 4;   // 修改后的消息数据
+}
+
+// 发送简单消息请求
+message SendSimpleMsgReq {
+  openim.sdkws.MsgData msgData = 3;  // 消息数据
+}
+
+// 发送简单消息响应
+message SendSimpleMsgResp {
+  string serverMsgID = 1;            // 服务端消息ID
+  string clientMsgID = 2;            // 客户端消息ID
+  int64 sendTime = 3;                // 发送时间戳
+  openim.sdkws.MsgData modify = 4;   // 修改后的消息数据
+}
+
+// ================================ 消息状态管理 ================================
+
+// 设置消息发送状态请求
+message SetSendMsgStatusReq {
+  int32 status = 1;  // 状态值
+}
+
+// 设置消息发送状态响应
+message SetSendMsgStatusResp {}
+
+// 获取消息发送状态请求
+message GetSendMsgStatusReq {}
+
+// 获取消息发送状态响应
+message GetSendMsgStatusResp {
+  int32 status = 1;  // 当前状态值
+}
+
+// 通过MQ修改消息数据
+message MsgDataToModifyByMQ {
+  repeated openim.sdkws.MsgData messages = 1; // 消息列表
+  string conversationID = 2;                  // 会话ID
+}
+
+// 删除消息请求(保留)
+message DelMsgsReq {}
+
+// 删除消息响应(保留)
+message DelMsgsResp {}
+
+// ================================ 消息撤回 ================================
+
+// 撤回消息请求
+message RevokeMsgReq {
+  string conversationID = 1;  // 会话ID
+  int64 seq = 2;             // 消息序列号
+  string userID = 3;         // 用户ID
+}
+
+// 撤回消息响应
+message RevokeMsgResp {}
+
+// ================================ 已读标记 ================================
+
+// 标记消息为已读请求
+message MarkMsgsAsReadReq {
+  string conversationID = 1;  // 会话ID
+  repeated int64 seqs = 2;   // 消息序列号列表
+  string userID = 3;         // 用户ID
+}
+
+// 标记消息为已读响应
+message MarkMsgsAsReadResp {}
+
+// 标记会话为已读请求
+message MarkConversationAsReadReq {
+  string conversationID = 1;  // 会话ID
+  string userID = 2;          // 用户ID
+  int64 hasReadSeq = 3;       // 已读序列号
+  repeated int64 seqs = 4;    // 消息序列号列表
+}
+
+// 标记会话为已读响应
+message MarkConversationAsReadResp {}
+
+// 设置会话已读序列号请求
+message SetConversationHasReadSeqReq {
+  string conversationID = 1;  // 会话ID
+  string userID = 2;          // 用户ID
+  int64 hasReadSeq = 3;       // 已读序列号
+  bool noNotification = 4;    // 是否不发送通知
+}
+
+// 设置会话已读序列号响应
+message SetConversationHasReadSeqResp {}
+
+// ================================ 消息删除 ================================
+
+// 删除同步选项
+message DeleteSyncOpt {
+  bool IsSyncSelf = 3;   // 是否同步到自己的其他设备
+  bool IsSyncOther = 4;  // 是否同步到其他用户
+}
+
+// 清空会话消息请求
+message ClearConversationsMsgReq {
+  repeated string conversationIDs = 1; // 会话ID列表
+  string userID = 2;                   // 用户ID
+  DeleteSyncOpt deleteSyncOpt = 3;     // 删除同步选项
+}
+
+// 清空会话消息响应
+message ClearConversationsMsgResp {}
+
+// 用户清空所有消息请求
+message UserClearAllMsgReq {
+  string userID = 1;                   // 用户ID
+  DeleteSyncOpt deleteSyncOpt = 3;     // 删除同步选项
+}
+
+// 用户清空所有消息响应
+message UserClearAllMsgResp {}
+
+// 删除指定消息请求
+message DeleteMsgsReq {
+  string conversationID = 1;            // 会话ID
+  repeated int64 seqs = 2;             // 消息序列号列表
+  string userID = 3;                   // 用户ID
+  DeleteSyncOpt deleteSyncOpt = 4;     // 删除同步选项
+}
+
+// 删除指定消息响应
+message DeleteMsgsResp {}
+
+// 物理删除消息请求(按时间戳)
+message DeleteMsgPhysicalReq {
+  repeated string conversationIDs = 1; // 会话ID列表
+  int64 timestamp = 2;                // 时间戳(删除该时间之前的消息)
+}
+
+// 物理删除消息响应
+message DeleteMsgPhysicalResp {}
+
+// 物理删除消息请求(按序列号)
+message DeleteMsgPhysicalBySeqReq {
+  string conversationID = 1;           // 会话ID
+  repeated int64 seqs = 2;            // 消息序列号列表
+}
+
+// 物理删除消息响应(按序列号)
+message DeleteMsgPhysicalBySeqResp {}
+
+// ================================ 序列号查询 ================================
+
+// 获取多个会话最大序列号请求
+message GetMaxSeqsReq {
+  repeated string conversationIDs = 1;  // 会话ID列表
+}
+
+// 获取已读序列号请求
+message GetHasReadSeqsReq {
+  string userID = 1;                    // 用户ID
+  repeated string conversationIDs = 2;   // 会话ID列表
+}
+
+// 序列号信息响应
+message SeqsInfoResp {
+  map<string, int64> maxSeqs = 1;       // 会话ID到最大序列号的映射
+}
+
+// 获取最新消息请求
+message GetMsgByConversationIDsReq {
+  repeated string conversationIDs = 1;   // 会话ID列表
+  map<string, int64> maxSeqs = 2;       // 各会话当前最大序列号
+}
+
+// 获取最新消息响应
+message GetMsgByConversationIDsResp {
+  map<string, openim.sdkws.MsgData> msgDatas = 1; // 会话ID到消息数据的映射
+}
+
+// 获取会话最大序列号请求
+message GetConversationMaxSeqReq {
+  string conversationID = 1;  // 会话ID
+}
+
+// 获取会话最大序列号响应
+message GetConversationMaxSeqResp {
+  int64 maxSeq = 1;  // 最大序列号
+}
+
+// 获取会话已读和最大序列号请求
+message GetConversationsHasReadAndMaxSeqReq {
+  string userID = 1;                    // 用户ID
+  repeated string conversationIDs = 2;   // 会话ID列表
+  bool returnPinned = 3;                // 是否返回置顶会话
+}
+
+// 序列号信息
+message Seqs {
+  int64 maxSeq = 1;        // 最大序列号
+  int64 hasReadSeq = 2;    // 已读序列号
+  int64 maxSeqTime = 3;    // 最大序列号对应的时间戳
+}
+
+// 获取会话已读和最大序列号响应
+message GetConversationsHasReadAndMaxSeqResp {
+  map<string, Seqs> seqs = 1;                   // 会话ID到序列号信息的映射
+  repeated string pinnedConversationIDs = 2;    // 置顶会话ID列表
+}
+
+// ================================ 活跃统计 ================================
+
+// 获取活跃用户请求
+message GetActiveUserReq {
+  int64 start = 1;                              // 开始时间戳
+  int64 end = 2;                                // 结束时间戳
+  bool ase = 3;                                 // 是否升序排序
+  bool group = 4;                               // 是否统计群组消息
+  openim.sdkws.RequestPagination pagination = 5; // 分页参数
+}
+
+// 活跃用户信息
+message ActiveUser {
+  openim.sdkws.UserInfo user = 1;  // 用户信息
+  int64 count = 2;                 // 消息数量
+}
+
+// 获取活跃用户响应
+message GetActiveUserResp {
+  int64 msgCount = 1;              // 总消息数
+  int64 userCount = 2;             // 用户数量
+  map<string, int64> dateCount = 3; // 每日消息数统计
+  repeated ActiveUser users = 4;   // 活跃用户列表
+}
+
+// 获取活跃群组请求
+message GetActiveGroupReq {
+  int64 start = 1;                              // 开始时间戳
+  int64 end = 2;                                // 结束时间戳
+  bool ase = 3;                                 // 是否升序排序
+  openim.sdkws.RequestPagination pagination = 4; // 分页参数
+}
+
+// 活跃群组信息
+message ActiveGroup {
+  openim.sdkws.GroupInfo group = 1;  // 群组信息
+  int64 count = 2;                   // 消息数量
+}
+
+// 获取活跃群组响应
+message GetActiveGroupResp {
+  int64 msgCount = 1;               // 总消息数
+  int64 groupCount = 2;             // 群组数量
+  map<string, int64> dateCount = 3; // 每日消息数统计
+  repeated ActiveGroup groups = 4;  // 活跃群组列表
+}
+
+// ================================ 消息搜索 ================================
+
+// 搜索消息请求
+message SearchMessageReq {
+  string sendID = 1;                            // 发送者ID
+  string recvID = 2;                            // 接收者ID
+  int32 contentType = 3;                        // 消息类型
+  string sendTime = 4;                           // 发送时间
+  int32 sessionType = 5;                        // 会话类型
+  openim.sdkws.RequestPagination pagination = 6; // 分页参数
+}
+
+// 搜索到的聊天记录
+message SearchChatLog {
+  ChatLog chatLog = 1;   // 聊天记录
+  bool isRevoked = 2;    // 是否已撤回
+}
+
+// 搜索到的消息数据
+message SearchedMsgData {
+  openim.sdkws.MsgData msgData = 1;  // 消息数据
+  bool isRevoked = 2;                 // 是否已撤回
+}
+
+// 搜索消息响应
+message SearchMessageResp {
+  repeated SearchChatLog chatLogs = 1;  // 聊天记录列表
+  int32 chatLogsNum = 2;                // 总数
+}
+
+// 聊天记录
+message ChatLog {
+  string serverMsgID = 1;        // 服务端消息ID
+  string clientMsgID = 2;        // 客户端消息ID
+  string sendID = 3;             // 发送者ID
+  string recvID = 4;             // 接收者ID
+  string groupID = 5;            // 群组ID
+  string recvNickname = 6;       // 接收者昵称
+  int32 senderPlatformID = 7;    // 发送者平台ID
+  string senderNickname = 8;     // 发送者昵称
+  string senderFaceURL = 9;      // 发送者头像URL
+  string groupName = 10;         // 群组名称
+  int32 sessionType = 11;        // 会话类型
+  int32 msgFrom = 12;            // 消息来源
+  int32 contentType = 13;        // 消息类型
+  string content = 14;           // 消息内容
+  int32 status = 15;             // 消息状态
+  int64 sendTime = 16;           // 发送时间
+  int64 createTime = 17;         // 创建时间
+  string ex = 18;                // 扩展字段
+  string groupFaceURL = 19;      // 群组头像URL
+  uint32 groupMemberCount = 20;  // 群成员数量
+  int64 seq = 21;                // 消息序列号
+  string groupOwner = 22;        // 群主ID
+  int32 groupType = 23;          // 群组类型
+}
+
+// ================================ 批量发送 ================================
+
+// 批量发送消息请求
+message batchSendMessageReq {
+  repeated string recvIDList = 1;        // 接收者ID列表
+  openim.sdkws.MsgData msgData = 2;      // 消息数据
+}
+
+// 批量发送消息响应
+message batchSendMessageResp {}
+
+// 获取服务器时间请求
+message GetServerTimeReq {}
+
+// 获取服务器时间响应
+message GetServerTimeResp {
+  int64 serverTime = 1;  // 服务器时间戳
+}
+
+// ================================ 消息清理 ================================
+
+// 清理消息请求
+message ClearMsgReq {
+  repeated openim.conversation.Conversation conversations = 1; // 会话列表
+}
+
+// 清理消息响应
+message ClearMsgResp {}
+
+// 销毁消息请求(按时间戳)
+message DestructMsgsReq {
+  int64 timestamp = 1;  // 时间戳
+  int32 limit = 2;      // 限制数量
+}
+
+// 销毁消息响应
+message DestructMsgsResp {
+  int32 count = 1;  // 销毁数量
+}
+
+// ================================ 增量同步 ================================
+
+// 设置用户会话最小序列号请求
+message SetUserConversationsMinSeqReq {
+  repeated string userIDs = 1;      // 用户ID列表
+  string conversationID = 2;        // 会话ID
+  int64 seq = 3;                    // 序列号
+}
+
+// 设置用户会话最小序列号响应
+message SetUserConversationsMinSeqResp {}
+
+// 会话序列号
+message ConversationSeqs {
+  string conversationID = 2;   // 会话ID
+  repeated int64 seqs = 3;     // 序列号列表
+}
+
+// 获取序列号消息请求
+message GetSeqMessageReq {
+  string userID = 1;                           // 用户ID
+  repeated ConversationSeqs conversations = 2; // 会话序列号列表
+  openim.sdkws.PullOrder order = 3;            // 拉取顺序
+}
+
+// 获取序列号消息响应
+message GetSeqMessageResp {
+  map<string, openim.sdkws.PullMsgs> msgs = 1;           // 消息列表
+  map<string, openim.sdkws.PullMsgs> notificationMsgs = 2; // 通知消息列表
+}
+
+// 获取活跃会话请求
+message GetActiveConversationReq {
+  repeated string conversationIDs = 1;  // 会话ID列表
+  int64 limit = 2;                      // 限制数量
+}
+
+// 活跃会话信息
+message ActiveConversation {
+  string conversationID = 1;  // 会话ID
+  int64 lastTime = 2;         // 最后活跃时间
+  int64 maxSeq = 3;           // 最大序列号
+}
+
+// 获取活跃会话响应
+message GetActiveConversationResp {
+  repeated ActiveConversation conversations = 1;  // 活跃会话列表
+}
+
+// 设置用户会话最大序列号请求
+message SetUserConversationMaxSeqReq {
+  string conversationID = 1;        // 会话ID
+  repeated string ownerUserID = 2;  // 用户ID列表
+  int64 maxSeq = 3;                // 最大序列号
+}
+
+// 设置用户会话最大序列号响应
+message SetUserConversationMaxSeqResp {}
+
+// 设置用户会话最小序列号请求
+message SetUserConversationMinSeqReq {
+  string conversationID = 1;        // 会话ID
+  repeated string ownerUserID = 2;  // 用户ID列表
+  int64 minSeq = 3;                // 最小序列号
+}
+
+// 设置用户会话最小序列号响应
+message SetUserConversationMinSeqResp {}
+
+// 获取指定时间的最后消息序列号请求
+message GetLastMessageSeqByTimeReq {
+  string conversationID = 1;  // 会话ID
+  int64 time = 2;             // 时间戳
+}
+
+// 获取指定时间的最后消息序列号响应
+message GetLastMessageSeqByTimeResp {
+  int64 seq = 1;  // 序列号
+}
+
+// 获取最后消息请求
+message GetLastMessageReq {
+  string userID = 1;                    // 用户ID
+  repeated string conversationIDs = 2;   // 会话ID列表
+}
+
+// 获取最后消息响应
+message GetLastMessageResp {
+  map<string, openim.sdkws.MsgData> msgs = 1;  // 会话ID到消息数据的映射
+}
+
+// ================================ 服务定义 ================================
+
+// 消息管理服务
+service msg {
+  // 获取最大序列号(包含用户和指定群组)
+  rpc GetMaxSeq(openim.sdkws.GetMaxSeqReq) returns (openim.sdkws.GetMaxSeqResp);
+  // 获取会话列表的最大序列号
+  rpc GetMaxSeqs(GetMaxSeqsReq) returns (SeqsInfoResp);
+  // 获取会话列表的已读序列号
+  rpc GetHasReadSeqs(GetHasReadSeqsReq) returns (SeqsInfoResp);
+  // 获取最新消息
+  rpc GetMsgByConversationIDs(GetMsgByConversationIDsReq) returns (GetMsgByConversationIDsResp);
+  // 获取会话最大序列号
+  rpc GetConversationMaxSeq(GetConversationMaxSeqReq) returns (GetConversationMaxSeqResp);
+  // 拉取历史消息(包含用户和指定群组)
+  rpc PullMessageBySeqs(openim.sdkws.PullMessageBySeqsReq) returns (openim.sdkws.PullMessageBySeqsResp);
+  // 获取序列号消息
+  rpc GetSeqMessage(GetSeqMessageReq) returns (GetSeqMessageResp);
+  // 搜索消息
+  rpc SearchMessage(SearchMessageReq) returns (SearchMessageResp);
+  // 发送消息
+  rpc SendMsg(SendMsgReq) returns (SendMsgResp);
+  // 发送简单消息
+  rpc SendSimpleMsg(SendSimpleMsgReq) returns (SendSimpleMsgResp);
+  // 设置用户会话最小序列号
+  rpc SetUserConversationsMinSeq(SetUserConversationsMinSeqReq) returns (SetUserConversationsMinSeqResp);
+  // 清空指定会话的所有消息并重置最小序列号
+  rpc ClearConversationsMsg(ClearConversationsMsgReq) returns (ClearConversationsMsgResp);
+  // 用户清空所有消息并重置最小序列号
+  rpc UserClearAllMsg(UserClearAllMsgReq) returns (UserClearAllMsgResp);
+  // 按序列号标记消息删除
+  rpc DeleteMsgs(DeleteMsgsReq) returns (DeleteMsgsResp);
+  // 按序列号物理删除消息
+  rpc DeleteMsgPhysicalBySeq(DeleteMsgPhysicalBySeqReq) returns (DeleteMsgPhysicalBySeqResp);
+  // 按时间戳物理删除消息
+  rpc DeleteMsgPhysical(DeleteMsgPhysicalReq) returns (DeleteMsgPhysicalResp);
+  // 设置API发送消息的送达状态
+  rpc SetSendMsgStatus(SetSendMsgStatusReq) returns (SetSendMsgStatusResp);
+  // 获取消息送达状态
+  rpc GetSendMsgStatus(GetSendMsgStatusReq) returns (GetSendMsgStatusResp);
+  // 撤回消息
+  rpc RevokeMsg(RevokeMsgReq) returns (RevokeMsgResp);
+  // 标记消息为已读
+  rpc MarkMsgsAsRead(MarkMsgsAsReadReq) returns (MarkMsgsAsReadResp);
+  // 标记会话为已读
+  rpc MarkConversationAsRead(MarkConversationAsReadReq) returns (MarkConversationAsReadResp);
+  // 设置会话已读序列号
+  rpc SetConversationHasReadSeq(SetConversationHasReadSeqReq) returns (SetConversationHasReadSeqResp);
+  // 获取会话已读和最大序列号
+  rpc GetConversationsHasReadAndMaxSeq(GetConversationsHasReadAndMaxSeqReq) returns (GetConversationsHasReadAndMaxSeqResp);
+  // 获取活跃用户
+  rpc GetActiveUser(GetActiveUserReq) returns (GetActiveUserResp);
+  // 获取活跃群组
+  rpc GetActiveGroup(GetActiveGroupReq) returns (GetActiveGroupResp);
+  // 获取服务器时间
+  rpc GetServerTime(GetServerTimeReq) returns (GetServerTimeResp);
+  // 清理消息
+  rpc ClearMsg(ClearMsgReq) returns (ClearMsgResp);
+  // 销毁消息
+  rpc DestructMsgs(DestructMsgsReq) returns (DestructMsgsResp);
+  // 获取活跃会话
+  rpc GetActiveConversation(GetActiveConversationReq) returns (GetActiveConversationResp);
+  // 设置用户会话最大序列号
+  rpc SetUserConversationMaxSeq(SetUserConversationMaxSeqReq) returns (SetUserConversationMaxSeqResp);
+  // 设置用户会话最小序列号
+  rpc SetUserConversationMinSeq(SetUserConversationMinSeqReq) returns (SetUserConversationMinSeqResp);
+  // 获取指定时间的最后消息序列号
+  rpc GetLastMessageSeqByTime(GetLastMessageSeqByTimeReq) returns (GetLastMessageSeqByTimeResp);
+  // 获取最后消息
+  rpc GetLastMessage(GetLastMessageReq) returns (GetLastMessageResp);
+}

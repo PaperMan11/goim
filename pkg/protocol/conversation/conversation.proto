@@ -1,0 +1,426 @@
+// OpenIM 会话管理协议定义
+// 定义会话相关的数据结构和 gRPC 服务接口
+syntax = "proto3";
+package openim.conversation;
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/conversation";
+
+// 导入依赖的 proto 文件
+import "sdkws/sdkws.proto";
+import "wrapperspb/wrapperspb.proto";
+
+// ================================ 数据结构 ================================
+
+// 会话信息
+message Conversation {
+  string ownerUserID = 1;           // 会话所有者ID
+  string conversationID = 2;        // 会话ID
+  int32 recvMsgOpt = 3;             // 消息接收选项(0-接收, 1-不接收, 2-接收但不通知)
+  int32 conversationType = 4;       // 会话类型(1-单聊, 2-群聊)
+  string userID = 5;                // 对方用户ID(单聊)
+  string groupID = 6;               // 群组ID(群聊)
+  bool isPinned = 7;                // 是否置顶
+  string attachedInfo = 8;          // 附加信息
+  bool isPrivateChat = 9;           // 是否私聊
+  int32 groupAtType = 10;           // 群@类型(0-普通, 1-@我, 2-@所有人, 3-@我和@所有人)
+  string ex = 11;                   // 扩展字段
+  int32 burnDuration = 12;          // 阅后即焚时长(秒)
+  int64 minSeq = 13;                // 最小消息序列号
+  int64 maxSeq = 14;                // 最大消息序列号
+  int64 msgDestructTime = 15;       // 消息销毁时间戳
+  int64 latestMsgDestructTime = 16; // 最新消息销毁时间戳
+  bool isMsgDestruct = 17;          // 是否开启消息销毁
+}
+
+// 会话请求参数(可选字段)
+message ConversationReq {
+  string conversationID = 1;                          // 会话ID
+  int32 conversationType = 2;                         // 会话类型
+  string userID = 3;                                  // 用户ID
+  string groupID = 4;                                 // 群组ID
+  openim.wrapperspb.Int32Value recvMsgOpt = 5;        // 消息接收选项(可选)
+  openim.wrapperspb.BoolValue isPinned = 6;           // 是否置顶(可选)
+  openim.wrapperspb.StringValue attachedInfo = 7;     // 附加信息(可选)
+  openim.wrapperspb.BoolValue isPrivateChat = 8;      // 是否私聊(可选)
+  openim.wrapperspb.StringValue ex = 9;               // 扩展字段(可选)
+  openim.wrapperspb.Int32Value burnDuration = 10;     // 阅后即焚时长(可选)
+  openim.wrapperspb.Int64Value minSeq = 11;           // 最小序列号(可选)
+  openim.wrapperspb.Int64Value maxSeq = 12;           // 最大序列号(可选)
+  openim.wrapperspb.Int32Value groupAtType = 13;      // 群@类型(可选)
+  openim.wrapperspb.Int64Value msgDestructTime = 14;  // 消息销毁时间(可选)
+  openim.wrapperspb.BoolValue isMsgDestruct = 15;     // 是否开启消息销毁(可选)
+}
+
+// 设置会话请求
+message SetConversationReq {
+  Conversation conversation = 1;  // 会话信息
+}
+
+// 设置会话响应
+message SetConversationResp {}
+
+// 获取会话请求
+message GetConversationReq {
+  string conversationID = 1;  // 会话ID
+  string ownerUserID = 2;     // 所有者ID
+}
+
+// 获取会话响应
+message GetConversationResp {
+  Conversation conversation = 2;  // 会话信息
+}
+
+// 获取排序会话列表请求
+message GetSortedConversationListReq {
+  string userID = 1;                           // 用户ID
+  repeated string conversationIDs = 2;         // 会话ID列表(可选，用于过滤)
+  openim.sdkws.RequestPagination pagination = 3; // 分页参数
+}
+
+// 获取排序会话列表响应
+message GetSortedConversationListResp {
+  int64 conversationTotal = 1;                 // 会话总数
+  int64 unreadTotal = 2;                       // 未读消息总数
+  repeated ConversationElem conversationElems = 3; // 会话元素列表
+}
+
+// 会话元素(包含消息摘要)
+message ConversationElem {
+  string conversationID = 1;  // 会话ID
+  int32 recvMsgOpt = 2;       // 消息接收选项
+  int64 unreadCount = 3;      // 未读消息数量
+  bool IsPinned = 4;          // 是否置顶
+  MsgInfo msgInfo = 5;        // 最新消息摘要
+}
+
+// 消息摘要信息
+message MsgInfo {
+  string serverMsgID = 1;           // 服务端消息ID
+  string clientMsgID = 2;           // 客户端消息ID
+  int32 sessionType = 3;            // 会话类型
+  string sendID = 4;                // 发送者ID
+  string recvID = 5;                // 接收者ID
+  string senderName = 6;            // 发送者名称
+  string faceURL = 7;               // 发送者头像URL
+  string groupID = 8;               // 群组ID
+  string groupName = 9;             // 群组名称
+  string groupFaceURL = 10;         // 群组头像URL
+  int32 groupType = 11;             // 群组类型
+  uint32 groupMemberCount = 12;     // 群成员数量
+  int64 LatestMsgRecvTime = 13;     // 最新消息接收时间
+  int32 msgFrom = 14;               // 消息来源
+  int32 contentType = 15;           // 消息内容类型
+  string content = 16;              // 消息内容
+  string ex = 17;                   // 扩展字段
+}
+
+// 获取多个会话请求
+message GetConversationsReq {
+  string ownerUserID = 1;              // 所有者ID
+  repeated string conversationIDs = 2; // 会话ID列表
+}
+
+// 获取多个会话响应
+message GetConversationsResp {
+  repeated Conversation conversations = 2; // 会话列表
+}
+
+// 获取所有会话请求
+message GetAllConversationsReq {
+  string ownerUserID = 1;  // 所有者ID
+}
+
+// 获取所有会话响应
+message GetAllConversationsResp {
+  repeated Conversation conversations = 2; // 会话列表
+}
+
+// 获取群消息不通知用户列表请求
+message GetRecvMsgNotNotifyUserIDsReq {
+  string groupID = 1;  // 群组ID
+}
+
+// 获取群消息不通知用户列表响应
+message GetRecvMsgNotNotifyUserIDsResp {
+  repeated string userIDs = 1;  // 用户ID列表
+}
+
+// 创建单聊会话请求
+message CreateSingleChatConversationsReq {
+  string recvID = 1;             // 接收者ID
+  string sendID = 2;             // 发送者ID
+  string conversationID = 3;     // 会话ID
+  int32 conversationType = 4;    // 会话类型
+}
+
+// 创建单聊会话响应
+message CreateSingleChatConversationsResp {}
+
+// 创建群聊会话请求
+message CreateGroupChatConversationsReq {
+  repeated string userIDs = 1;  // 用户ID列表
+  string groupID = 2;           // 群组ID
+}
+
+// 创建群聊会话响应
+message CreateGroupChatConversationsResp {}
+
+// 设置会话最大序列号请求
+message SetConversationMaxSeqReq {
+  string conversationID = 1;          // 会话ID
+  repeated string ownerUserID = 2;    // 所有者ID列表
+  int64 maxSeq = 3;                   // 最大序列号
+}
+
+// 设置会话最大序列号响应
+message SetConversationMaxSeqResp {}
+
+// 设置会话最小序列号请求
+message SetConversationMinSeqReq {
+  string conversationID = 1;          // 会话ID
+  repeated string ownerUserID = 2;    // 所有者ID列表
+  int64 minSeq = 3;                   // 最小序列号
+}
+
+// 设置会话最小序列号响应
+message SetConversationMinSeqResp {}
+
+// 获取会话ID列表请求
+message GetConversationIDsReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取会话ID列表响应
+message GetConversationIDsResp {
+  repeated string conversationIDs = 1;  // 会话ID列表
+}
+
+// 批量设置会话请求
+message SetConversationsReq {
+  repeated string userIDs = 1;          // 用户ID列表
+  ConversationReq conversation = 2;     // 会话参数
+}
+
+// 批量设置会话响应
+message SetConversationsResp {}
+
+// 获取用户会话ID哈希请求
+message GetUserConversationIDsHashReq {
+  string ownerUserID = 1;  // 所有者ID
+}
+
+// 获取用户会话ID哈希响应
+message GetUserConversationIDsHashResp {
+  uint64 hash = 1;  // 哈希值
+}
+
+// 按会话ID获取会话列表请求
+message GetConversationsByConversationIDReq {
+  repeated string conversationIDs = 1;  // 会话ID列表
+}
+
+// 按会话ID获取会话列表响应
+message GetConversationsByConversationIDResp {
+  repeated Conversation conversations = 1;  // 会话列表
+}
+
+// 获取会话离线推送用户列表请求
+message GetConversationOfflinePushUserIDsReq {
+  string conversationID = 1;          // 会话ID
+  repeated string userIDs = 2;        // 用户ID列表(用于过滤)
+}
+
+// 获取会话离线推送用户列表响应
+message GetConversationOfflinePushUserIDsResp {
+  repeated string userIDs = 1;  // 用户ID列表
+}
+
+// 获取会话不接收消息用户列表请求
+message GetConversationNotReceiveMessageUserIDsReq {
+  string conversationID = 1;  // 会话ID
+}
+
+// 获取会话不接收消息用户列表响应
+message GetConversationNotReceiveMessageUserIDsResp {
+  repeated string userIDs = 1;  // 用户ID列表
+}
+
+// 更新会话请求
+message UpdateConversationReq {
+  string conversationID = 1;                          // 会话ID
+  repeated string userIDs = 2;                        // 用户ID列表
+  openim.wrapperspb.Int32Value recvMsgOpt = 3;        // 消息接收选项(可选)
+  openim.wrapperspb.BoolValue isPinned = 4;           // 是否置顶(可选)
+  openim.wrapperspb.StringValue attachedInfo = 5;     // 附加信息(可选)
+  openim.wrapperspb.BoolValue isPrivateChat = 6;      // 是否私聊(可选)
+  openim.wrapperspb.StringValue ex = 7;               // 扩展字段(可选)
+  openim.wrapperspb.Int32Value burnDuration = 8;      // 阅后即焚时长(可选)
+  openim.wrapperspb.Int64Value minSeq = 9;            // 最小序列号(可选)
+  openim.wrapperspb.Int64Value maxSeq = 10;           // 最大序列号(可选)
+  openim.wrapperspb.Int32Value groupAtType = 11;      // 群@类型(可选)
+  openim.wrapperspb.Int64Value msgDestructTime = 12;  // 消息销毁时间(可选)
+  openim.wrapperspb.BoolValue isMsgDestruct = 13;     // 是否开启消息销毁(可选)
+  openim.wrapperspb.Int64Value latestMsgDestructTime = 14; // 最新消息销毁时间(可选)
+}
+
+// 更新会话响应
+message UpdateConversationResp {}
+
+// 获取完整所有者会话ID列表请求
+message GetFullOwnerConversationIDsReq {
+  uint64 idHash = 1;  // ID哈希值
+  string userID = 2;  // 用户ID
+}
+
+// 获取完整所有者会话ID列表响应
+message GetFullOwnerConversationIDsResp {
+  uint64 version = 1;              // 版本号
+  string versionID = 2;            // 版本ID
+  bool equal = 3;                  // 哈希是否相等
+  repeated string conversationIDs = 4; // 会话ID列表
+}
+
+// 获取增量会话请求
+message GetIncrementalConversationReq {
+  string userID = 1;      // 用户ID
+  string versionID = 2;   // 版本ID
+  uint64 version = 3;     // 版本号
+}
+
+// 获取增量会话响应
+message GetIncrementalConversationResp {
+  uint64 version = 1;                    // 当前版本号
+  string versionID = 2;                  // 当前版本ID
+  bool full = 3;                         // 是否需要全量同步
+  repeated string delete = 4;            // 删除的会话ID列表
+  repeated Conversation insert = 5;      // 新增的会话列表
+  repeated Conversation update = 6;      // 更新的会话列表
+}
+
+// 获取所有者会话列表请求
+message GetOwnerConversationReq {
+  string userID = 1;                                // 用户ID
+  openim.sdkws.RequestPagination pagination = 2;    // 分页参数
+}
+
+// 获取所有者会话列表响应
+message GetOwnerConversationResp {
+  int64 total = 1;                    // 总数
+  repeated Conversation conversations = 2; // 会话列表
+}
+
+// 获取需要清理消息的会话请求
+message GetConversationsNeedClearMsgReq {}
+
+// 获取需要清理消息的会话响应
+message GetConversationsNeedClearMsgResp {
+  repeated Conversation conversations = 1; // 会话列表
+}
+
+// 获取不通知会话ID列表请求
+message GetNotNotifyConversationIDsReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取不通知会话ID列表响应
+message GetNotNotifyConversationIDsResp {
+  repeated string conversationIDs = 1;  // 会话ID列表
+}
+
+// 获取置顶会话ID列表请求
+message GetPinnedConversationIDsReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取置顶会话ID列表响应
+message GetPinnedConversationIDsResp {
+  repeated string conversationIDs = 1;  // 会话ID列表
+}
+
+// 清理用户会话消息请求
+message ClearUserConversationMsgReq {
+  int64 timestamp = 1;  // 时间戳
+  int32 limit = 2;      // 限制数量
+}
+
+// 清理用户会话消息响应
+message ClearUserConversationMsgResp {
+  int32 count = 1;  // 清理数量
+}
+
+// 按用户更新会话请求
+message UpdateConversationsByUserReq {
+  string userID = 1;                          // 用户ID
+  openim.wrapperspb.StringValue ex = 2;       // 扩展字段(可选)
+}
+
+// 按用户更新会话响应
+message UpdateConversationsByUserResp {}
+
+// 删除会话请求
+message DeleteConversationsReq {
+  string ownerUserID = 1;               // 所有者ID
+  int64 needDeleteTime = 2;            // 需要删除的时间
+  repeated string conversationIDs = 3;  // 会话ID列表(可选)
+}
+
+// 删除会话响应
+message DeleteConversationsResp {}
+
+// ================================ 服务定义 ================================
+
+// 会话管理服务
+service conversation {
+  // 获取单个会话
+  rpc GetConversation(GetConversationReq) returns (GetConversationResp);
+  // 获取排序会话列表
+  rpc GetSortedConversationList(GetSortedConversationListReq) returns (GetSortedConversationListResp);
+  // 获取所有会话
+  rpc GetAllConversations(GetAllConversationsReq) returns (GetAllConversationsResp);
+  // 获取多个会话
+  rpc GetConversations(GetConversationsReq) returns (GetConversationsResp);
+  // 设置会话
+  rpc SetConversation(SetConversationReq) returns (SetConversationResp);
+  // 获取群消息不通知用户列表
+  rpc GetRecvMsgNotNotifyUserIDs(GetRecvMsgNotNotifyUserIDsReq) returns (GetRecvMsgNotNotifyUserIDsResp);
+  // 创建单聊会话
+  rpc CreateSingleChatConversations(CreateSingleChatConversationsReq) returns (CreateSingleChatConversationsResp);
+  // 创建群聊会话
+  rpc CreateGroupChatConversations(CreateGroupChatConversationsReq) returns (CreateGroupChatConversationsResp);
+  // 设置会话最大序列号
+  rpc SetConversationMaxSeq(SetConversationMaxSeqReq) returns (SetConversationMaxSeqResp);
+  // 设置会话最小序列号
+  rpc SetConversationMinSeq(SetConversationMinSeqReq) returns (SetConversationMinSeqResp);
+  // 获取会话ID列表
+  rpc GetConversationIDs(GetConversationIDsReq) returns (GetConversationIDsResp);
+  // 批量设置会话
+  rpc SetConversations(SetConversationsReq) returns (SetConversationsResp);
+  // 获取用户会话ID哈希
+  rpc GetUserConversationIDsHash(GetUserConversationIDsHashReq) returns (GetUserConversationIDsHashResp);
+  // 按会话ID获取会话列表
+  rpc GetConversationsByConversationID(GetConversationsByConversationIDReq) returns (GetConversationsByConversationIDResp);
+  // 获取会话离线推送用户列表
+  rpc GetConversationOfflinePushUserIDs(GetConversationOfflinePushUserIDsReq) returns (GetConversationOfflinePushUserIDsResp);
+  // 获取会话不接收消息用户列表
+  rpc GetConversationNotReceiveMessageUserIDs(GetConversationNotReceiveMessageUserIDsReq) returns (GetConversationNotReceiveMessageUserIDsResp);
+  // 更新会话
+  rpc UpdateConversation(UpdateConversationReq) returns (UpdateConversationResp);
+  // 获取完整所有者会话ID列表
+  rpc GetFullOwnerConversationIDs(GetFullOwnerConversationIDsReq) returns (GetFullOwnerConversationIDsResp);
+  // 获取增量会话
+  rpc GetIncrementalConversation(GetIncrementalConversationReq) returns (GetIncrementalConversationResp);
+  // 获取所有者会话列表
+  rpc GetOwnerConversation(GetOwnerConversationReq) returns (GetOwnerConversationResp);
+  // 获取需要清理消息的会话
+  rpc GetConversationsNeedClearMsg(GetConversationsNeedClearMsgReq) returns (GetConversationsNeedClearMsgResp);
+  // 获取不通知会话ID列表
+  rpc GetNotNotifyConversationIDs(GetNotNotifyConversationIDsReq) returns (GetNotNotifyConversationIDsResp);
+  // 获取置顶会话ID列表
+  rpc GetPinnedConversationIDs(GetPinnedConversationIDsReq) returns (GetPinnedConversationIDsResp);
+  // 清理用户会话消息
+  rpc ClearUserConversationMsg(ClearUserConversationMsgReq) returns (ClearUserConversationMsgResp);
+  // 按用户更新会话
+  rpc UpdateConversationsByUser(UpdateConversationsByUserReq) returns (UpdateConversationsByUserResp);
+  // 删除会话
+  rpc DeleteConversations(DeleteConversationsReq) returns (DeleteConversationsResp);
+}

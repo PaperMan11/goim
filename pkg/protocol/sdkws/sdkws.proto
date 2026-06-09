@@ -1,0 +1,680 @@
+// OpenIM SDK WebSocket 协议定义
+// 定义客户端与服务器之间通过 WebSocket 通信的消息格式
+syntax = "proto3";
+
+package openim.sdkws;
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/sdkws";
+
+// 导入包装类型定义
+import "wrapperspb/wrapperspb.proto";
+
+// ================================ 基础数据结构 ================================
+
+// 群组信息
+message GroupInfo {
+  string groupID = 1;              // 群组ID
+  string groupName = 2;            // 群组名称
+  string notification = 3;         // 群组公告
+  string introduction = 4;         // 群组介绍
+  string faceURL = 5;              // 群组头像URL
+  string ownerUserID = 6;          // 群主ID
+  int64 createTime = 7;            // 创建时间戳
+  uint32 memberCount = 8;          // 成员数量
+  string ex = 9;                   // 扩展字段
+  int32 status = 10;               // 群组状态
+  string creatorUserID = 11;       // 创建者ID
+  int32 groupType = 12;            // 群组类型
+  int32 needVerification = 13;     // 是否需要验证(0-不需要, 1-需要)
+  int32 lookMemberInfo = 14;       // 是否允许查看成员信息(0-不允许, 1-允许)
+  int32 applyMemberFriend = 15;    // 是否允许成员添加好友(0-不允许, 1-允许)
+  int64 notificationUpdateTime = 16; // 公告更新时间戳
+  string notificationUserID = 17;   // 公告更新者ID
+}
+
+// 群组信息修改请求
+message GroupInfoForSet {
+  string groupID = 1;                                    // 群组ID
+  string groupName = 2;                                  // 群组名称
+  string notification = 3;                               // 群组公告
+  string introduction = 4;                               // 群组介绍
+  string faceURL = 5;                                    // 群组头像URL
+  openim.wrapperspb.StringValue ex = 6;                  // 扩展字段(可选)
+  openim.wrapperspb.Int32Value needVerification = 7;     // 是否需要验证(可选)
+  openim.wrapperspb.Int32Value lookMemberInfo = 8;       // 是否允许查看成员信息(可选)
+  openim.wrapperspb.Int32Value applyMemberFriend = 9;    // 是否允许成员添加好友(可选)
+}
+
+// 群组成员完整信息
+message GroupMemberFullInfo {
+  string groupID = 1;       // 群组ID
+  string userID = 2;        // 用户ID
+  int32 roleLevel = 3;      // 角色等级(100-群主, 60-管理员, 20-普通成员)
+  int64 joinTime = 4;       // 加入时间戳
+  string nickname = 5;      // 群昵称
+  string faceURL = 6;       // 头像URL
+  int32 appMangerLevel = 7; // 应用管理员等级(>0表示管理员)
+  int32 joinSource = 8;     // 加入来源
+  string operatorUserID = 9; // 操作人ID
+  string ex = 10;           // 扩展字段
+  int64 muteEndTime = 11;   // 禁言结束时间(0表示未禁言)
+  string inviterUserID = 12; // 邀请人ID
+}
+
+// 公开用户信息
+message PublicUserInfo {
+  string userID = 1;   // 用户ID
+  string nickname = 2; // 昵称
+  string faceURL = 3;  // 头像URL
+  string ex = 4;       // 扩展字段
+}
+
+// 用户信息
+message UserInfo {
+  string userID = 1;          // 用户ID
+  string nickname = 2;        // 昵称
+  string faceURL = 3;         // 头像URL
+  string ex = 4;              // 扩展字段
+  int64 createTime = 5;       // 创建时间戳
+  int32 appMangerLevel = 6;   // 应用管理员等级
+  int32 globalRecvMsgOpt = 7; // 全局消息接收选项
+}
+
+// 用户信息(带可选字段)
+message UserInfoWithEx {
+  string userID = 1;                                     // 用户ID
+  openim.wrapperspb.StringValue nickname = 2;            // 昵称(可选)
+  openim.wrapperspb.StringValue faceURL = 3;             // 头像URL(可选)
+  openim.wrapperspb.StringValue ex = 4;                  // 扩展字段(可选)
+  openim.wrapperspb.Int32Value globalRecvMsgOpt = 7;     // 全局消息接收选项(可选)
+}
+
+// 好友信息
+message FriendInfo {
+  string ownerUserID = 1; // 所有者ID
+  string remark = 2;      // 备注名
+  int64 createTime = 3;   // 创建时间戳
+  UserInfo friendUser = 4; // 好友用户信息
+  int32 addSource = 5;    // 添加来源
+  string operatorUserID = 6; // 操作人ID
+  string ex = 7;          // 扩展字段
+  bool isPinned = 8;      // 是否置顶
+}
+
+// 黑名单信息
+message BlackInfo {
+  string ownerUserID = 1;      // 所有者ID
+  int64 createTime = 2;        // 创建时间戳
+  PublicUserInfo blackUserInfo = 3; // 黑名单用户信息
+  int32 addSource = 4;        // 添加来源
+  string operatorUserID = 5;   // 操作人ID
+  string ex = 6;              // 扩展字段
+}
+
+// 群组申请信息
+message GroupRequest {
+  PublicUserInfo userInfo = 1;   // 申请人信息
+  GroupInfo groupInfo = 2;       // 群组信息
+  int32 handleResult = 3;        // 处理结果(0-未处理, 1-已同意, -1-已拒绝)
+  string reqMsg = 4;             // 申请消息
+  string handleMsg = 5;          // 处理消息
+  int64 reqTime = 6;             // 申请时间戳
+  string handleUserID = 7;       // 处理人ID
+  int64 handleTime = 8;          // 处理时间戳
+  string ex = 9;                 // 扩展字段
+  int32 joinSource = 10;         // 加入来源
+  string inviterUserID = 11;     // 邀请人ID
+}
+
+// 好友申请信息
+message FriendRequest {
+  string fromUserID = 1;   // 申请人ID
+  string fromNickname = 2; // 申请人昵称
+  string fromFaceURL = 3;  // 申请人头像URL
+  string toUserID = 4;     // 被申请人ID
+  string toNickname = 5;   // 被申请人昵称
+  string toFaceURL = 6;    // 被申请人头像URL
+  int32 handleResult = 7;  // 处理结果(0-未处理, 1-已同意, -1-已拒绝)
+  string reqMsg = 8;       // 申请消息
+  int64 createTime = 9;    // 创建时间戳
+  string handlerUserID = 10; // 处理人ID
+  string handleMsg = 11;    // 处理消息
+  int64 handleTime = 12;    // 处理时间戳
+  string ex = 13;           // 扩展字段
+}
+
+// ================================ 消息拉取与推送 ================================
+
+// 消息拉取顺序
+enum PullOrder {
+  PullOrderAsc = 0;   // 升序
+  PullOrderDesc = 1;  // 降序
+}
+
+// 按序列号拉取消息请求
+message PullMessageBySeqsReq {
+  string userID = 1;          // 用户ID
+  repeated SeqRange seqRanges = 2; // 序列号范围列表
+  PullOrder order = 3;        // 拉取顺序
+}
+
+// 序列号范围
+message SeqRange {
+  string conversationID = 1;  // 会话ID
+  int64 begin = 2;            // 起始序列号
+  int64 end = 3;              // 结束序列号
+  int64 num = 4;              // 数量限制
+}
+
+// 拉取的消息集合
+message PullMsgs {
+  repeated MsgData Msgs = 1;  // 消息列表
+  bool isEnd = 2;             // 是否到达末尾
+  int64 endSeq = 3;           // 结束序列号
+}
+
+// 按序列号拉取消息响应
+message PullMessageBySeqsResp {
+  map<string, PullMsgs> msgs = 1;              // 普通消息(会话ID -> 消息集合)
+  map<string, PullMsgs> notificationMsgs = 2;  // 通知消息(会话ID -> 消息集合)
+}
+
+// 获取最大序列号请求
+message GetMaxSeqReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取最大序列号响应
+message GetMaxSeqResp {
+  map<string, int64> maxSeqs = 1;  // 各会话最大序列号
+  map<string, int64> minSeqs = 2;  // 各会话最小序列号
+}
+
+// 用户发送消息响应
+message UserSendMsgResp {
+  string serverMsgID = 1;  // 服务端消息ID
+  string clientMsgID = 2;  // 客户端消息ID
+  int64 sendTime = 3;      // 发送时间戳
+}
+
+// 消息数据
+message MsgData {
+  string sendID = 1;            // 发送者ID
+  string recvID = 2;            // 接收者ID
+  string groupID = 3;           // 群组ID(群消息时使用)
+  string clientMsgID = 4;       // 客户端消息ID
+  string serverMsgID = 5;       // 服务端消息ID
+  int32 senderPlatformID = 6;   // 发送者平台ID
+  string senderNickname = 7;    // 发送者昵称
+  string senderFaceURL = 8;     // 发送者头像URL
+  int32 sessionType = 9;        // 会话类型(1-单聊, 2-群聊)
+  int32 msgFrom = 10;           // 消息来源(100-用户消息, 200-系统消息)
+  int32 contentType = 11;       // 消息内容类型
+  bytes content = 12;           // 消息内容(二进制)
+  int64 seq = 14;               // 消息序列号
+  int64 sendTime = 15;          // 发送时间戳
+  int64 createTime = 16;        // 创建时间戳
+  int32 status = 17;            // 消息状态
+  bool isRead = 18;             // 是否已读
+  map<string, bool> options = 19; // 消息选项
+  OfflinePushInfo offlinePushInfo = 20; // 离线推送信息
+  repeated string atUserIDList = 21;    // @用户ID列表
+  string attachedInfo = 22;     // 附加信息
+  string ex = 23;               // 扩展字段
+}
+
+// 推送消息
+message PushMessages {
+  map<string, PullMsgs> msgs = 1;              // 普通消息(会话ID -> 消息集合)
+  map<string, PullMsgs> notificationMsgs = 2;  // 通知消息(会话ID -> 消息集合)
+}
+
+// 离线推送信息
+message OfflinePushInfo {
+  string title = 1;           // 推送标题
+  string desc = 2;            // 推送描述
+  string ex = 3;              // 扩展字段
+  string iOSPushSound = 4;    // iOS推送声音
+  bool iOSBadgeCount = 5;     // iOS角标计数
+  string signalInfo = 6;      // 信令信息
+}
+
+// 通用提示消息
+message TipsComm {
+  bytes detail = 1;          // 详细内容(二进制)
+  string defaultTips = 2;    // 默认提示文本
+  string jsonDetail = 3;     // JSON格式详细内容
+}
+
+// ================================ 群组事件通知 ================================
+
+// 群组创建通知 - OnGroupCreated()
+message GroupCreatedTips {
+  GroupInfo group = 1;                         // 群组信息
+  GroupMemberFullInfo opUser = 2;              // 操作人信息
+  repeated GroupMemberFullInfo memberList = 3; // 成员列表
+  int64 operationTime = 4;                     // 操作时间戳
+  GroupMemberFullInfo groupOwnerUser = 5;      // 群主信息
+  uint64 groupMemberVersion = 6;               // 群成员版本号
+  string groupMemberVersionID = 7;             // 群成员版本ID
+}
+
+// 群组信息修改通知 - OnGroupInfoSet()
+message GroupInfoSetTips {
+  GroupMemberFullInfo opUser = 1;              // 操作人信息
+  int64 muteTime = 2;                          // 禁言时间
+  GroupInfo group = 3;                         // 群组信息
+  uint64 groupMemberVersion = 4;               // 群成员版本号
+  string groupMemberVersionID = 5;             // 群成员版本ID
+}
+
+// 群组名称修改通知
+message GroupInfoSetNameTips {
+  GroupMemberFullInfo opUser = 1;              // 操作人信息
+  GroupInfo group = 2;                         // 群组信息
+  uint64 groupMemberVersion = 3;               // 群成员版本号
+  string groupMemberVersionID = 4;             // 群成员版本ID
+}
+
+// 群组公告修改通知
+message GroupInfoSetAnnouncementTips {
+  GroupMemberFullInfo opUser = 1;              // 操作人信息
+  GroupInfo group = 2;                         // 群组信息
+  uint64 groupMemberVersion = 3;               // 群成员版本号
+  string groupMemberVersionID = 4;             // 群成员版本ID
+}
+
+// 入群申请通知 - OnJoinGroupApplication()
+message JoinGroupApplicationTips {
+  GroupInfo group = 1;         // 群组信息
+  PublicUserInfo applicant = 2; // 申请人信息
+  string reqMsg = 3;           // 申请消息
+  string uuid = 4;             // 申请唯一标识
+  GroupRequest request = 5;    // 申请详情
+}
+
+// 成员退出群组通知 - OnQuitGroup()
+message MemberQuitTips {
+  GroupInfo group = 1;                          // 群组信息
+  GroupMemberFullInfo quitUser = 2;             // 退出成员信息
+  int64 operationTime = 3;                      // 操作时间戳
+  uint64 groupMemberVersion = 4;                // 群成员版本号
+  string groupMemberVersionID = 5;              // 群成员版本ID
+}
+
+// 入群申请通过通知 - OnApplicationGroupAccepted()
+message GroupApplicationAcceptedTips {
+  GroupInfo group = 1;              // 群组信息
+  GroupMemberFullInfo opUser = 2;   // 操作人信息
+  string handleMsg = 4;             // 处理消息
+  int32 receiverAs = 5;             // 接收者身份(1-管理员, 0-申请人)
+  string uuid = 6;                  // 申请唯一标识
+  GroupRequest request = 7;         // 申请详情
+}
+
+// 入群申请拒绝通知 - OnApplicationGroupRejected()
+message GroupApplicationRejectedTips {
+  GroupInfo group = 1;              // 群组信息
+  GroupMemberFullInfo opUser = 2;   // 操作人信息
+  string handleMsg = 4;             // 处理消息
+  int32 receiverAs = 5;             // 接收者身份(1-管理员, 0-申请人)
+  string uuid = 6;                  // 申请唯一标识
+  GroupRequest request = 7;         // 申请详情
+}
+
+// 群主转让通知 - OnTransferGroupOwner()
+message GroupOwnerTransferredTips {
+  GroupInfo group = 1;                          // 群组信息
+  GroupMemberFullInfo opUser = 2;               // 操作人信息
+  GroupMemberFullInfo newGroupOwner = 3;        // 新群主信息
+  string oldGroupOwner = 4;                     // 旧群主ID
+  int64 operationTime = 5;                      // 操作时间戳
+  GroupMemberFullInfo oldGroupOwnerInfo = 6;    // 旧群主信息
+  uint64 groupMemberVersion = 7;                // 群成员版本号
+  string groupMemberVersionID = 8;              // 群成员版本ID
+}
+
+// 成员被踢出群组通知 - OnMemberKicked()
+message MemberKickedTips {
+  GroupInfo group = 1;                          // 群组信息
+  GroupMemberFullInfo opUser = 2;               // 操作人信息
+  repeated GroupMemberFullInfo kickedUserList = 3; // 被踢成员列表
+  int64 operationTime = 4;                      // 操作时间戳
+  uint64 groupMemberVersion = 5;                // 群成员版本号
+  string groupMemberVersionID = 6;              // 群成员版本ID
+}
+
+// 成员被邀请入群通知 - OnMemberInvited()
+message MemberInvitedTips {
+  GroupInfo group = 1;                          // 群组信息
+  GroupMemberFullInfo opUser = 2;               // 操作人信息
+  repeated GroupMemberFullInfo invitedUserList = 3; // 被邀请成员列表
+  int64 operationTime = 4;                      // 操作时间戳
+  uint64 groupMemberVersion = 5;                // 群成员版本号
+  string groupMemberVersionID = 6;              // 群成员版本ID
+  GroupMemberFullInfo inviterUser = 7;          // 邀请人信息
+}
+
+// 成员主动加入群组通知
+message MemberEnterTips {
+  GroupInfo group = 1;                         // 群组信息
+  GroupMemberFullInfo entrantUser = 2;         // 加入成员信息
+  int64 operationTime = 3;                     // 操作时间戳
+  uint64 groupMemberVersion = 5;               // 群成员版本号
+  string groupMemberVersionID = 6;             // 群成员版本ID
+}
+
+// 群组解散通知
+message GroupDismissedTips {
+  GroupInfo group = 1;              // 群组信息
+  GroupMemberFullInfo opUser = 2;   // 操作人信息
+  int64 operationTime = 3;          // 操作时间戳
+}
+
+// 群成员被禁言通知
+message GroupMemberMutedTips {
+  GroupInfo group = 1;             // 群组信息
+  GroupMemberFullInfo opUser = 2;  // 操作人信息
+  int64 operationTime = 3;         // 操作时间戳
+  GroupMemberFullInfo mutedUser = 4; // 被禁言成员信息
+  uint32 mutedSeconds = 5;         // 禁言时长(秒)
+  uint64 groupMemberVersion = 6;   // 群成员版本号
+  string groupMemberVersionID = 7; // 群成员版本ID
+}
+
+// 群成员禁言解除通知
+message GroupMemberCancelMutedTips {
+  GroupInfo group = 1;             // 群组信息
+  GroupMemberFullInfo opUser = 2;  // 操作人信息
+  int64 operationTime = 3;         // 操作时间戳
+  GroupMemberFullInfo mutedUser = 4; // 被解除禁言成员信息
+  uint64 groupMemberVersion = 5;   // 群成员版本号
+  string groupMemberVersionID = 6; // 群成员版本ID
+}
+
+// 群组全员禁言通知
+message GroupMutedTips {
+  GroupInfo group = 1;             // 群组信息
+  GroupMemberFullInfo opUser = 2;  // 操作人信息
+  int64 operationTime = 3;         // 操作时间戳
+  uint64 groupMemberVersion = 4;   // 群成员版本号
+  string groupMemberVersionID = 5; // 群成员版本ID
+}
+
+// 群组全员禁言解除通知
+message GroupCancelMutedTips {
+  GroupInfo group = 1;             // 群组信息
+  GroupMemberFullInfo opUser = 2;  // 操作人信息
+  int64 operationTime = 3;         // 操作时间戳
+  uint64 groupMemberVersion = 4;   // 群成员版本号
+  string groupMemberVersionID = 5; // 群成员版本ID
+}
+
+// 群成员信息修改通知
+message GroupMemberInfoSetTips {
+  GroupInfo group = 1;                          // 群组信息
+  GroupMemberFullInfo opUser = 2;               // 操作人信息
+  int64 operationTime = 3;                      // 操作时间戳
+  GroupMemberFullInfo changedUser = 4;          // 被修改成员信息
+  uint64 groupMemberVersion = 5;                // 群成员版本号
+  string groupMemberVersionID = 6;              // 群成员版本ID
+  uint64 groupSortVersion = 7;                  // 群排序版本号
+}
+
+// ================================ 好友事件通知 ================================
+
+// 好友申请信息
+message FriendApplication {
+  int64 addTime = 1;      // 添加时间戳
+  string addSource = 2;   // 添加来源
+  string addWording = 3;  // 添加备注
+}
+
+// 用户ID对
+message FromToUserID {
+  string fromUserID = 1;  // 发起者ID
+  string toUserID = 2;    // 接收者ID
+}
+
+// 好友申请通知
+message FriendApplicationTips {
+  FromToUserID fromToUserID = 1; // 发起者和接收者ID对
+  FriendRequest request = 2;      // 申请详情
+}
+
+// 好友申请通过通知
+message FriendApplicationApprovedTips {
+  FromToUserID fromToUserID = 1; // 同意者和申请者ID对
+  string handleMsg = 2;          // 处理消息
+  uint64 friendVersion = 3;      // 好友版本号
+  string friendVersionID = 4;    // 好友版本ID
+  FriendRequest request = 5;     // 申请详情
+}
+
+// 好友申请拒绝通知
+message FriendApplicationRejectedTips {
+  FromToUserID fromToUserID = 1; // 拒绝者和申请者ID对
+  string handleMsg = 2;          // 处理消息
+  FriendRequest request = 3;     // 申请详情
+}
+
+// 好友添加成功通知
+message FriendAddedTips {
+  FriendInfo friend = 1;         // 好友信息
+  int64 operationTime = 2;       // 操作时间戳
+  PublicUserInfo opUser = 3;     // 操作人信息
+  uint64 friendVersion = 4;      // 好友版本号
+  string friendVersionID = 5;    // 好友版本ID
+}
+
+// 好友删除通知
+message FriendDeletedTips {
+  FromToUserID fromToUserID = 1; // 删除者和被删除者ID对
+  uint64 friendVersion = 2;      // 好友版本号
+  string friendVersionID = 3;    // 好友版本ID
+}
+
+// 黑名单添加通知
+message BlackAddedTips {
+  FromToUserID fromToUserID = 1; // 添加者和被拉黑者ID对
+}
+
+// 黑名单删除通知
+message BlackDeletedTips {
+  FromToUserID fromToUserID = 1; // 删除者和被移除者ID对
+}
+
+// 好友信息变更通知
+message FriendInfoChangedTips {
+  FromToUserID fromToUserID = 1; // 变更者和好友ID对
+  uint64 friendVersion = 2;      // 好友版本号
+  string friendVersionID = 3;    // 好友版本ID
+  uint64 friendSortVersion = 4;  // 好友排序版本号
+}
+
+// ================================ 用户事件通知 ================================
+
+// 用户信息更新通知
+message UserInfoUpdatedTips {
+  string userID = 1;  // 用户ID
+}
+
+// 用户状态变更通知
+message UserStatusChangeTips {
+  string fromUserID = 1; // 状态变更用户ID
+  string toUserID = 2;   // 订阅者ID
+  int32 status = 3;      // 在线状态(1-在线, 0-离线)
+  int32 platformID = 4;  // 平台ID
+}
+
+// 用户命令添加通知
+message UserCommandAddTips {
+  string fromUserID = 1; // 发送者ID
+  string toUserID = 2;   // 接收者ID
+}
+
+// 用户命令更新通知
+message UserCommandUpdateTips {
+  string fromUserID = 1; // 发送者ID
+  string toUserID = 2;   // 接收者ID
+}
+
+// 用户命令删除通知
+message UserCommandDeleteTips {
+  string fromUserID = 1; // 发送者ID
+  string toUserID = 2;   // 接收者ID
+}
+
+// ================================ 会话事件通知 ================================
+
+// 会话更新通知
+message ConversationUpdateTips {
+  string userID = 1;                  // 用户ID
+  repeated string conversationIDList = 2; // 会话ID列表
+}
+
+// 会话设置私聊通知
+message ConversationSetPrivateTips {
+  string recvID = 1;          // 接收者ID
+  string sendID = 2;          // 发送者ID
+  bool isPrivate = 3;         // 是否私聊
+  string conversationID = 4;  // 会话ID
+}
+
+// 会话已读通知
+message ConversationHasReadTips {
+  string userID = 1;           // 用户ID
+  string conversationID = 2;   // 会话ID
+  int64 hasReadSeq = 3;        // 已读序列号
+  int64 unreadCountTime = 4;   // 未读计数时间戳
+}
+
+// 通知元素
+message NotificationElem {
+  string detail = 1;  // 详细内容
+}
+
+// ================================ 消息事件通知 ================================
+
+// 序列号列表
+message seqs {
+  repeated int64 seqs = 1;  // 序列号列表
+}
+
+// 消息删除通知
+message DeleteMessageTips {
+  string opUserID = 1;        // 操作人ID
+  string userID = 2;          // 用户ID
+  repeated int64 seqs = 3;    // 被删除消息序列号列表
+}
+
+// 消息撤回通知
+message RevokeMsgTips {
+  string revokerUserID = 1;   // 撤回者ID
+  string clientMsgID = 2;     // 客户端消息ID
+  int64 revokeTime = 3;       // 撤回时间戳
+  int32 sesstionType = 5;     // 会话类型
+  int64 seq = 6;              // 消息序列号
+  string conversationID = 7;  // 会话ID
+  bool isAdminRevoke = 8;     // 是否管理员撤回
+}
+
+// 消息撤回内容
+message MessageRevokedContent {
+  string revokerID = 1;                    // 撤回者ID
+  int32 revokerRole = 2;                   // 撤回者角色
+  string clientMsgID = 3;                  // 客户端消息ID
+  string revokerNickname = 4;              // 撤回者昵称
+  int64 revokeTime = 5;                    // 撤回时间戳
+  int64 sourceMessageSendTime = 6;         // 原消息发送时间
+  string sourceMessageSendID = 7;          // 原消息发送者ID
+  string sourceMessageSenderNickname = 8;  // 原消息发送者昵称
+  int32 sessionType = 10;                  // 会话类型
+  int64 seq = 11;                          // 消息序列号
+  string ex = 12;                          // 扩展字段
+}
+
+// 清空会话通知
+message ClearConversationTips {
+  string userID = 1;                  // 用户ID
+  repeated string conversationIDs = 2; // 会话ID列表
+}
+
+// 删除消息通知
+message DeleteMsgsTips {
+  string userID = 1;           // 用户ID
+  string conversationID = 2;   // 会话ID
+  repeated int64 seqs = 3;     // 被删除消息序列号列表
+}
+
+// 标记已读通知
+message MarkAsReadTips {
+  string markAsReadUserID = 1;  // 标记已读用户ID
+  string conversationID = 2;    // 会话ID
+  repeated int64 seqs = 3;      // 被标记消息序列号列表
+  int64 hasReadSeq = 4;         // 已读序列号
+}
+
+// 设置应用后台状态请求
+message SetAppBackgroundStatusReq {
+  string userID = 1;      // 用户ID
+  bool isBackground = 2;  // 是否后台运行
+}
+
+// 设置应用后台状态响应
+message SetAppBackgroundStatusResp {}
+
+// 用户命令处理
+message ProcessUserCommand {
+  string userID = 1;       // 用户ID
+  int32 type = 2;          // 命令类型
+  int64 createTime = 3;    // 创建时间戳
+  string uuid = 4;         // 唯一标识
+  string value = 5;        // 命令值
+}
+
+// 分页请求
+message RequestPagination {
+  int32 pageNumber = 1;   // 页码
+  int32 showNumber = 2;   // 每页数量
+}
+
+// 好友信息更新通知
+message FriendsInfoUpdateTips {
+  FromToUserID fromToUserID = 1; // 用户ID对
+  repeated string friendIDs = 2;  // 好友ID列表
+  uint64 friendVersion = 3;       // 好友版本号
+  string friendVersionID = 4;     // 好友版本ID
+}
+
+// 订阅用户在线状态元素
+message SubUserOnlineStatusElem {
+  string userID = 1;                  // 用户ID
+  repeated int32 onlinePlatformIDs = 2; // 在线平台ID列表
+}
+
+// 订阅用户在线状态通知
+message SubUserOnlineStatusTips {
+  repeated SubUserOnlineStatusElem subscribers = 1; // 订阅者列表
+}
+
+// 订阅用户在线状态
+message SubUserOnlineStatus {
+  repeated string subscribeUserID = 1;   // 订阅用户ID列表
+  repeated string unsubscribeUserID = 2; // 取消订阅用户ID列表
+}
+
+// 流式消息通知
+message StreamMsgTips {
+  string conversationID = 1;  // 会话ID
+  string clientMsgID = 2;     // 客户端消息ID
+  int64 startIndex = 3;       // 起始索引
+  repeated string packets = 4; // 数据包列表
+  bool end = 5;               // 是否结束
+}
+
+// 会话删除通知
+message ConversationDeleteTips {
+  string userID = 1;                  // 用户ID
+  repeated string conversationIDs = 2; // 会话ID列表
+}

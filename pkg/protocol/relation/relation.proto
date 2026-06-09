@@ -1,0 +1,427 @@
+// OpenIM 关系链管理协议定义
+// 定义好友关系、黑名单等关系链相关的数据结构和 gRPC 服务接口
+syntax = "proto3";
+package openim.relation;
+
+// 导入依赖的 proto 文件
+import "sdkws/sdkws.proto";
+import "wrapperspb/wrapperspb.proto";
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/relation";
+
+// ================================ 好友管理 ================================
+
+// 分页获取好友列表请求
+message getPaginationFriendsReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+  string userID = 2;                              // 用户ID
+}
+
+// 分页获取好友列表响应
+message getPaginationFriendsResp {
+  repeated openim.sdkws.FriendInfo friendsInfo = 1; // 好友信息列表
+  int32 total = 2;                                  // 总数
+}
+
+// 申请添加好友请求
+message applyToAddFriendReq {
+  string fromUserID = 1;  // 请求发起者ID
+  string toUserID = 2;    // 请求接收者ID
+  string reqMsg = 3;      // 请求消息
+  string ex = 4;          // 扩展字段
+}
+
+// 申请添加好友响应
+message applyToAddFriendResp {}
+
+// 好友信息
+message friendInfo {
+  string ownerUserID = 1;     // 所有者ID
+  string friendUserID = 2;    // 好友ID
+  string friendNickname = 3;  // 好友昵称
+  string friendFaceURL = 4;   // 好友头像URL
+  string remark = 5;          // 备注
+  int64 createTime = 6;       // 创建时间戳
+  int32 addSource = 7;        // 添加来源
+  string operatorUserID = 8;  // 操作者ID
+  string ex = 9;              // 扩展字段
+  bool isPinned = 10;         // 是否置顶
+}
+
+// 导入好友关系请求
+message importFriendReq {
+  string ownerUserID = 1;           // 所有者ID
+  repeated string friendUserIDs = 2; // 好友ID列表
+}
+
+// 导入好友关系响应
+message importFriendResp {}
+
+// ================================ 好友申请管理 ================================
+
+// 分页获取收到的好友申请请求
+message getPaginationFriendsApplyToReq {
+  string userID = 1;                              // 用户ID
+  openim.sdkws.RequestPagination pagination = 2;  // 分页参数
+  repeated int32 handleResults = 3;               // 处理结果过滤(可选)
+}
+
+// 分页获取收到的好友申请响应
+message getPaginationFriendsApplyToResp {
+  repeated openim.sdkws.FriendRequest FriendRequests = 1; // 好友申请列表
+  int32 total = 2;                                        // 总数
+}
+
+// 获取指定好友申请请求
+message getDesignatedFriendsApplyReq {
+  string fromUserID = 1;  // 请求发起者ID
+  string toUserID = 2;    // 请求接收者ID
+}
+
+// 获取指定好友申请响应
+message getDesignatedFriendsApplyResp {
+  repeated openim.sdkws.FriendRequest friendRequests = 1; // 好友申请列表
+}
+
+// 获取未处理好友申请数量请求
+message getSelfUnhandledApplyCountReq {
+  string userID = 1;  // 用户ID
+  int64 time = 2;     // 时间戳(可选，查询该时间之后的)
+}
+
+// 获取未处理好友申请数量响应
+message getSelfUnhandledApplyCountResp {
+  int64 count = 1;  // 未处理数量
+}
+
+// 获取增量好友申请(收到的)请求
+message getIncrementalFriendsApplyToReq {
+  string userID = 1;      // 用户ID
+  string versionID = 2;   // 版本ID
+  uint64 version = 3;     // 版本号
+}
+
+// 获取增量好友申请(收到的)响应
+message getIncrementalFriendsApplyToResp {
+  uint64 version = 1;                           // 当前版本号
+  string versionID = 2;                         // 当前版本ID
+  bool full = 3;                                // 是否需要全量同步
+  repeated string deleteUserIds = 4;            // 删除的用户ID列表
+  repeated openim.sdkws.FriendRequest changes = 5; // 变更的好友申请列表
+}
+
+// 获取增量好友申请(发出的)请求
+message getIncrementalFriendsApplyFromReq {
+  string userID = 1;      // 用户ID
+  string versionID = 2;   // 版本ID
+  uint64 version = 3;     // 版本号
+}
+
+// 获取增量好友申请(发出的)响应
+message getIncrementalFriendsApplyFromResp {
+  uint64 version = 1;                           // 当前版本号
+  string versionID = 2;                         // 当前版本ID
+  bool full = 3;                                // 是否需要全量同步
+  repeated string deleteUserIds = 4;            // 删除的用户ID列表
+  repeated openim.sdkws.FriendRequest changes = 5; // 变更的好友申请列表
+}
+
+// 获取指定好友信息请求
+message getDesignatedFriendsReq {
+  string ownerUserID = 1;           // 所有者ID
+  repeated string friendUserIDs = 2; // 好友ID列表
+}
+
+// 获取指定好友信息响应
+message getDesignatedFriendsResp {
+  repeated openim.sdkws.FriendInfo friendsInfo = 1; // 好友信息列表
+}
+
+// ================================ 黑名单管理 ================================
+
+// 添加黑名单请求
+message addBlackReq {
+  string ownerUserID = 1;  // 所有者ID
+  string blackUserID = 2;  // 被拉黑用户ID
+  string ex = 3;           // 扩展字段
+}
+
+// 添加黑名单响应
+message addBlackResp {}
+
+// 移除黑名单请求
+message removeBlackReq {
+  string ownerUserID = 1;  // 所有者ID
+  string blackUserID = 2;  // 被移除用户ID
+}
+
+// 移除黑名单响应
+message removeBlackResp {}
+
+// 分页获取黑名单列表请求
+message getPaginationBlacksReq {
+  string userID = 1;                              // 用户ID
+  openim.sdkws.RequestPagination pagination = 2;  // 分页参数
+}
+
+// 分页获取黑名单列表响应
+message getPaginationBlacksResp {
+  repeated openim.sdkws.BlackInfo blacks = 1; // 黑名单列表
+  int32 total = 2;                            // 总数
+}
+
+message isFriendReq {
+  string userID1 = 1;
+  string userID2 = 2;
+}
+message isFriendResp {
+  bool inUser1Friends = 1;  // userID2是否在userID1的好友列表中
+  bool inUser2Friends = 2;  // userID1是否在userID2的好友列表中
+}
+
+message isBlackReq {
+  string userID1 = 1;
+  string userID2 = 2;
+}
+message isBlackResp {
+  bool inUser1Blacks = 1;  // userID2是否在userID1的黑名单中
+  bool inUser2Blacks = 2;  // userID1是否在userID2的黑名单中
+}
+
+message deleteFriendReq {
+  string ownerUserID = 1;
+  string friendUserID = 2;
+}
+message deleteFriendResp {}
+
+// ================================ 好友申请处理 ================================
+
+// 处理好友申请请求
+message respondFriendApplyReq {
+  string fromUserID = 1;    // 请求发起者ID
+  string toUserID = 2;      // 请求接收者ID
+  int32 handleResult = 3;   // 处理结果(1-同意, 2-拒绝)
+  string handleMsg = 4;     // 处理消息
+}
+
+// 处理好友申请响应
+message respondFriendApplyResp {}
+
+// 更新好友信息请求
+message updateFriendsReq {
+  string ownerUserID = 1;                      // 所有者ID
+  repeated string friendUserIDs = 2;           // 好友ID列表
+  openim.wrapperspb.BoolValue isPinned = 3;   // 是否置顶(可选)
+  openim.wrapperspb.StringValue remark = 4;   // 备注(可选)
+  openim.wrapperspb.StringValue ex = 5;       // 扩展字段(可选)
+}
+
+// 更新好友信息响应
+message updateFriendsResp {}
+
+// 设置好友备注请求
+message setFriendRemarkReq {
+  string ownerUserID = 1;   // 所有者ID
+  string friendUserID = 2;  // 好友ID
+  string remark = 3;        // 备注
+}
+
+// 设置好友备注响应
+message setFriendRemarkResp {}
+
+// 分页获取发出的好友申请请求
+message getPaginationFriendsApplyFromReq {
+  string userID = 1;                              // 用户ID
+  openim.sdkws.RequestPagination pagination = 2;  // 分页参数
+  repeated int32 handleResults = 3;               // 处理结果过滤(可选)
+}
+
+// 分页获取发出的好友申请响应
+message getPaginationFriendsApplyFromResp {
+  repeated openim.sdkws.FriendRequest friendRequests = 1; // 好友申请列表
+  int32 total = 2;                                        // 总数
+}
+
+// 获取好友ID列表请求
+message getFriendIDsReq {
+  string userID = 1;  // 用户ID
+}
+
+// 获取好友ID列表响应
+message getFriendIDsResp {
+  repeated string friendIDs = 1;  // 好友ID列表
+}
+
+// 获取指定用户的详细信息请求
+message getSpecifiedFriendsInfoReq {
+  string ownerUserID = 1;          // 所有者ID
+  repeated string userIDList = 2;  // 用户ID列表
+}
+
+// 指定用户的详细信息
+message getSpecifiedFriendsInfoInfo {
+  openim.sdkws.UserInfo userInfo = 1;     // 用户信息
+  openim.sdkws.FriendInfo friendInfo = 2; // 好友信息(如果是好友)
+  openim.sdkws.BlackInfo blackInfo = 3;   // 黑名单信息(如果在黑名单)
+}
+
+// 获取指定用户的详细信息响应
+message getSpecifiedFriendsInfoResp {
+  repeated getSpecifiedFriendsInfoInfo infos = 1; // 用户详细信息列表
+}
+
+// ================================ 增量同步 ================================
+
+// 获取增量好友列表请求
+message getIncrementalFriendsReq {
+  string userID = 1;      // 用户ID
+  string versionID = 2;   // 版本ID
+  uint64 version = 3;     // 版本号
+}
+
+// 获取增量好友列表响应
+message getIncrementalFriendsResp {
+  uint64 version = 1;                        // 当前版本号
+  string versionID = 2;                      // 当前版本ID
+  bool full = 3;                             // 是否需要全量同步
+  repeated string delete = 4;                // 删除的好友ID列表
+  repeated openim.sdkws.FriendInfo insert = 5; // 新增的好友列表
+  repeated openim.sdkws.FriendInfo update = 6; // 更新的好友列表
+  uint64 sortVersion = 7;                    // 排序版本
+}
+
+// 获取增量黑名单列表请求
+message getIncrementalBlacksReq {
+  string userID = 1;      // 用户ID
+  string versionID = 2;   // 版本ID
+  uint64 version = 3;     // 版本号
+}
+
+// 获取增量黑名单列表响应
+message getIncrementalBlacksResp {
+  uint64 version = 1;                      // 当前版本号
+  string versionID = 2;                    // 当前版本ID
+  bool full = 3;                           // 是否需要全量同步
+  repeated string delete = 4;              // 删除的黑名单ID列表
+  repeated openim.sdkws.BlackInfo insert = 5; // 新增的黑名单列表
+  repeated openim.sdkws.BlackInfo update = 6; // 更新的黑名单列表
+}
+
+// 获取指定黑名单信息请求
+message GetSpecifiedBlacksReq {
+  string ownerUserID = 1;          // 所有者ID
+  repeated string userIDList = 2;  // 用户ID列表
+}
+
+// 获取指定黑名单信息响应
+message GetSpecifiedBlacksResp {
+  repeated openim.sdkws.BlackInfo blacks = 1; // 黑名单信息列表
+  int32 total = 2;                            // 总数
+}
+
+// 获取完整好友ID列表请求
+message getFullFriendUserIDsReq {
+  uint64 idHash = 1;  // ID哈希值
+  string userID = 2;  // 用户ID
+}
+
+// 获取完整好友ID列表响应
+message getFullFriendUserIDsResp {
+  uint64 version = 1;      // 版本号
+  string versionID = 2;    // 版本ID
+  bool equal = 3;          // 哈希是否相等
+  repeated string userIDs = 4; // 好友ID列表
+}
+
+// 用户信息更新通知请求
+message notificationUserInfoUpdateReq {
+  string userID = 1;             // 用户ID
+  openim.sdkws.UserInfo oldUserInfo = 2; // 旧用户信息
+  openim.sdkws.UserInfo newUserInfo = 3; // 新用户信息
+}
+
+// 用户信息更新通知响应
+message notificationUserInfoUpdateResp {}
+
+// 简化的好友信息
+message FriendInfoOnly {
+  string ownerUserID = 1;     // 所有者ID
+  string friendUserID = 2;    // 好友ID
+  string remark = 3;          // 备注
+  int64 createTime = 4;       // 创建时间戳
+  int32 addSource = 5;        // 添加来源
+  string operatorUserID = 6;  // 操作者ID
+  string ex = 7;              // 扩展字段
+  bool isPinned = 8;          // 是否置顶
+}
+
+// 获取好友信息请求
+message getFriendInfoReq {
+  string ownerUserID = 1;           // 所有者ID
+  repeated string friendUserIDs = 2; // 好友ID列表
+}
+
+// 获取好友信息响应
+message getFriendInfoResp {
+  repeated FriendInfoOnly friendInfos = 1; // 好友信息列表
+}
+
+// ================================ 服务定义 ================================
+
+// 好友关系管理服务
+service friend {
+  // 申请添加好友
+  rpc applyToAddFriend(applyToAddFriendReq) returns (applyToAddFriendResp);
+  // 获取收到的好友申请列表
+  rpc getPaginationFriendsApplyTo(getPaginationFriendsApplyToReq) returns (getPaginationFriendsApplyToResp);
+  // 获取发出的好友申请列表
+  rpc getPaginationFriendsApplyFrom(getPaginationFriendsApplyFromReq) returns (getPaginationFriendsApplyFromResp);
+  // 获取未处理好友申请数量
+  rpc getSelfUnhandledApplyCount(getSelfUnhandledApplyCountReq) returns (getSelfUnhandledApplyCountResp);
+  // 获取指定好友申请
+  rpc getDesignatedFriendsApply(getDesignatedFriendsApplyReq) returns (getDesignatedFriendsApplyResp);
+  // 获取增量好友申请(收到的)
+  rpc getIncrementalFriendsApplyTo(getIncrementalFriendsApplyToReq) returns (getIncrementalFriendsApplyToResp);
+  // 获取增量好友申请(发出的)
+  rpc getIncrementalFriendsApplyFrom(getIncrementalFriendsApplyFromReq) returns (getIncrementalFriendsApplyFromResp);
+  // 添加黑名单
+  rpc addBlack(addBlackReq) returns (addBlackResp);
+  // 移除黑名单
+  rpc removeBlack(removeBlackReq) returns (removeBlackResp);
+  // 验证好友关系
+  rpc isFriend(isFriendReq) returns (isFriendResp);
+  // 验证黑名单关系
+  rpc isBlack(isBlackReq) returns (isBlackResp);
+  // 获取黑名单列表
+  rpc getPaginationBlacks(getPaginationBlacksReq) returns (getPaginationBlacksResp);
+  // 获取指定黑名单信息
+  rpc GetSpecifiedBlacks(GetSpecifiedBlacksReq) returns (GetSpecifiedBlacksResp);
+  // 删除好友
+  rpc deleteFriend(deleteFriendReq) returns (deleteFriendResp);
+  // 处理好友申请(同意或拒绝)
+  rpc respondFriendApply(respondFriendApplyReq) returns (respondFriendApplyResp);
+  // 更新好友信息(置顶、备注等)
+  rpc updateFriends(updateFriendsReq) returns (updateFriendsResp);
+  // 设置好友备注
+  rpc setFriendRemark(setFriendRemarkReq) returns (setFriendRemarkResp);
+  // 导入好友关系
+  rpc importFriends(importFriendReq) returns (importFriendResp);
+  // 获取指定好友信息(未找到不报错)
+  rpc getDesignatedFriends(getDesignatedFriendsReq) returns (getDesignatedFriendsResp);
+  // 分页获取好友列表(ID不存在报错)
+  rpc getPaginationFriends(getPaginationFriendsReq) returns (getPaginationFriendsResp);
+  // 获取好友ID列表
+  rpc getFriendIDs(getFriendIDsReq) returns (getFriendIDsResp);
+  // 获取指定用户的详细信息
+  rpc GetSpecifiedFriendsInfo(getSpecifiedFriendsInfoReq) returns (getSpecifiedFriendsInfoResp);
+  // 获取增量好友列表
+  rpc getIncrementalFriends(getIncrementalFriendsReq) returns (getIncrementalFriendsResp);
+  // 获取增量黑名单列表
+  rpc getIncrementalBlacks(getIncrementalBlacksReq) returns (getIncrementalBlacksResp);
+  // 获取完整好友ID列表
+  rpc getFullFriendUserIDs(getFullFriendUserIDsReq) returns (getFullFriendUserIDsResp);
+  // 通知用户信息更新
+  rpc NotificationUserInfoUpdate(notificationUserInfoUpdateReq) returns (notificationUserInfoUpdateResp);
+  // 获取好友信息(简化版)
+  rpc getFriendInfo(getFriendInfoReq) returns (getFriendInfoResp);
+}

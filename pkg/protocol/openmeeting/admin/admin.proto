@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package openmeeting.admin;
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/openmeeting/admin";
+
+
+message userLoginReq {
+  string account = 4;
+  string password = 5;
+}
+
+message userLoginResp {
+  string token = 2;
+  string userID = 3;
+}
+
+message userRegisterReq {
+  string nickname = 1;
+  string account = 2;
+  string password = 3;
+}
+
+message userRegisterResp {
+}
+

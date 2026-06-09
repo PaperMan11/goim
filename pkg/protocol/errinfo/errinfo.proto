@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package openim.errinfo;
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/errinfo";
+
+message ErrorInfo {
+  string path = 1;
+  uint32 line = 2;
+  string name = 3;
+  string cause = 4;
+  repeated string warp = 5;
+}

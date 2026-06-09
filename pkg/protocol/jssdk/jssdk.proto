@@ -1,0 +1,38 @@
+syntax = "proto3";
+package openim.jssdk;
+
+import "sdkws/sdkws.proto";
+import "relation/relation.proto";
+import "conversation/conversation.proto";
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/jssdk";
+
+message ConversationMsg {
+  openim.conversation.Conversation conversation = 1;
+  openim.sdkws.MsgData lastMsg = 2;
+  openim.sdkws.UserInfo user = 3;
+  openim.relation.FriendInfoOnly friend = 4;
+  openim.sdkws.GroupInfo group = 5;
+  int64 maxSeq = 6;
+  int64 readSeq = 7;
+}
+
+message GetActiveConversationsReq  {
+  string ownerUserID = 1;
+  int64 count = 2;
+}
+
+message GetActiveConversationsResp {
+  int64 unreadCount = 1;
+  repeated ConversationMsg conversations = 2;
+}
+
+message GetConversationsReq  {
+  string ownerUserID = 1;
+  repeated string conversationIDs = 2;
+}
+
+message GetConversationsResp {
+  int64 unreadCount = 1;
+  repeated ConversationMsg conversations = 2;
+}

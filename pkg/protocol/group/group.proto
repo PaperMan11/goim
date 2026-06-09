@@ -1,0 +1,601 @@
+// OpenIM 群组管理协议定义
+// 定义群组相关的数据结构和 gRPC 服务接口
+syntax = "proto3";
+package openim.group;
+
+// 导入依赖的 proto 文件
+import "sdkws/sdkws.proto";
+import "wrapperspb/wrapperspb.proto";
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/group";
+
+// ================================ 群组管理 ================================
+
+// 创建群组请求
+message CreateGroupReq {
+  repeated string memberUserIDs = 1;        // 群成员ID列表
+  openim.sdkws.GroupInfo groupInfo = 2;     // 群组信息
+  repeated string adminUserIDs = 3;         // 管理员ID列表
+  string ownerUserID = 4;                   // 群主ID
+  optional bool sendMessage = 5;            // 是否发送通知消息
+}
+
+// 创建群组响应
+message CreateGroupResp {
+  openim.sdkws.GroupInfo groupInfo = 1;  // 创建的群组信息
+}
+
+// 获取群组信息请求
+message GetGroupsInfoReq {
+  repeated string groupIDs = 1;  // 群组ID列表
+}
+
+// 获取群组信息响应
+message GetGroupsInfoResp {
+  repeated openim.sdkws.GroupInfo groupInfos = 1;  // 群组信息列表
+}
+
+// 设置群组信息请求
+message SetGroupInfoReq {
+  openim.sdkws.GroupInfoForSet groupInfoForSet = 1;  // 群组设置信息
+}
+
+// 设置群组信息响应
+message SetGroupInfoResp {}
+
+// 设置群组信息(扩展)请求
+message SetGroupInfoExReq {
+  string groupID = 1;                                  // 群组ID
+  openim.wrapperspb.StringValue groupName = 2;         // 群名称(可选)
+  openim.wrapperspb.StringValue notification = 3;      // 群公告(可选)
+  openim.wrapperspb.StringValue introduction = 4;      // 群介绍(可选)
+  openim.wrapperspb.StringValue faceURL = 5;           // 群头像(可选)
+  openim.wrapperspb.StringValue ex = 6;                // 扩展字段(可选)
+  openim.wrapperspb.Int32Value needVerification = 7;   // 是否需要验证(可选)
+  openim.wrapperspb.Int32Value lookMemberInfo = 8;     // 是否可见成员信息(可选)
+  openim.wrapperspb.Int32Value applyMemberFriend = 9;  // 是否允许申请加好友(可选)
+}
+
+// 设置群组信息(扩展)响应
+message SetGroupInfoExResp {}
+
+// ================================ 群申请管理 ================================
+
+// 获取群申请列表请求(管理员/群主视角)
+message GetGroupApplicationListReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+  string fromUserID = 2;                          // 管理员/群主ID
+  repeated string groupIDs = 3;                   // 群组ID列表(可选)
+  repeated int32 handleResults = 4;               // 处理结果过滤(可选)
+}
+
+// 获取群申请列表响应
+message GetGroupApplicationListResp {
+  uint32 total = 1;                                  // 总数
+  repeated openim.sdkws.GroupRequest groupRequests = 2; // 群申请列表
+}
+
+// 获取未处理群申请数量请求
+message GetGroupApplicationUnhandledCountReq {
+  string userID = 1;  // 用户ID
+  int64 time = 2;     // 时间戳(可选，查询该时间之后的)
+}
+
+// 获取未处理群申请数量响应
+message GetGroupApplicationUnhandledCountResp {
+  int64 count = 1;  // 未处理数量
+}
+
+// 获取用户申请加入群列表请求
+message GetUserReqApplicationListReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+  string userID = 2;                              // 用户ID
+  repeated string groupIDs = 3;                   // 群组ID列表(可选)
+  repeated int32 handleResults = 4;               // 处理结果过滤(可选)
+}
+
+// 获取用户申请加入群列表响应
+message GetUserReqApplicationListResp {
+  uint32 total = 1;                                  // 总数
+  repeated openim.sdkws.GroupRequest groupRequests = 2; // 群申请列表
+}
+
+// 获取指定用户的群申请信息请求
+message GetSpecifiedUserGroupRequestInfoReq {
+  string groupID = 1;  // 群组ID
+  string userID = 2;   // 用户ID
+}
+
+// 获取指定用户的群申请信息响应
+message GetSpecifiedUserGroupRequestInfoResp {
+  uint32 total = 1;                                  // 总数
+  repeated openim.sdkws.GroupRequest groupRequests = 2; // 群申请列表
+}
+
+// 转让群主请求
+message TransferGroupOwnerReq {
+  string groupID = 1;         // 群组ID
+  string oldOwnerUserID = 2;  // 旧群主ID
+  string newOwnerUserID = 3;  // 新群主ID
+}
+
+// 转让群主响应
+message TransferGroupOwnerResp {}
+
+// 加入群组请求
+message JoinGroupReq {
+  string groupID = 1;        // 群组ID
+  string reqMessage = 2;     // 申请消息
+  int32 joinSource = 3;      // 加入来源
+  string inviterUserID = 4;  // 邀请者ID(可选)
+  string ex = 5;             // 扩展字段
+}
+
+// 加入群组响应
+message JoinGroupResp {}
+
+// 处理群申请请求
+message GroupApplicationResponseReq {
+  string groupID = 1;       // 群组ID
+  string fromUserID = 2;    // 申请者ID
+  string handledMsg = 3;    // 处理消息
+  int32 handleResult = 4;   // 处理结果(1-同意, 2-拒绝)
+}
+
+// 处理群申请响应
+message GroupApplicationResponseResp {}
+
+// 退出群组请求
+message QuitGroupReq {
+  string groupID = 1;  // 群组ID
+  string userID = 2;   // 用户ID
+}
+
+// 退出群组响应
+message QuitGroupResp {}
+
+// ================================ 群成员管理 ================================
+
+// 获取群成员列表请求
+message GetGroupMemberListReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+  string groupID = 2;                             // 群组ID
+  int32 filter = 3;                               // 过滤条件(0-全部, 1-群主, 2-管理员)
+  string keyword = 4;                             // 搜索关键词(可选)
+}
+
+// 获取群成员列表响应
+message GetGroupMemberListResp {
+  uint32 total = 1;                                       // 总数
+  repeated openim.sdkws.GroupMemberFullInfo members = 2;   // 群成员列表
+}
+
+// 获取指定群成员信息请求
+message GetGroupMembersInfoReq {
+  string groupID = 1;           // 群组ID
+  repeated string userIDs = 2;  // 用户ID列表
+}
+
+// 获取指定群成员信息响应
+message GetGroupMembersInfoResp {
+  repeated openim.sdkws.GroupMemberFullInfo members = 1;  // 群成员信息列表
+}
+
+// 踢出群成员请求
+message KickGroupMemberReq {
+  string groupID = 1;              // 群组ID
+  repeated string kickedUserIDs = 2; // 被踢用户ID列表
+  string reason = 3;               // 踢人原因
+  optional bool sendMessage = 4;   // 是否发送通知消息
+}
+
+// 踢出群成员响应
+message KickGroupMemberResp {}
+
+// 获取已加入群组列表请求
+message GetJoinedGroupListReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+  string fromUserID = 2;                          // 用户ID
+}
+
+// 获取已加入群组列表响应
+message GetJoinedGroupListResp {
+  uint32 total = 1;                          // 总数
+  repeated openim.sdkws.GroupInfo groups = 2; // 群组列表
+}
+
+// 邀请用户入群请求
+message InviteUserToGroupReq {
+  string groupID = 1;                 // 群组ID
+  string reason = 2;                  // 邀请理由
+  repeated string invitedUserIDs = 3; // 被邀请用户ID列表
+  optional bool sendMessage = 4;      // 是否发送通知消息
+}
+
+// 邀请用户入群响应
+message InviteUserToGroupResp {}
+
+// 获取群所有成员请求
+message GetGroupAllMemberReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+  string groupID = 2;                             // 群组ID
+}
+
+// 获取群所有成员响应
+message GetGroupAllMemberResp {
+  repeated openim.sdkws.GroupMemberFullInfo members = 1;  // 群成员列表
+}
+
+// ================================ CMS管理 ================================
+
+// CMS群组信息
+message CMSGroup {
+  openim.sdkws.GroupInfo groupInfo = 1;   // 群组信息
+  string groupOwnerUserName = 2;          // 群主用户名
+  string groupOwnerUserID = 3;            // 群主用户ID
+}
+
+// CMS获取群组列表请求
+message GetGroupsReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+  string groupName = 2;                           // 群名称(可选，用于搜索)
+  string groupID = 3;                             // 群组ID(可选，用于精确查找)
+}
+
+// CMS获取群组列表响应
+message GetGroupsResp {
+  uint32 total = 1;          // 总数
+  repeated CMSGroup groups = 2; // 群组列表
+}
+
+// 获取群成员请求
+message GetGroupMemberReq {
+  string groupID = 1;  // 群组ID
+}
+
+// CMS获取群成员列表请求
+message GetGroupMembersCMSReq {
+  openim.sdkws.RequestPagination pagination = 1;  // 分页参数
+  string groupID = 2;                             // 群组ID
+  string userName = 3;                            // 用户名(可选，用于搜索)
+}
+
+// CMS获取群成员列表响应
+message GetGroupMembersCMSResp {
+  uint32 total = 1;                                       // 总数
+  repeated openim.sdkws.GroupMemberFullInfo members = 2;   // 群成员列表
+}
+
+// 解散群组请求
+message DismissGroupReq {
+  string groupID = 1;           // 群组ID
+  bool deleteMember = 2;        // 是否删除成员记录
+  optional bool sendMessage = 3; // 是否发送通知消息
+}
+
+// 解散群组响应
+message DismissGroupResp {}
+
+// ================================ 禁言管理 ================================
+
+// 禁言群成员请求
+message MuteGroupMemberReq {
+  string groupID = 1;         // 群组ID
+  string userID = 2;          // 用户ID
+  uint32 mutedSeconds = 3;    // 禁言时长(秒)
+}
+
+// 禁言群成员响应
+message MuteGroupMemberResp {}
+
+// 取消禁言群成员请求
+message CancelMuteGroupMemberReq {
+  string groupID = 1;  // 群组ID
+  string userID = 2;   // 用户ID
+}
+
+// 取消禁言群成员响应
+message CancelMuteGroupMemberResp {}
+
+// 禁言整个群请求
+message MuteGroupReq {
+  string groupID = 1;  // 群组ID
+}
+
+// 禁言整个群响应
+message MuteGroupResp {}
+
+// 取消群禁言请求
+message CancelMuteGroupReq {
+  string groupID = 1;  // 群组ID
+}
+
+// 取消群禁言响应
+message CancelMuteGroupResp {}
+
+// 设置群成员信息
+message SetGroupMemberInfo {
+  string groupID = 1;                             // 群组ID
+  string userID = 2;                              // 用户ID
+  openim.wrapperspb.StringValue nickname = 3;     // 群昵称(可选)
+  openim.wrapperspb.StringValue faceURL = 4;      // 头像URL(可选)
+  openim.wrapperspb.Int32Value roleLevel = 5;     // 角色等级(可选)
+  openim.wrapperspb.StringValue ex = 6;           // 扩展字段(可选)
+}
+
+// 设置群成员信息请求
+message SetGroupMemberInfoReq {
+  repeated SetGroupMemberInfo members = 1;  // 群成员信息列表
+}
+
+// 设置群成员信息响应
+message SetGroupMemberInfoResp {}
+
+// 获取群组摘要信息请求
+message GetGroupAbstractInfoReq {
+  repeated string groupIDs = 1;  // 群组ID列表
+}
+
+// 群组摘要信息
+message GroupAbstractInfo {
+  string groupID = 1;                  // 群组ID
+  uint32 groupMemberNumber = 2;        // 成员数量
+  uint64 groupMemberListHash = 3;      // 成员列表哈希
+}
+
+// 获取群组摘要信息响应
+message GetGroupAbstractInfoResp {
+  repeated GroupAbstractInfo groupAbstractInfos = 1;  // 群组摘要信息列表
+}
+
+// 获取用户在群中的成员信息请求
+message GetUserInGroupMembersReq {
+  string userID = 1;           // 用户ID
+  repeated string groupIDs = 2; // 群组ID列表
+}
+
+// 获取用户在群中的成员信息响应
+message GetUserInGroupMembersResp {
+  repeated openim.sdkws.GroupMemberFullInfo members = 1;  // 成员信息列表
+}
+
+// 获取群成员用户ID列表请求
+message GetGroupMemberUserIDsReq {
+  string groupID = 1;  // 群组ID
+}
+
+// 获取群成员用户ID列表响应
+message GetGroupMemberUserIDsResp {
+  repeated string userIDs = 1;  // 用户ID列表
+}
+
+// 获取指定角色等级的群成员请求
+message GetGroupMemberRoleLevelReq {
+  string groupID = 1;           // 群组ID
+  repeated int32 roleLevels = 2; // 角色等级列表
+}
+
+// 获取指定角色等级的群成员响应
+message GetGroupMemberRoleLevelResp {
+  repeated openim.sdkws.GroupMemberFullInfo members = 1;  // 群成员列表
+}
+
+// ================================ 缓存管理 ================================
+
+// 获取群组信息缓存请求
+message GetGroupInfoCacheReq {
+  string groupID = 1;  // 群组ID
+}
+
+// 获取群组信息缓存响应
+message GetGroupInfoCacheResp {
+  openim.sdkws.GroupInfo groupInfo = 1;  // 群组信息
+}
+
+// 获取群成员缓存请求
+message GetGroupMemberCacheReq {
+  string groupID = 1;         // 群组ID
+  string groupMemberID = 2;   // 群成员ID
+}
+
+// 获取群成员缓存响应
+message GetGroupMemberCacheResp {
+  openim.sdkws.GroupMemberFullInfo member = 1;  // 群成员信息
+}
+
+// 群组创建统计请求
+message GroupCreateCountReq {
+  int64 start = 1;  // 开始时间戳
+  int64 end = 2;    // 结束时间戳
+}
+
+// 群组创建统计响应
+message GroupCreateCountResp {
+  int64 total = 1;            // 总群数
+  int64 before = 2;           // 开始时间前的群数
+  map<string, int64> count = 3; // 时间段内每日创建数
+}
+
+// 获取群用户申请列表请求
+message getGroupUsersReqApplicationListReq {
+  string groupID = 1;           // 群组ID
+  repeated string userIDs = 2;  // 用户ID列表
+}
+
+// 获取群用户申请列表响应
+message getGroupUsersReqApplicationListResp {
+  int64 total = 1;                                  // 总数
+  repeated openim.sdkws.GroupRequest groupRequests = 2; // 群申请列表
+}
+
+// 用户信息更新通知请求
+message notificationUserInfoUpdateReq {
+  string userID = 1;             // 用户ID
+  openim.sdkws.UserInfo oldUserInfo = 2; // 旧用户信息
+  openim.sdkws.UserInfo newUserInfo = 3; // 新用户信息
+}
+
+// 用户信息更新通知响应
+message notificationUserInfoUpdateResp {}
+
+// ================================ 增量同步 ================================
+
+// 获取增量群成员请求
+message getIncrementalGroupMemberReq {
+  string groupID = 1;      // 群组ID
+  string versionID = 2;    // 版本ID
+  uint64 version = 3;      // 版本号
+}
+
+// 获取增量群成员响应
+message getIncrementalGroupMemberResp {
+  uint64 version = 1;                                      // 当前版本号
+  string versionID = 2;                                    // 当前版本ID
+  bool full = 3;                                           // 是否需要全量同步
+  repeated string delete = 4;                              // 删除的成员ID列表
+  repeated openim.sdkws.GroupMemberFullInfo insert = 5;     // 新增的成员列表
+  repeated openim.sdkws.GroupMemberFullInfo update = 6;     // 更新的成员列表
+  openim.sdkws.GroupInfo group = 7;                        // 群组信息
+  uint64 sortVersion = 8;                                  // 排序版本
+}
+
+// 获取增量加入群组请求
+message getIncrementalJoinGroupReq {
+  string userID = 1;      // 用户ID
+  string versionID = 2;   // 版本ID
+  uint64 version = 3;     // 版本号
+}
+
+// 获取增量加入群组响应
+message getIncrementalJoinGroupResp {
+  uint64 version = 1;                      // 当前版本号
+  string versionID = 2;                    // 当前版本ID
+  bool full = 3;                           // 是否需要全量同步
+  repeated string delete = 4;              // 退出的群组ID列表
+  repeated openim.sdkws.GroupInfo insert = 5; // 新增的群组列表
+  repeated openim.sdkws.GroupInfo update = 6; // 更新的群组列表
+  uint64 sortVersion = 7;                  // 排序版本
+}
+
+// 获取完整群成员ID列表请求
+message GetFullGroupMemberUserIDsReq {
+  uint64 idHash = 1;  // ID哈希值
+  string groupID = 2;  // 群组ID
+}
+
+// 获取完整群成员ID列表响应
+message GetFullGroupMemberUserIDsResp {
+  uint64 version = 1;      // 版本号
+  string versionID = 2;    // 版本ID
+  bool equal = 3;          // 哈希是否相等
+  repeated string userIDs = 4; // 成员ID列表
+}
+
+// 获取完整加入群组ID列表请求
+message GetFullJoinGroupIDsReq {
+  uint64 idHash = 1;  // ID哈希值
+  string userID = 2;  // 用户ID
+}
+
+// 获取完整加入群组ID列表响应
+message GetFullJoinGroupIDsResp {
+  uint64 version = 1;       // 版本号
+  string versionID = 2;     // 版本ID
+  bool equal = 3;           // 哈希是否相等
+  repeated string groupIDs = 4; // 群组ID列表
+}
+
+// 批量获取增量群成员请求
+message BatchGetIncrementalGroupMemberReq {
+  string userID = 1;                              // 用户ID
+  repeated getIncrementalGroupMemberReq reqList = 2; // 请求列表
+}
+
+// 批量获取增量群成员响应
+message BatchGetIncrementalGroupMemberResp {
+  map<string, getIncrementalGroupMemberResp> respList = 1; // 响应列表(key为groupID)
+}
+
+// ================================ 服务定义 ================================
+
+// 群组管理服务
+service group {
+  // 创建群组
+  rpc createGroup(CreateGroupReq) returns (CreateGroupResp);
+  // 申请加入群组
+  rpc joinGroup(JoinGroupReq) returns (JoinGroupResp);
+  // 退出群组
+  rpc quitGroup(QuitGroupReq) returns (QuitGroupResp);
+  // 获取指定群组信息
+  rpc getGroupsInfo(GetGroupsInfoReq) returns (GetGroupsInfoResp);
+  // 设置群组信息
+  rpc setGroupInfo(SetGroupInfoReq) returns (SetGroupInfoResp);
+  // 设置群组信息(扩展)
+  rpc setGroupInfoEx(SetGroupInfoExReq) returns (SetGroupInfoExResp);
+  // 获取群申请列表(管理员/群主视角)
+  rpc getGroupApplicationList(GetGroupApplicationListReq) returns (GetGroupApplicationListResp);
+  // 获取未处理群申请数量
+  rpc getGroupApplicationUnhandledCount(GetGroupApplicationUnhandledCountReq) returns (GetGroupApplicationUnhandledCountResp);
+  // 获取用户申请加入群列表
+  rpc getUserReqApplicationList(GetUserReqApplicationListReq) returns (GetUserReqApplicationListResp);
+  // 获取群用户申请列表
+  rpc getGroupUsersReqApplicationList(getGroupUsersReqApplicationListReq) returns (getGroupUsersReqApplicationListResp);
+  // 获取指定用户的群申请信息
+  rpc getSpecifiedUserGroupRequestInfo(GetSpecifiedUserGroupRequestInfoReq) returns (GetSpecifiedUserGroupRequestInfoResp);
+  // 转让群主
+  rpc transferGroupOwner(TransferGroupOwnerReq) returns (TransferGroupOwnerResp);
+  // 处理群申请(管理员/群主)
+  rpc groupApplicationResponse(GroupApplicationResponseReq) returns (GroupApplicationResponseResp);
+  // 获取群成员列表
+  rpc getGroupMemberList(GetGroupMemberListReq) returns (GetGroupMemberListResp);
+  // 获取指定群成员信息
+  rpc getGroupMembersInfo(GetGroupMembersInfoReq) returns (GetGroupMembersInfoResp);
+  // 踢出群成员
+  rpc kickGroupMember(KickGroupMemberReq) returns (KickGroupMemberResp);
+  // 获取用户已加入的群组列表
+  rpc getJoinedGroupList(GetJoinedGroupListReq) returns (GetJoinedGroupListResp);
+  // 邀请用户入群
+  rpc inviteUserToGroup(InviteUserToGroupReq) returns (InviteUserToGroupResp);
+  // CMS获取群组列表
+  rpc getGroups(GetGroupsReq) returns (GetGroupsResp);
+  // CMS获取群成员列表
+  rpc getGroupMembersCMS(GetGroupMembersCMSReq) returns (GetGroupMembersCMSResp);
+  // 解散群组
+  rpc dismissGroup(DismissGroupReq) returns (DismissGroupResp);
+  // 禁言群成员
+  rpc muteGroupMember(MuteGroupMemberReq) returns (MuteGroupMemberResp);
+  // 取消禁言群成员
+  rpc cancelMuteGroupMember(CancelMuteGroupMemberReq) returns (CancelMuteGroupMemberResp);
+  // 禁言整个群
+  rpc muteGroup(MuteGroupReq) returns (MuteGroupResp);
+  // 取消群禁言
+  rpc cancelMuteGroup(CancelMuteGroupReq) returns (CancelMuteGroupResp);
+  // 设置群成员信息
+  rpc setGroupMemberInfo(SetGroupMemberInfoReq) returns (SetGroupMemberInfoResp);
+  // 获取群组摘要信息
+  rpc getGroupAbstractInfo(GetGroupAbstractInfoReq) returns (GetGroupAbstractInfoResp);
+  // 获取用户在群中的成员信息
+  rpc getUserInGroupMembers(GetUserInGroupMembersReq) returns (GetUserInGroupMembersResp);
+  // 获取群成员用户ID列表
+  rpc getGroupMemberUserIDs(GetGroupMemberUserIDsReq) returns (GetGroupMemberUserIDsResp);
+  // 获取指定角色等级的群成员
+  rpc GetGroupMemberRoleLevel(GetGroupMemberRoleLevelReq) returns (GetGroupMemberRoleLevelResp);
+  // 获取群组信息缓存
+  rpc GetGroupInfoCache(GetGroupInfoCacheReq) returns (GetGroupInfoCacheResp);
+  // 获取群成员缓存
+  rpc GetGroupMemberCache(GetGroupMemberCacheReq) returns (GetGroupMemberCacheResp);
+  // 群组创建统计
+  rpc GroupCreateCount(GroupCreateCountReq) returns (GroupCreateCountResp);
+  // 通知用户信息更新
+  rpc NotificationUserInfoUpdate(notificationUserInfoUpdateReq) returns (notificationUserInfoUpdateResp);
+  // 获取增量群成员
+  rpc getIncrementalGroupMember(getIncrementalGroupMemberReq) returns (getIncrementalGroupMemberResp);
+  // 批量获取增量群成员
+  rpc BatchGetIncrementalGroupMember(BatchGetIncrementalGroupMemberReq) returns (BatchGetIncrementalGroupMemberResp);
+  // 获取增量加入群组
+  rpc getIncrementalJoinGroup(getIncrementalJoinGroupReq) returns (getIncrementalJoinGroupResp);
+  // 获取完整群成员ID列表
+  rpc GetFullGroupMemberUserIDs(GetFullGroupMemberUserIDsReq) returns (GetFullGroupMemberUserIDsResp);
+  // 获取完整加入群组ID列表
+  rpc GetFullJoinGroupIDs(GetFullJoinGroupIDsReq) returns (GetFullJoinGroupIDsResp);
+}

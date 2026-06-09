@@ -1,0 +1,438 @@
+syntax = "proto3";
+
+import "wrapperspb/wrapperspb.proto";
+package openmeeting.meeting;
+
+option go_package = "github.com/PaperMan11/goim/pkg/protocol/openmeeting/meeting";
+
+// ================================ 基础数据结构 ================================
+
+// LiveKit实时通信服务信息
+message LiveKit {
+  string token = 1;  // 身份验证访问令牌
+  string url = 2;    // LiveKit服务连接URL
+}
+
+// 系统生成的会议信息(创建后不可修改)
+message SystemGeneratedMeetingInfo {
+  string creatorUserID = 1;    // 创建者用户ID
+  string creatorNickname = 2;  // 创建者昵称
+  string status = 3;           // 会议状态(如: scheduled预约中, in-progress进行中, completed已完成)
+  int64 startTime = 4;         // 会议实际开始时间戳
+  string meetingID = 5;        // 会议唯一标识符
+}
+
+// 用户定义的会议信息(可修改)
+message CreatorDefinedMeetingInfo {
+  string title = 1;              // 会议标题
+  int64 scheduledTime = 2;       // 会议计划开始时间戳
+  int64 meetingDuration = 3;      // 会议时长(秒)
+  string password = 4;           // 加入会议密码(可选)
+  string timeZone = 5;           // 时区设置
+  string hostUserID = 6;         // 主持人用户ID
+  repeated string coHostUSerID = 7; // 联席主持人用户ID列表
+}
+
+// 会议完整信息(合并系统生成和用户定义信息)
+message MeetingInfo {
+  SystemGeneratedMeetingInfo systemGenerated = 1;      // 系统生成信息
+  CreatorDefinedMeetingInfo creatorDefinedMeeting = 2; // 用户定义信息
+}
+
+// ================================ 枚举定义 ================================
+
+// 星期枚举
+enum DayOfWeek {
+  SUNDAY = 0;    // 周日
+  MONDAY = 1;    // 周一
+  TUESDAY = 2;   // 周二
+  WEDNESDAY = 3; // 周三
+  THURSDAY = 4;  // 周四
+  FRIDAY = 5;    // 周五
+  SATURDAY = 6;  // 周六
+}
+
+// 踢出原因枚举
+enum KickOffReason {
+  DuplicatedLogin = 0;  // 重复登录
+  Offline = 1;          // 离线
+  Logout = 2;           // 登出
+}
+
+// 会议结束类型枚举
+enum MeetingEndType {
+  CancelType = 0;  // 取消会议
+  EndType = 1;     // 正常结束
+}
+
+// 会议重复周期信息
+message MeetingRepeatInfo {
+  int64 endDate = 1;                    // 重复结束日期
+  int32 repeatTimes = 2;                // 重复次数
+  string repeatType = 3;               // 重复类型
+  string uintType = 4;                  // 单位类型
+  int32 interval = 5;                   // 重复间隔
+  repeated DayOfWeek repeatDaysOfWeek = 6; // 每周重复的星期
+}
+
+// ================================ 会议设置 ================================
+
+// 会议功能设置(控制视频、音频、屏幕共享等权限)
+message MeetingSetting {
+  bool canParticipantsEnableCamera = 1;           // 参与者是否可以开启摄像头
+  bool canParticipantsUnmuteMicrophone = 2;       // 参与者是否可以开启麦克风
+  bool canParticipantsShareScreen = 3;            // 参与者是否可以共享屏幕
+  bool disableCameraOnJoin = 4;                  // 加入时是否默认关闭摄像头
+  bool disableMicrophoneOnJoin = 5;               // 加入时是否默认关闭麦克风
+  bool canParticipantJoinMeetingEarly = 6;       // 是否允许参与者提前加入会议
+  bool lockMeeting = 7;                           // 是否锁定会议(锁定后新用户无法加入)
+  bool audioEncouragement = 8;                    // 是否启用音频激励提示
+  bool videoMirroring = 9;                        // 是否启用视频镜像
+}
+
+// 会议完整信息(包含信息和设置)
+message MeetingInfoSetting {
+  MeetingInfo info = 1;             // 会议基本信息
+  MeetingSetting setting = 2;       // 会议设置
+  MeetingRepeatInfo repeatInfo = 3; // 重复周期信息
+}
+
+// 用户信息
+message UserInfo {
+  string userID = 1;    // 用户ID
+  string nickname = 2;  // 昵称
+  string account = 3;   // 账号
+  string faceURL = 4;   // 头像URL
+}
+
+// 参与者元数据
+message ParticipantMetaData {
+  UserInfo userInfo = 1;  // 用户信息
+}
+
+// ================================ 会议预约与创建 ================================
+
+// 预约未来会议请求
+message BookMeetingReq {
+  string creatorUserID = 1;                      // 创建者用户ID
+  CreatorDefinedMeetingInfo creatorDefinedMeetingInfo = 2; // 会议定义信息
+  MeetingSetting setting = 3;                    // 会议设置
+  MeetingRepeatInfo repeatInfo = 4;             // 重复周期信息
+}
+
+// 预约未来会议响应
+message BookMeetingResp {
+  MeetingInfoSetting detail = 1;  // 会议详细信息
+}
+
+// 创建即时会议请求
+message CreateImmediateMeetingReq {
+  string creatorUserID = 1;                      // 创建者用户ID
+  CreatorDefinedMeetingInfo creatorDefinedMeetingInfo = 2; // 会议定义信息
+  MeetingSetting setting = 3;                    // 会议设置
+}
+
+// 创建即时会议响应
+message CreateImmediateMeetingResp {
+  MeetingInfoSetting detail = 1;  // 会议详细信息
+  LiveKit liveKit = 2;            // LiveKit连接信息
+}
+
+// ================================ 会议参与 ================================
+
+// 加入会议请求
+message JoinMeetingReq {
+  string meetingID = 1;   // 会议ID
+  string userID = 2;      // 加入会议的用户ID
+  string password = 3;     // 会议密码(可选)
+}
+
+// 加入会议响应
+message JoinMeetingResp {
+  LiveKit liveKit = 1;  // LiveKit连接信息
+}
+
+// 获取会议Token请求
+message GetMeetingTokenReq {
+  string meetingID = 1;  // 会议ID
+  string userID = 2;     // 加入会议的用户ID
+}
+
+// 获取会议Token响应
+message GetMeetingTokenResp {
+  string meetingID = 1;  // 会议ID
+  LiveKit liveKit = 2;   // LiveKit连接信息
+}
+
+// 离开会议请求
+message LeaveMeetingReq {
+  string meetingID = 1;  // 会议ID
+  string userID = 2;     // 离开会议的用户ID
+}
+
+// 离开会议响应
+message LeaveMeetingResp {
+}
+
+// 结束会议请求
+message EndMeetingReq {
+  string meetingID = 1;      // 会议ID
+  string userID = 2;          // 操作者用户ID
+  MeetingEndType endType = 3; // 结束类型
+}
+
+// 结束会议响应
+message EndMeetingResp {
+}
+
+// ================================ 会议查询 ================================
+
+// 获取用户会议列表请求
+message GetMeetingsReq {
+  string userID = 1;                // 用户ID
+  repeated string status = 2;       // 状态过滤器(如: scheduled预约中, in-progress进行中, completed已完成)
+}
+
+// 获取用户会议列表响应
+message GetMeetingsResp {
+  repeated MeetingInfoSetting meetingDetails = 1;  // 会议详情列表
+}
+
+// 获取指定会议信息请求
+message GetMeetingReq {
+  string userID = 1;    // 用户ID
+  string meetingID = 2; // 会议ID
+}
+
+// 获取指定会议信息响应
+message GetMeetingResp {
+  MeetingInfoSetting meetingDetail = 1;  // 会议详情
+}
+
+// 修改会议参与者昵称请求
+message ModifyMeetingParticipantNickNameReq {
+  string meetingID = 1;         // 会议ID
+  string userID = 2;             // 操作者用户ID
+  string participantUserID = 3;  // 被修改的参与者用户ID
+  string nickname = 4;           // 新昵称
+}
+
+// 修改会议参与者昵称响应
+message ModifyMeetingParticipantNickNameResp {
+}
+
+// ================================ 会议更新 ================================
+
+// 更新会议请求
+message UpdateMeetingRequest {
+  string meetingID = 1;                                          // 会议ID
+  string updatingUserID = 2;                                     // 更新者用户ID
+  openim.wrapperspb.StringValue title = 3;                       // 会议标题
+  openim.wrapperspb.Int64Value scheduledTime = 4;               // 计划开始时间
+  openim.wrapperspb.Int64Value meetingDuration = 5;             // 会议时长
+  openim.wrapperspb.StringValue password = 6;                   // 会议密码
+  openim.wrapperspb.StringValue timeZone = 7;                   // 时区
+  MeetingRepeatInfo repeatInfo = 8;                             // 重复周期信息
+  openim.wrapperspb.BoolValue canParticipantsEnableCamera = 9;  // 是否可开启摄像头
+  openim.wrapperspb.BoolValue canParticipantsUnmuteMicrophone = 10; // 是否可开启麦克风
+  openim.wrapperspb.BoolValue canParticipantsShareScreen = 11;  // 是否可共享屏幕
+  openim.wrapperspb.BoolValue disableCameraOnJoin = 12;        // 加入时关闭摄像头
+  openim.wrapperspb.BoolValue disableMicrophoneOnJoin = 13;    // 加入时关闭麦克风
+  openim.wrapperspb.BoolValue canParticipantJoinMeetingEarly = 14; // 可提前加入
+  openim.wrapperspb.BoolValue lockMeeting = 15;                 // 是否锁定会议
+  openim.wrapperspb.BoolValue audioEncouragement = 16;         // 音频激励
+  openim.wrapperspb.BoolValue videoMirroring = 17;             // 视频镜像
+}
+
+// 更新会议响应
+message UpdateMeetingResp {
+}
+
+// ================================ 个人会议设置 ================================
+
+// 个人会议设置(控制加入时的视频和音频)
+message PersonalMeetingSetting {
+  bool cameraOnEntry = 1;        // 加入会议时是否默认开启摄像头
+  bool microphoneOnEntry = 2;    // 加入会议时是否默认开启麦克风
+}
+
+// 获取个人会议设置请求
+message GetPersonalMeetingSettingsReq {
+  string meetingID = 1;  // 会议ID
+  string userID = 2;     // 用户ID
+}
+
+// 获取个人会议设置响应
+message GetPersonalMeetingSettingsResp {
+  PersonalMeetingSetting setting = 1;  // 个人设置
+}
+
+// 设置个人会议设置请求
+message SetPersonalMeetingSettingsReq {
+  string meetingID = 1;                                  // 会议ID
+  string userID = 2;                                      // 用户ID
+  openim.wrapperspb.BoolValue cameraOnEntry = 3;         // 加入时是否开启摄像头
+  openim.wrapperspb.BoolValue microphoneOnEntry = 4;     // 加入时是否开启麦克风
+}
+
+// 设置个人会议设置响应
+message SetPersonalMeetingSettingsResp {
+}
+
+// 个人会议数据
+message PersonalData {
+  string userID = 1;                    // 用户ID
+  PersonalMeetingSetting personalSetting = 2;  // 个人设置
+  PersonalMeetingSetting limitSetting = 3;    // 限制设置(主持人对该用户的流操作限制)
+}
+
+// 会议元数据
+message MeetingMetadata {
+  MeetingInfoSetting detail = 1;             // 会议详情
+  repeated PersonalData personalData = 2;   // 个人数据列表
+}
+
+// ================================ 会议控制 ================================
+
+// 操作会议室所有流请求
+message OperateRoomAllStreamReq {
+  string meetingID = 1;                               // 会议ID
+  string operatorUserID = 2;                          // 操作者用户ID
+  openim.wrapperspb.BoolValue cameraOnEntry = 3;      // 统一设置摄像头
+  openim.wrapperspb.BoolValue microphoneOnEntry = 4;  // 统一设置麦克风
+}
+
+// 操作会议室所有流响应
+message OperateRoomAllStreamResp {
+  repeated string streamNotExistUserIDList = 1;  // 流不存在的用户ID列表
+  repeated string failedUserIDList = 2;        // 操作失败的用户ID列表
+}
+
+// 移除会议参与者请求
+message RemoveMeetingParticipantsReq {
+  string meetingID = 1;                   // 会议ID
+  string userID = 2;                       // 操作者用户ID
+  repeated string participantUserIDs = 3;   // 被移除的参与者ID列表
+}
+
+// 移除会议参与者响应
+message RemoveMeetingParticipantsResp {
+  repeated string successUserIDList = 1;   // 成功移除的用户ID列表
+  repeated string failedUserIDList = 2;    // 移除失败的用户ID列表
+}
+
+// 设置会议主持人信息请求
+message SetMeetingHostInfoReq {
+  string meetingID = 1;                          // 会议ID
+  string userID = 2;                              // 操作者用户ID
+  openim.wrapperspb.StringValue hostUserID = 3; // 新主持人用户ID
+  repeated string coHostUserIDs = 4;              // 联席主持人用户ID列表
+}
+
+// 设置会议主持人信息响应
+message SetMeetingHostInfoResp {
+}
+
+// ================================ 会议通知数据 ================================
+
+// 会议通知数据
+message NotifyMeetingData {
+  string operatorUserID = 1;  // 操作者用户ID
+  oneof messageType {
+    StreamOperateData streamOperateData = 2;    // 流操作数据
+    MeetingHostData meetingHostData = 3;         // 主持人变更数据
+    KickOffMeetingData kickOffMeetingData = 4;   // 踢出会议数据
+  }
+}
+
+// 踢出会议数据
+message KickOffMeetingData {
+  string userID = 1;           // 被踢出用户ID
+  string nickname = 2;         // 被踢出用户昵称
+  KickOffReason reasonCode = 3; // 踢出原因
+  string reason = 4;           // 踢出原因描述
+}
+
+// 流操作数据
+message StreamOperateData {
+  repeated UserOperationData operation = 1;  // 用户操作数据列表
+}
+
+// 用户操作数据
+message UserOperationData {
+  string userID = 1;                               // 用户ID
+  openim.wrapperspb.BoolValue cameraOnEntry = 2;  // 摄像头设置
+  openim.wrapperspb.BoolValue microphoneOnEntry = 3; // 麦克风设置
+}
+
+// 会议主持人数据
+message MeetingHostData {
+  string operatorNickname = 2;  // 操作者昵称
+  string userID = 3;           // 用户ID
+  string hostType = 4;         // 主持人类型
+}
+
+// ================================ 其他操作 ================================
+
+// 清理之前的会议请求(登录时清理RTC中的会议)
+message CleanPreviousMeetingsReq {
+  string userID = 1;       // 用户ID
+  int32 reasonCode = 2;    // 原因代码
+  string reason = 3;       // 原因描述
+}
+
+// 清理之前的会议响应
+message CleanPreviousMeetingsResp {
+}
+
+// 切换会议录制请求
+message ToggleRecordMeetingReq {
+  string meetingID = 1;   // 会议ID
+  string userID = 2;       // 用户ID
+  bool enableRecord = 3;   // 是否启用录制
+}
+
+// 切换会议录制响应
+message ToggleRecordMeetingResp {
+}
+
+
+// ================================ 服务定义 ================================
+
+// 会议管理服务
+service MeetingService {
+  // 预约未来会议
+  rpc BookMeeting(BookMeetingReq) returns (BookMeetingResp);
+  // 创建即时会议
+  rpc CreateImmediateMeeting(CreateImmediateMeetingReq) returns (CreateImmediateMeetingResp);
+  // 加入会议
+  rpc JoinMeeting(JoinMeetingReq) returns (JoinMeetingResp);
+  // 获取会议Token
+  rpc GetMeetingToken(GetMeetingTokenReq) returns (GetMeetingTokenResp);
+  // 离开会议
+  rpc LeaveMeeting(LeaveMeetingReq) returns (LeaveMeetingResp);
+  // 结束会议
+  rpc EndMeeting(EndMeetingReq) returns (EndMeetingResp);
+  // 获取用户创建或参与的会议列表
+  rpc GetMeetings(GetMeetingsReq) returns (GetMeetingsResp);
+  // 获取指定会议详情
+  rpc GetMeeting(GetMeetingReq) returns (GetMeetingResp);
+  // 更新会议信息
+  rpc UpdateMeeting(UpdateMeetingRequest) returns (UpdateMeetingResp);
+  // 获取个人会议设置
+  rpc GetPersonalMeetingSettings(GetPersonalMeetingSettingsReq) returns (GetPersonalMeetingSettingsResp);
+  // 设置个人会议设置
+  rpc SetPersonalMeetingSettings(SetPersonalMeetingSettingsReq) returns (SetPersonalMeetingSettingsResp);
+  // 操作会议室所有流
+  rpc OperateRoomAllStream(OperateRoomAllStreamReq) returns (OperateRoomAllStreamResp);
+  // 修改会议参与者昵称
+  rpc ModifyMeetingParticipantNickName(ModifyMeetingParticipantNickNameReq) returns (ModifyMeetingParticipantNickNameResp);
+  // 批量移除会议参与者
+  rpc RemoveParticipants(RemoveMeetingParticipantsReq) returns (RemoveMeetingParticipantsResp);
+  // 设置会议主持人或联席主持人
+  rpc SetMeetingHostInfo(SetMeetingHostInfoReq) returns (SetMeetingHostInfoResp);
+  // 登录时清理RTC中之前的会议
+  rpc CleanPreviousMeetings(CleanPreviousMeetingsReq) returns (CleanPreviousMeetingsResp);
+  // 切换会议录制状态
+  rpc ToggleRecordMeeting(ToggleRecordMeetingReq) returns (ToggleRecordMeetingResp);
+}
