@@ -1,0 +1,62 @@
+# Compiled Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Go test coverage
+coverage.out
+coverage.html
+profile.out
+
+# Go module cache
+go.sum
+go.mod
+
+# Go build output
+bin/
+build/
+dist/
+
+# Editor directories and files
+.vscode/
+.idea/
+.project
+.classpath
+.settings/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Generated code
+pkg/protocol/*/*.pb.go
+pkg/protocol/*/*_grpc.pb.go
+
+# Node.js dependencies
+node_modules/
+
+# Docker
+docker-compose.override.yml
