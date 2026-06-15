@@ -1,0 +1,37 @@
+Name: im-msggateway
+Mode: pro
+ListenOn: 0.0.0.0:8070
+
+Etcd:
+  Hosts:
+    - 192.168.241.128:2379
+  Key: im-msggateway.rpc
+
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9001
+  Path: /metrics
+
+Log:
+  Stat: false # go-zero 版本 >= 1.5.0 才支持
+  Mode: console # [console,file,volume]
+  Encoding: plain
+  Path: logs/im-msggateway
+  Level: debug
+
+WsServer:
+  Host: 0.0.0.0
+  Port: 50001
+  MaxConns: 1024096
+  MaxMsgSize: 1024096
+  WriteWait: 10 # 写入超时时间
+  PongWait: 60 # 读取超时时间
+  PingPeriod: 5 # 心跳周期
+  EnableAuth: false # 是否开启认证，默认开启
+
+AuthRpc:
+  Etcd:
+    Hosts:
+      - 192.168.241.128:2379
+    Key: im-msggateway.rpc
+  Stub: true

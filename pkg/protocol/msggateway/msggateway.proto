@@ -5,99 +5,157 @@ import "sdkws/sdkws.proto";
 
 option go_package = "github.com/PaperMan11/goim/pkg/protocol/msggateway";
 
+// 在线推送消息请求
 message OnlinePushMsgReq {
+  // 消息数据
   openim.sdkws.MsgData msgData = 1;
+  // 推送目标用户ID
   string pushToUserID = 2;
 }
 
+// 在线推送消息响应
 message OnlinePushMsgResp {
+  // 单个用户各平台推送结果列表
   repeated SingleMsgToUserPlatform resp = 1;
 }
 
+// 单个用户的推送结果（包含多个平台）
 message SingleMsgToUserResults {
+  // 用户ID
   string userID = 1;
+  // 各平台推送结果
   repeated SingleMsgToUserPlatform resp = 2;
+  // 是否在线推送成功
   bool onlinePush = 3;
 }
+
+// 批量在线推送单条消息请求
 message OnlineBatchPushOneMsgReq {
+  // 消息数据
   openim.sdkws.MsgData msgData = 1;
+  // 推送目标用户ID列表
   repeated string pushToUserIDs = 2;
 }
 
+// 批量在线推送单条消息响应
 message OnlineBatchPushOneMsgResp {
+  // 每个用户的推送结果
   repeated SingleMsgToUserResults singlePushResult = 1;
 }
-//message SendMsgByWSReq{
-//  string SendID = 1;
-//  string RecvID = 2;
-//  string Content = 3;
-//  int64 SendTime = 4;
-//  int64  MsgFrom = 5;
-//  int64  ContentType = 6;
-//  int64  SessionType = 7;
-//  string OperationID = 8;
-//  int64  PlatformID = 9;
-//}
 
+// 单个用户单个平台的推送结果
 message SingleMsgToUserPlatform {
+  // 结果码，0表示成功
   int64 ResultCode = 1;
+  // 接收用户ID
   string RecvID = 2;
+  // 接收平台ID（如iOS=1, Android=2, PC=3等）
   int32 RecvPlatFormID = 3;
 }
 
+// 获取用户在线状态请求
 message GetUsersOnlineStatusReq {
+  // 要查询的用户ID列表
   repeated string userIDs = 1;
 }
 
+// 获取用户在线状态响应
 message GetUsersOnlineStatusResp {
+  // 查询成功的用户状态列表
   repeated SuccessResult successResult = 1;
+  // 查询失败的用户列表
   repeated FailedDetail failedResult = 2;
+
+  // 单个平台的在线详情
   message SuccessDetail {
+    // 平台ID
     int32 platformID = 1;
+    // 连接ID
     string connID = 2;
+    // 是否后台运行
     bool isBackground = 3;
+    // 用户token
     string token = 4;
   }
 
+  // 查询失败详情
   message FailedDetail {
+    // 查询失败的用户ID
     string userID = 1;
   }
+
+  // 单个用户的查询成功结果
   message SuccessResult {
+    // 用户ID
     string userID = 1;
+    // 在线状态（1=在线，0=离线）
     int32 status = 2;
+    // 各平台的详细在线状态
     repeated SuccessDetail detailPlatformStatus = 3;
   }
 }
+
+// 单个用户的详细状态信息
 message SingleDetail {
+  // 用户ID
   string userID = 1;
+  // 在线状态
   int32 status = 2;
+  // 各平台的token信息
   repeated SinglePlatformToken singlePlatformToken = 3;
 }
+
+// 单个平台的token信息
 message SinglePlatformToken {
+  // 平台ID
   int32 platformID = 1;
+  // 该平台的连接数量
   int32 total = 2;
+  // 该平台的token列表
   repeated string token = 3;
 }
 
+// 踢用户下线请求
 message KickUserOfflineReq {
+  // 平台ID（0表示所有平台）
   int32 platformID = 1;
+  // 要踢下线的用户ID列表
   repeated string kickUserIDList = 2;
 }
 
+// 踢用户下线响应
 message KickUserOfflineResp {}
 
+// 多端登录检查请求
 message MultiTerminalLoginCheckReq {
+  // 用户ID
   string userID = 1;
+  // 平台ID
   int32 platformID = 2;
+  // 用户token
   string token = 3;
 }
+
+// 多端登录检查响应
 message MultiTerminalLoginCheckResp {}
 
+// 消息网关服务接口定义
 service msgGateway {
+  // 在线推送单条消息给指定用户
   rpc OnlinePushMsg(OnlinePushMsgReq) returns (OnlinePushMsgResp);
+
+  // 获取多个用户的在线状态
   rpc GetUsersOnlineStatus(GetUsersOnlineStatusReq) returns (GetUsersOnlineStatusResp);
+
+  // 批量在线推送单条消息给多个用户
   rpc OnlineBatchPushOneMsg(OnlineBatchPushOneMsgReq) returns (OnlineBatchPushOneMsgResp);
+
+  // 超级群批量在线推送单条消息
   rpc SuperGroupOnlineBatchPushOneMsg(OnlineBatchPushOneMsgReq) returns (OnlineBatchPushOneMsgResp);
+
+  // 踢用户下线
   rpc KickUserOffline(KickUserOfflineReq) returns (KickUserOfflineResp);
+
+  // 多端登录检查
   rpc MultiTerminalLoginCheck(MultiTerminalLoginCheckReq) returns (MultiTerminalLoginCheckResp);
 }
