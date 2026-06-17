@@ -7,6 +7,7 @@ import (
 
 	"github.com/PaperMan11/goim/im-msggateway/internal"
 	authservice "github.com/PaperMan11/goim/pkg/rpcclient/authservice"
+	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/proc"
@@ -24,10 +25,7 @@ func main() {
 	wsServer := newWsServer(&c)
 	proc.AddShutdownListener(func() {
 		wsServer.Stop()
-		logx.Infof("WebSocket server stopped")
 	})
-
-	logx.Infof("WebSocket server starting on %s:%d...", c.WsServer.Host, c.WsServer.Port)
 
 	if err := wsServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logx.Errorf("Failed to start server: %v", err)
@@ -50,6 +48,10 @@ func newWsServer(c *internal.MsgGatewayConfig) internal.Server {
 	})
 
 	pipeline := internal.NewMessagePipeline(handler)
+	// 创建webhook manager
+	webhookManager := webhooks.NewManager(webhooks.NewMemoryDeliveryRepository(), 5)
+	webhookManager.Start()
+	defer webhookManager.Stop()
 
-	return internal.NewWsServer(&c.WsServer, authService, pipeline)
+	return internal.NewWsServer(&c.WsServer, authService, pipeline, webhookManager)
 }

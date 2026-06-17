@@ -10,6 +10,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	pbauth "github.com/PaperMan11/goim/pkg/protocol/auth"
 	"github.com/PaperMan11/goim/pkg/rpcclient/authservice"
+	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/gorilla/websocket"
 	"github.com/zeromicro/go-zero/core/jsonx"
 	"github.com/zeromicro/go-zero/core/logc"
@@ -35,9 +36,10 @@ type wsServer struct {
 	server          *http.Server
 	authService     authservice.AuthService
 	messagePipeline *MessagePipeline
+	webhookManager  *webhooks.Manager
 }
 
-func NewWsServer(config *WsServerConfig, authService authservice.AuthService, pipeline *MessagePipeline) *wsServer {
+func NewWsServer(config *WsServerConfig, authService authservice.AuthService, pipeline *MessagePipeline, webhookManager *webhooks.Manager) *wsServer {
 	return &wsServer{
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -50,6 +52,7 @@ func NewWsServer(config *WsServerConfig, authService authservice.AuthService, pi
 		config:          config,
 		authService:     authService,
 		messagePipeline: pipeline,
+		webhookManager:  webhookManager,
 	}
 }
 
@@ -62,7 +65,17 @@ func (s *wsServer) Start() error {
 	mux.HandleFunc("/ws", s.ServeHTTP)
 	addr := fmt.Sprintf("%s:%d", s.Config().Host, s.Config().Port)
 	s.server = &http.Server{Addr: addr, Handler: mux}
+	logx.Infof("WebSocket server starting on %s:%d", s.Config().Host, s.Config().Port)
 	return s.server.ListenAndServe()
+}
+
+func (s *wsServer) Stop() error {
+	logx.Infof("WebSocket server stopped")
+	s.connManager.CloseAll()
+	if s.server != nil {
+		return s.server.Shutdown(context.Background())
+	}
+	return nil
 }
 
 func (s *wsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -95,15 +108,10 @@ func (s *wsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wsConn.Start()
-}
+	// 触发用户上线webhook事件
+	s.triggerUserOnlineEvent(connContext)
 
-func (s *wsServer) Stop() error {
-	s.connManager.CloseAll()
-	if s.server != nil {
-		return s.server.Shutdown(context.Background())
-	}
-	return nil
+	wsConn.Start()
 }
 
 func (s *wsServer) Verify(connContext ConnContext, w http.ResponseWriter) bool {
@@ -164,5 +172,61 @@ func (s *wsServer) HandleMessage(conn Connection, message []byte) error {
 
 func (s *wsServer) Disconnect(conn Connection) error {
 	logc.Debugf(conn.Context(), "disconnecting conn %s", conn.ID())
+
+	// 触发用户下线webhook事件
+	s.triggerUserOfflineEvent(conn.Context())
+
 	return s.connManager.Remove(conn.ID())
+}
+
+// triggerUserOnlineEvent 触发用户上线webhook事件
+func (s *wsServer) triggerUserOnlineEvent(ctx ConnContext) {
+	if s.webhookManager == nil {
+		return
+	}
+
+	handshakeInfo := ctx.HandshakeInfo()
+	userData := &webhooks.UserEventData{
+		UserID:       handshakeInfo.GetUserID(),
+		PlatformID:   int(handshakeInfo.GetPlatformID()),
+		DeviceID:     handshakeInfo.GetDeviceID(),
+		OnlineStatus: 1, // 1表示在线
+		Extra: map[string]string{
+			"remoteAddr":   ctx.RemoteAddr(),
+			"isBackground": fmt.Sprintf("%v", handshakeInfo.GetIsBackground()),
+			"sdkType":      handshakeInfo.GetSDKType(),
+			"sdkVersion":   handshakeInfo.GetSDKVersion(),
+		},
+	}
+
+	event := webhooks.NewUserOnlineEvent(userData)
+	if err := s.webhookManager.Dispatch(event); err != nil {
+		logc.Errorf(ctx, "Failed to dispatch user online webhook event: %v", err)
+	}
+}
+
+// triggerUserOfflineEvent 触发用户下线webhook事件
+func (s *wsServer) triggerUserOfflineEvent(ctx ConnContext) {
+	if s.webhookManager == nil {
+		return
+	}
+
+	handshakeInfo := ctx.HandshakeInfo()
+	userData := &webhooks.UserEventData{
+		UserID:       handshakeInfo.GetUserID(),
+		PlatformID:   int(handshakeInfo.GetPlatformID()),
+		DeviceID:     handshakeInfo.GetDeviceID(),
+		OnlineStatus: 0, // 0表示离线
+		Extra: map[string]string{
+			"remoteAddr":   ctx.RemoteAddr(),
+			"isBackground": fmt.Sprintf("%v", handshakeInfo.GetIsBackground()),
+			"sdkType":      handshakeInfo.GetSDKType(),
+			"sdkVersion":   handshakeInfo.GetSDKVersion(),
+		},
+	}
+
+	event := webhooks.NewUserOfflineEvent(userData)
+	if err := s.webhookManager.Dispatch(event); err != nil {
+		logc.Errorf(ctx, "Failed to dispatch user offline webhook event: %v", err)
+	}
 }
