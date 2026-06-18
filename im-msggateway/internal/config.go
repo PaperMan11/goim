@@ -9,6 +9,8 @@ type MsgGatewayConfig struct {
 	WsServer WsServerConfig
 	AuthRpc  RpcConfig
 	UserRpc  RpcConfig
+	MsgRpc   RpcConfig
+	PushRpc  RpcConfig
 }
 
 type WsServerConfig struct {

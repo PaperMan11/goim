@@ -34,9 +34,31 @@ WsServer:
   MaxConnPerUser: 10 # 每个用户最大连接数(allow_multi策略下生效)
   MaxConnPerUserPerPlatform: 3 # 每个用户每个平台最大连接数
 
+# RPC 配置
 AuthRpc:
   Etcd:
     Hosts:
       - 192.168.241.128:2379
-    Key: im-msggateway.rpc
+    Key: auth.rpc
+  Stub: true
+
+UserRpc:
+  Etcd:
+    Hosts:
+      - 192.168.241.128:2379
+    Key: user.rpc
+  Stub: true
+
+MsgRpc:
+  Etcd:
+    Hosts:
+      - 192.168.241.128:2379
+    Key: msg.rpc
+  Stub: true
+
+PushRpc:
+  Etcd:
+    Hosts:
+      - 192.168.241.128:2379
+    Key: push.rpc
   Stub: true
