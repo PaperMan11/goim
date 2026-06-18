@@ -72,8 +72,6 @@ func newWsServer(c *internal.MsgGatewayConfig) internal.Server {
 
 	// 创建webhook manager
 	webhookManager := webhooks.NewManager(webhooks.NewMemoryDeliveryRepository(), 5)
-	webhookManager.Start()
-	defer webhookManager.Stop()
 
 	return internal.NewWsServer(&c.WsServer, pipeline, webhookManager, authService, userService)
 }

@@ -73,6 +73,7 @@ func (s *wsServer) Start() error {
 	mux.HandleFunc("/ws", s.ServeHTTP)
 	addr := fmt.Sprintf("%s:%d", s.Config().Host, s.Config().Port)
 	s.server = &http.Server{Addr: addr, Handler: mux}
+	s.webhookManager.Start()
 	logx.Infof("WebSocket server starting on %s:%d", s.Config().Host, s.Config().Port)
 	return s.server.ListenAndServe()
 }
@@ -82,6 +83,7 @@ func (s *wsServer) Stop() error {
 	if s.server != nil {
 		return s.server.Shutdown(context.Background())
 	}
+	s.webhookManager.Stop()
 	logx.Infof("WebSocket server stopped")
 	return nil
 }
