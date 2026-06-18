@@ -7,6 +7,7 @@ import (
 
 	"github.com/PaperMan11/goim/im-msggateway/internal"
 	authservice "github.com/PaperMan11/goim/pkg/rpcclient/authservice"
+	userservice "github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -35,6 +36,7 @@ func main() {
 func newWsServer(c *internal.MsgGatewayConfig) internal.Server {
 	var (
 		authService authservice.AuthService
+		userService userservice.UserService
 	)
 	if c.AuthRpc.Stub {
 		authService = authservice.NewStubAuthService()
@@ -42,16 +44,20 @@ func newWsServer(c *internal.MsgGatewayConfig) internal.Server {
 		authRpcClient := zrpc.MustNewClient(c.AuthRpc.RpcClientConf)
 		authService = authservice.NewAuthService(authRpcClient)
 	}
+	if c.UserRpc.Stub {
+		userService = userservice.NewStubUserService()
+	} else {
+		userRpcClient := zrpc.MustNewClient(c.UserRpc.RpcClientConf)
+		userService = userservice.NewUserService(userRpcClient)
+	}
 
-	handler := internal.MessageHandlerFunc(func(conn internal.Connection, req *internal.Request) error {
-		return internal.BusinessHandler().Handle(conn, req)
-	})
+	// 消息处理器
+	pipeline := internal.NewMessagePipeline(internal.NewBusinessHandler())
 
-	pipeline := internal.NewMessagePipeline(handler)
 	// 创建webhook manager
 	webhookManager := webhooks.NewManager(webhooks.NewMemoryDeliveryRepository(), 5)
 	webhookManager.Start()
 	defer webhookManager.Stop()
 
-	return internal.NewWsServer(&c.WsServer, authService, pipeline, webhookManager)
+	return internal.NewWsServer(&c.WsServer, pipeline, webhookManager, authService, userService)
 }

@@ -9,7 +9,9 @@ import (
 	"github.com/PaperMan11/goim/pkg/apiresp"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	pbauth "github.com/PaperMan11/goim/pkg/protocol/auth"
+	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/rpcclient/authservice"
+	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/gorilla/websocket"
 	"github.com/zeromicro/go-zero/core/jsonx"
@@ -35,12 +37,16 @@ type wsServer struct {
 	config          *WsServerConfig
 	server          *http.Server
 	authService     authservice.AuthService
+	userService     userservice.UserService
 	messagePipeline *MessagePipeline
 	webhookManager  *webhooks.Manager
 }
 
-func NewWsServer(config *WsServerConfig, authService authservice.AuthService, pipeline *MessagePipeline, webhookManager *webhooks.Manager) *wsServer {
-	return &wsServer{
+func NewWsServer(config *WsServerConfig, pipeline *MessagePipeline, webhookManager *webhooks.Manager,
+	authService authservice.AuthService,
+	userService userservice.UserService,
+) *wsServer {
+	s := &wsServer{
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -48,12 +54,14 @@ func NewWsServer(config *WsServerConfig, authService authservice.AuthService, pi
 				return true
 			},
 		},
-		connManager:     NewConnManager(config.MaxConns),
 		config:          config,
 		authService:     authService,
+		userService:     userService,
 		messagePipeline: pipeline,
 		webhookManager:  webhookManager,
 	}
+	s.connManager = NewConnManager(config.MaxConns, config.LoginStrategyConfig, WithOnRemove(s.onConnRemove), WithOnAdd(s.onConnAdd))
+	return s
 }
 
 func (s *wsServer) Config() *WsServerConfig {
@@ -70,11 +78,11 @@ func (s *wsServer) Start() error {
 }
 
 func (s *wsServer) Stop() error {
-	logx.Infof("WebSocket server stopped")
 	s.connManager.CloseAll()
 	if s.server != nil {
 		return s.server.Shutdown(context.Background())
 	}
+	logx.Infof("WebSocket server stopped")
 	return nil
 }
 
@@ -107,9 +115,6 @@ func (s *wsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = wsConn.Close()
 		return
 	}
-
-	// 触发用户上线webhook事件
-	s.triggerUserOnlineEvent(connContext)
 
 	wsConn.Start()
 }
@@ -171,62 +176,90 @@ func (s *wsServer) HandleMessage(conn Connection, message []byte) error {
 }
 
 func (s *wsServer) Disconnect(conn Connection) error {
-	logc.Debugf(conn.Context(), "disconnecting conn %s", conn.ID())
-
-	// 触发用户下线webhook事件
-	s.triggerUserOfflineEvent(conn.Context())
-
 	return s.connManager.Remove(conn.ID())
 }
 
-// triggerUserOnlineEvent 触发用户上线webhook事件
-func (s *wsServer) triggerUserOnlineEvent(ctx ConnContext) {
-	if s.webhookManager == nil {
-		return
-	}
-
+// onConnAdded 触发用户上线webhook事件
+func (s *wsServer) onConnAdd(conn Connection) {
+	ctx := conn.Context()
 	handshakeInfo := ctx.HandshakeInfo()
-	userData := &webhooks.UserEventData{
-		UserID:       handshakeInfo.GetUserID(),
-		PlatformID:   int(handshakeInfo.GetPlatformID()),
-		DeviceID:     handshakeInfo.GetDeviceID(),
-		OnlineStatus: 1, // 1表示在线
-		Extra: map[string]string{
-			"remoteAddr":   ctx.RemoteAddr(),
-			"isBackground": fmt.Sprintf("%v", handshakeInfo.GetIsBackground()),
-			"sdkType":      handshakeInfo.GetSDKType(),
-			"sdkVersion":   handshakeInfo.GetSDKVersion(),
-		},
+	if s.userService != nil {
+		s.userService.SetUserOnlineStatus(ctx, &pbuser.SetUserOnlineStatusReq{
+			Status: []*pbuser.UserOnlineStatus{
+				{
+					UserID:  handshakeInfo.GetUserID(),
+					ConnID:  conn.ID(),
+					Online:  []int32{handshakeInfo.GetPlatformID()},
+					Offline: nil,
+				},
+			},
+		})
 	}
 
-	event := webhooks.NewUserOnlineEvent(userData)
-	if err := s.webhookManager.Dispatch(event); err != nil {
-		logc.Errorf(ctx, "Failed to dispatch user online webhook event: %v", err)
+	if s.webhookManager != nil {
+		userData := &webhooks.UserEventData{
+			UserID:       handshakeInfo.GetUserID(),
+			PlatformID:   int(handshakeInfo.GetPlatformID()),
+			DeviceID:     handshakeInfo.GetDeviceID(),
+			OnlineStatus: 1, // 1表示在线
+			Extra: map[string]string{
+				"remoteAddr":   ctx.RemoteAddr(),
+				"isBackground": fmt.Sprintf("%v", handshakeInfo.GetIsBackground()),
+				"sdkType":      handshakeInfo.GetSDKType(),
+				"sdkVersion":   handshakeInfo.GetSDKVersion(),
+			},
+		}
+
+		event := webhooks.NewUserOnlineEvent(userData)
+		event.OperationID = ctx.HandshakeInfo().GetOperationID()
+		if err := s.webhookManager.Dispatch(event); err != nil {
+			logc.Errorf(ctx, "Failed to dispatch user online webhook event: %v", err)
+		}
 	}
 }
 
-// triggerUserOfflineEvent 触发用户下线webhook事件
-func (s *wsServer) triggerUserOfflineEvent(ctx ConnContext) {
-	if s.webhookManager == nil {
-		return
-	}
-
+// onConnRemoved 触发用户下线webhook事件
+func (s *wsServer) onConnRemove(conn Connection) {
+	ctx := conn.Context()
 	handshakeInfo := ctx.HandshakeInfo()
-	userData := &webhooks.UserEventData{
-		UserID:       handshakeInfo.GetUserID(),
-		PlatformID:   int(handshakeInfo.GetPlatformID()),
-		DeviceID:     handshakeInfo.GetDeviceID(),
-		OnlineStatus: 0, // 0表示离线
-		Extra: map[string]string{
-			"remoteAddr":   ctx.RemoteAddr(),
-			"isBackground": fmt.Sprintf("%v", handshakeInfo.GetIsBackground()),
-			"sdkType":      handshakeInfo.GetSDKType(),
-			"sdkVersion":   handshakeInfo.GetSDKVersion(),
-		},
+
+	if s.authService != nil {
+		s.authService.KickTokens(ctx, &pbauth.KickTokensReq{
+			Tokens: []string{handshakeInfo.GetToken()},
+		})
 	}
 
-	event := webhooks.NewUserOfflineEvent(userData)
-	if err := s.webhookManager.Dispatch(event); err != nil {
-		logc.Errorf(ctx, "Failed to dispatch user offline webhook event: %v", err)
+	if s.userService != nil {
+		s.userService.SetUserOnlineStatus(ctx, &pbuser.SetUserOnlineStatusReq{
+			Status: []*pbuser.UserOnlineStatus{
+				{
+					UserID:  handshakeInfo.GetUserID(),
+					ConnID:  conn.ID(),
+					Online:  nil,
+					Offline: []int32{handshakeInfo.GetPlatformID()},
+				},
+			},
+		})
+	}
+
+	if s.webhookManager != nil {
+		userData := &webhooks.UserEventData{
+			UserID:       handshakeInfo.GetUserID(),
+			PlatformID:   int(handshakeInfo.GetPlatformID()),
+			DeviceID:     handshakeInfo.GetDeviceID(),
+			OnlineStatus: 0, // 0表示离线
+			Extra: map[string]string{
+				"remoteAddr":   ctx.RemoteAddr(),
+				"isBackground": fmt.Sprintf("%v", handshakeInfo.GetIsBackground()),
+				"sdkType":      handshakeInfo.GetSDKType(),
+				"sdkVersion":   handshakeInfo.GetSDKVersion(),
+			},
+		}
+
+		event := webhooks.NewUserOfflineEvent(userData)
+		event.OperationID = ctx.HandshakeInfo().GetOperationID()
+		if err := s.webhookManager.Dispatch(event); err != nil {
+			logc.Errorf(ctx, "Failed to dispatch user offline webhook event: %v", err)
+		}
 	}
 }

@@ -75,117 +75,110 @@ func (p *MessagePipeline) HandleRaw(conn Connection, message []byte) error {
 // BusinessHandler 处理业务消息
 // ----------------------------------------------------
 
-func BusinessHandler() MessageHandler {
+type BusinessHandler struct {
+}
 
-	replyFn := func(conn Connection, req *Request, err error, data []byte) error {
-		errInfo := errx.Success
-		if err != nil {
-			errInfo = errx.ParseError(err)
-		}
-		reply := Response{
-			ReqIdentifier: req.ReqIdentifier,
-			MsgIncr:       req.MsgIncr,
-			OperationID:   req.OperationID,
-			ErrCode:       errInfo.Code,
-			ErrMsg:        errInfo.Message,
-			Data:          data,
-		}
-		encoder := encoder.GetEncoder(conn.Context().HandshakeInfo().GetSDKType())
-		encodeData, err := encoder.Marshal(&reply)
-		if err != nil {
-			return err
-		}
-		compressor := compressor.GetCompressor(conn.Context().HandshakeInfo().GetCompression())
-		compressed, err := compressor.Compress(encodeData)
-		if err != nil {
-			return err
-		}
+func NewBusinessHandler() *BusinessHandler {
+	return &BusinessHandler{}
+}
 
-		err = conn.Send(compressed)
-		if err != nil {
-			return err
-		}
-
-		if req.ReqIdentifier == WSLogoutMsg {
-			return errx.LogoutError.Wrap(fmt.Sprintf("userID: %s", conn.Context().HandshakeInfo().GetUserID()))
-		}
-		return nil
+func (h *BusinessHandler) Handle(conn Connection, req *Request) error {
+	logc.Debugf(conn.Context(), "handle business message: %+v", req)
+	if conn.Server().Config().EnableAuth && conn.Context().HandshakeInfo().GetUserID() != req.SenderID {
+		// replyFn(conn, req, errx.DataError.Wrap("senderID not match"), nil)
+		return fmt.Errorf("senderID not match: %s, expect %s", req.SenderID, conn.Context().HandshakeInfo().GetUserID())
 	}
 
-	return MessageHandlerFunc(func(conn Connection, req *Request) error {
-		logc.Debugf(conn.Context(), "handle business message: %+v", req)
-		if conn.Server().Config().EnableAuth && conn.Context().HandshakeInfo().GetUserID() != req.SenderID {
-			// replyFn(conn, req, errx.DataError.Wrap("senderID not match"), nil)
-			return fmt.Errorf("senderID not match: %s, expect %s", req.SenderID, conn.Context().HandshakeInfo().GetUserID())
+	var (
+		err    error
+		data   []byte
+		opName string
+	)
+
+	start := time.Now()
+	defer func() {
+		duration := float64(time.Since(start).Milliseconds())
+		businessOpDurationHistogram.ObserveFloat(duration, opName)
+		if err != nil {
+			businessOpErrorCounter.Inc(opName)
 		}
+	}()
 
-		var (
-			err    error
-			data   []byte
-			opName string
-		)
+	switch req.ReqIdentifier {
+	case WSGetNewestSeq:
+		opName = "get_newest_seq"
+		businessOpCounter.Inc(opName)
+	case WSPullMsgBySeqList:
+		opName = "pull_msg_by_seq"
+		businessOpCounter.Inc(opName)
+		pullMsgCounter.Inc("by_seq_list")
+	case WSSendMsg:
+		opName = "send_msg"
+		businessOpCounter.Inc(opName)
+		sendMsgCounter.Inc("normal")
+	case WSSendSignalMsg:
+		opName = "send_signal_msg"
+		businessOpCounter.Inc(opName)
+		sendMsgCounter.Inc("signal")
+	case WSPullMsg:
+		opName = "pull_msg"
+		businessOpCounter.Inc(opName)
+		pullMsgCounter.Inc("normal")
+	case WSGetConvMaxReadSeq:
+		opName = "get_conv_max_read_seq"
+		businessOpCounter.Inc(opName)
+	case WsPullConvLastMessage:
+		opName = "pull_conv_last_msg"
+		businessOpCounter.Inc(opName)
+		pullMsgCounter.Inc("last_message")
+	case WSPushMsg:
+		opName = "push_msg"
+		businessOpCounter.Inc(opName)
+	case WSKickOnlineMsg:
+		opName = "kick_online"
+		businessOpCounter.Inc(opName)
+	case WSLogoutMsg:
+		opName = "logout"
+		businessOpCounter.Inc(opName)
+	case WSSetBackgroundStatus:
+		opName = "set_background_status"
+		businessOpCounter.Inc(opName)
+	case WSSubUserOnlineStatus:
+		opName = "sub_online_status"
+		businessOpCounter.Inc(opName)
+		subscribeCounter.Inc("online_status")
+	case WSDataError:
+		opName = "data_error"
+		businessOpCounter.Inc(opName)
+	default:
+		opName = "unknown_message"
+		err = errx.UnknownMessageError.Wrap(fmt.Sprintf("reqIdentifier: %d", req.ReqIdentifier))
+		logc.Errorf(conn.Context(), "unknown message: %+v", req)
+	}
+	data = []byte(opName) // 模拟返回空数据
+	return h.reply(conn, req, err, data)
+}
 
-		start := time.Now()
-		defer func() {
-			duration := float64(time.Since(start).Milliseconds())
-			businessOpDurationHistogram.ObserveFloat(duration, opName)
-			if err != nil {
-				businessOpErrorCounter.Inc(opName)
-			}
-		}()
+func (h *BusinessHandler) reply(conn Connection, req *Request, err error, data []byte) error {
+	errInfo := errx.Success
+	if err != nil {
+		errInfo = errx.ParseError(err)
+	}
+	reply := Response{
+		ReqIdentifier: req.ReqIdentifier,
+		MsgIncr:       req.MsgIncr,
+		OperationID:   req.OperationID,
+		ErrCode:       errInfo.Code,
+		ErrMsg:        errInfo.Message,
+		Data:          data,
+	}
 
-		switch req.ReqIdentifier {
-		case WSGetNewestSeq:
-			opName = "get_newest_seq"
-			businessOpCounter.Inc(opName)
-		case WSPullMsgBySeqList:
-			opName = "pull_msg_by_seq"
-			businessOpCounter.Inc(opName)
-			pullMsgCounter.Inc("by_seq_list")
-		case WSSendMsg:
-			opName = "send_msg"
-			businessOpCounter.Inc(opName)
-			sendMsgCounter.Inc("normal")
-		case WSSendSignalMsg:
-			opName = "send_signal_msg"
-			businessOpCounter.Inc(opName)
-			sendMsgCounter.Inc("signal")
-		case WSPullMsg:
-			opName = "pull_msg"
-			businessOpCounter.Inc(opName)
-			pullMsgCounter.Inc("normal")
-		case WSGetConvMaxReadSeq:
-			opName = "get_conv_max_read_seq"
-			businessOpCounter.Inc(opName)
-		case WsPullConvLastMessage:
-			opName = "pull_conv_last_msg"
-			businessOpCounter.Inc(opName)
-			pullMsgCounter.Inc("last_message")
-		case WSPushMsg:
-			opName = "push_msg"
-			businessOpCounter.Inc(opName)
-		case WSKickOnlineMsg:
-			opName = "kick_online"
-			businessOpCounter.Inc(opName)
-		case WSLogoutMsg:
-			opName = "logout"
-			businessOpCounter.Inc(opName)
-		case WSSetBackgroundStatus:
-			opName = "set_background_status"
-			businessOpCounter.Inc(opName)
-		case WSSubUserOnlineStatus:
-			opName = "sub_online_status"
-			businessOpCounter.Inc(opName)
-			subscribeCounter.Inc("online_status")
-		case WSDataError:
-			opName = "data_error"
-			businessOpCounter.Inc(opName)
-		default:
-			opName = "unknown_message"
-			err = errx.UnknownMessageError.Wrap(fmt.Sprintf("reqIdentifier: %d", req.ReqIdentifier))
-			logc.Errorf(conn.Context(), "unknown message: %+v", req)
-		}
-		data = []byte(opName) // 模拟返回空数据
-		return replyFn(conn, req, err, data)
-	})
+	if err := conn.SendResponse(&reply); err != nil {
+		return err
+	}
+
+	if req.ReqIdentifier == WSLogoutMsg {
+		return errx.LogoutError.Wrap(fmt.Sprintf("userID: %s", conn.Context().HandshakeInfo().GetUserID()))
+	}
+	return nil
 }

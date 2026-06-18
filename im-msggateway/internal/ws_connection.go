@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/PaperMan11/goim/im-msggateway/internal/compressor"
+	"github.com/PaperMan11/goim/im-msggateway/internal/encoder"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/gorilla/websocket"
 	"github.com/zeromicro/go-zero/core/logc"
@@ -26,8 +28,8 @@ type Connection interface {
 	Start()
 	Close() error
 	Send(message []byte) error
+	SendResponse(resp *Response) error
 	Context() ConnContext
-	RawConn() *websocket.Conn
 	Error() error
 	Server() WsServer
 }
@@ -138,7 +140,6 @@ func (c *WsConnection) writePump() {
 	for {
 		select {
 		case <-c.doneCh:
-			c.flushSendQueue()
 			return
 		case message, ok := <-c.sendCh:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
@@ -191,6 +192,7 @@ func (c *WsConnection) Close() error {
 	c.closed.Store(true)
 	close(c.sendCh)
 	close(c.doneCh)
+	c.flushSendQueue()
 	c.ctx.Close()
 	return c.conn.Close()
 }
@@ -203,6 +205,33 @@ func (c *WsConnection) Send(message []byte) error {
 	return nil
 }
 
+func (c *WsConnection) SendResponse(resp *Response) error {
+	if c.closed.Load() {
+		return ErrConnClosed
+	}
+
+	encoder := encoder.GetEncoder(c.ctx.HandshakeInfo().GetSDKType())
+	encodeData, err := encoder.Marshal(resp)
+	if err != nil {
+		logc.Errorf(c.ctx, "SendResponse marshal error: %v", err)
+		return err
+	}
+	compressor := compressor.GetCompressor(c.ctx.HandshakeInfo().GetCompression())
+	compressed, err := compressor.Compress(encodeData)
+	if err != nil {
+		logc.Errorf(c.ctx, "SendResponse compress error: %v", err)
+		return err
+	}
+
+	select {
+	case c.sendCh <- compressed:
+		return nil
+	case <-time.After(time.Second):
+		logc.Errorf(c.ctx, "SendResponse timeout, conn: %s", c.ID())
+		return fmt.Errorf("send response timeout")
+	}
+}
+
 func (c *WsConnection) ReadMessage() (int, []byte, error) {
 	return c.conn.ReadMessage()
 }
@@ -213,10 +242,6 @@ func (c *WsConnection) ID() string {
 
 func (c *WsConnection) Context() ConnContext {
 	return c.ctx
-}
-
-func (c *WsConnection) RawConn() *websocket.Conn {
-	return c.conn
 }
 
 func (c *WsConnection) closeWithError(err error) {
