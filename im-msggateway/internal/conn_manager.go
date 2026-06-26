@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/loginstrategy"
 )
 
 type ConnManager interface {
@@ -29,7 +30,7 @@ type connManager struct {
 	mu                  sync.RWMutex
 	maxConns            int64
 	connCount           int64
-	loginStrategyConfig LoginStrategyConfig
+	loginStrategyConfig LoginStrategyConf
 	onRemove            ConnChangeCallback
 	onAdd               ConnChangeCallback
 }
@@ -48,7 +49,7 @@ func WithOnAdd(onAdd ConnChangeCallback) Option {
 	}
 }
 
-func NewConnManager(maxConns int64, loginStrategy LoginStrategyConfig, opts ...Option) *connManager {
+func NewConnManager(maxConns int64, loginStrategy LoginStrategyConf, opts ...Option) *connManager {
 	manager := &connManager{
 		connections:         make(map[string][]Connection),
 		connIndex:           make(map[string]Connection),
@@ -93,13 +94,13 @@ func (cm *connManager) addWithStrategy(conn Connection) (err error) {
 	platformID := handshakeInfo.GetPlatformID()
 
 	switch cm.loginStrategyConfig.LoginStrategy {
-	case LoginStrategySingle:
+	case loginstrategy.LoginStrategySingle:
 		err = cm.handleSingleLogin(userID, conn)
-	case LoginStrategyReplace:
+	case loginstrategy.LoginStrategyReplace:
 		err = cm.handleReplaceLogin(userID, conn)
-	case LoginStrategyReplaceSamePlatform:
+	case loginstrategy.LoginStrategyReplaceSamePlatform:
 		err = cm.handleReplaceSamePlatformLogin(userID, platformID, conn)
-	case LoginStrategyAllowMulti:
+	case loginstrategy.LoginStrategyAllowMulti:
 		fallthrough
 	default:
 		err = cm.handleAllowMultiLogin(userID, platformID, conn)

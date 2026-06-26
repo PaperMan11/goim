@@ -22,10 +22,13 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 在线推送消息请求
 type OnlinePushMsgReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MsgData       *sdkws.MsgData         `protobuf:"bytes,1,opt,name=msgData,proto3" json:"msgData,omitempty"`
-	PushToUserID  string                 `protobuf:"bytes,2,opt,name=pushToUserID,proto3" json:"pushToUserID,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 消息数据
+	MsgData *sdkws.MsgData `protobuf:"bytes,1,opt,name=msgData,proto3" json:"msgData,omitempty"`
+	// 推送目标用户ID
+	PushToUserID  string `protobuf:"bytes,2,opt,name=pushToUserID,proto3" json:"pushToUserID,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -74,8 +77,10 @@ func (x *OnlinePushMsgReq) GetPushToUserID() string {
 	return ""
 }
 
+// 在线推送消息响应
 type OnlinePushMsgResp struct {
-	state         protoimpl.MessageState     `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 单个用户各平台推送结果列表
 	Resp          []*SingleMsgToUserPlatform `protobuf:"bytes,1,rep,name=resp,proto3" json:"resp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -118,11 +123,15 @@ func (x *OnlinePushMsgResp) GetResp() []*SingleMsgToUserPlatform {
 	return nil
 }
 
+// 单个用户的推送结果（包含多个平台）
 type SingleMsgToUserResults struct {
-	state         protoimpl.MessageState     `protogen:"open.v1"`
-	UserID        string                     `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
-	Resp          []*SingleMsgToUserPlatform `protobuf:"bytes,2,rep,name=resp,proto3" json:"resp,omitempty"`
-	OnlinePush    bool                       `protobuf:"varint,3,opt,name=onlinePush,proto3" json:"onlinePush,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 用户ID
+	UserID string `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	// 各平台推送结果
+	Resp []*SingleMsgToUserPlatform `protobuf:"bytes,2,rep,name=resp,proto3" json:"resp,omitempty"`
+	// 是否在线推送成功
+	OnlinePush    bool `protobuf:"varint,3,opt,name=onlinePush,proto3" json:"onlinePush,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -178,10 +187,13 @@ func (x *SingleMsgToUserResults) GetOnlinePush() bool {
 	return false
 }
 
+// 批量在线推送单条消息请求
 type OnlineBatchPushOneMsgReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MsgData       *sdkws.MsgData         `protobuf:"bytes,1,opt,name=msgData,proto3" json:"msgData,omitempty"`
-	PushToUserIDs []string               `protobuf:"bytes,2,rep,name=pushToUserIDs,proto3" json:"pushToUserIDs,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 消息数据
+	MsgData *sdkws.MsgData `protobuf:"bytes,1,opt,name=msgData,proto3" json:"msgData,omitempty"`
+	// 推送目标用户ID列表
+	PushToUserIDs []string `protobuf:"bytes,2,rep,name=pushToUserIDs,proto3" json:"pushToUserIDs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -230,8 +242,10 @@ func (x *OnlineBatchPushOneMsgReq) GetPushToUserIDs() []string {
 	return nil
 }
 
+// 批量在线推送单条消息响应
 type OnlineBatchPushOneMsgResp struct {
-	state            protoimpl.MessageState    `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 每个用户的推送结果
 	SinglePushResult []*SingleMsgToUserResults `protobuf:"bytes,1,rep,name=singlePushResult,proto3" json:"singlePushResult,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -274,11 +288,15 @@ func (x *OnlineBatchPushOneMsgResp) GetSinglePushResult() []*SingleMsgToUserResu
 	return nil
 }
 
+// 单个用户单个平台的推送结果
 type SingleMsgToUserPlatform struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ResultCode     int64                  `protobuf:"varint,1,opt,name=ResultCode,proto3" json:"ResultCode,omitempty"`
-	RecvID         string                 `protobuf:"bytes,2,opt,name=RecvID,proto3" json:"RecvID,omitempty"`
-	RecvPlatFormID int32                  `protobuf:"varint,3,opt,name=RecvPlatFormID,proto3" json:"RecvPlatFormID,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 结果码，0表示成功
+	ResultCode int64 `protobuf:"varint,1,opt,name=ResultCode,proto3" json:"ResultCode,omitempty"`
+	// 接收用户ID
+	RecvID string `protobuf:"bytes,2,opt,name=RecvID,proto3" json:"RecvID,omitempty"`
+	// 接收平台ID（如iOS=1, Android=2, PC=3等）
+	RecvPlatFormID int32 `protobuf:"varint,3,opt,name=RecvPlatFormID,proto3" json:"RecvPlatFormID,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -334,9 +352,11 @@ func (x *SingleMsgToUserPlatform) GetRecvPlatFormID() int32 {
 	return 0
 }
 
+// 获取用户在线状态请求
 type GetUsersOnlineStatusReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserIDs       []string               `protobuf:"bytes,1,rep,name=userIDs,proto3" json:"userIDs,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 要查询的用户ID列表
+	UserIDs       []string `protobuf:"bytes,1,rep,name=userIDs,proto3" json:"userIDs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -378,10 +398,13 @@ func (x *GetUsersOnlineStatusReq) GetUserIDs() []string {
 	return nil
 }
 
+// 获取用户在线状态响应
 type GetUsersOnlineStatusResp struct {
-	state         protoimpl.MessageState                    `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 查询成功的用户状态列表
 	SuccessResult []*GetUsersOnlineStatusResp_SuccessResult `protobuf:"bytes,1,rep,name=successResult,proto3" json:"successResult,omitempty"`
-	FailedResult  []*GetUsersOnlineStatusResp_FailedDetail  `protobuf:"bytes,2,rep,name=failedResult,proto3" json:"failedResult,omitempty"`
+	// 查询失败的用户列表
+	FailedResult  []*GetUsersOnlineStatusResp_FailedDetail `protobuf:"bytes,2,rep,name=failedResult,proto3" json:"failedResult,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -430,10 +453,14 @@ func (x *GetUsersOnlineStatusResp) GetFailedResult() []*GetUsersOnlineStatusResp
 	return nil
 }
 
+// 单个用户的详细状态信息
 type SingleDetail struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	UserID              string                 `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
-	Status              int32                  `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 用户ID
+	UserID string `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	// 在线状态
+	Status int32 `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
+	// 各平台的token信息
 	SinglePlatformToken []*SinglePlatformToken `protobuf:"bytes,3,rep,name=singlePlatformToken,proto3" json:"singlePlatformToken,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
@@ -490,11 +517,15 @@ func (x *SingleDetail) GetSinglePlatformToken() []*SinglePlatformToken {
 	return nil
 }
 
+// 单个平台的token信息
 type SinglePlatformToken struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlatformID    int32                  `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	Token         []string               `protobuf:"bytes,3,rep,name=token,proto3" json:"token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 平台ID
+	PlatformID int32 `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
+	// 该平台的连接数量
+	Total int32 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	// 该平台的token列表
+	Token         []string `protobuf:"bytes,3,rep,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -550,10 +581,13 @@ func (x *SinglePlatformToken) GetToken() []string {
 	return nil
 }
 
+// 踢用户下线请求
 type KickUserOfflineReq struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	PlatformID     int32                  `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
-	KickUserIDList []string               `protobuf:"bytes,2,rep,name=kickUserIDList,proto3" json:"kickUserIDList,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 平台ID（0表示所有平台）
+	PlatformID int32 `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
+	// 要踢下线的用户ID列表
+	KickUserIDList []string `protobuf:"bytes,2,rep,name=kickUserIDList,proto3" json:"kickUserIDList,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -602,6 +636,7 @@ func (x *KickUserOfflineReq) GetKickUserIDList() []string {
 	return nil
 }
 
+// 踢用户下线响应
 type KickUserOfflineResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -638,11 +673,15 @@ func (*KickUserOfflineResp) Descriptor() ([]byte, []int) {
 	return file_msggateway_msggateway_proto_rawDescGZIP(), []int{11}
 }
 
+// 多端登录检查请求
 type MultiTerminalLoginCheckReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserID        string                 `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
-	PlatformID    int32                  `protobuf:"varint,2,opt,name=platformID,proto3" json:"platformID,omitempty"`
-	Token         string                 `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 用户ID
+	UserID string `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	// 平台ID
+	PlatformID int32 `protobuf:"varint,2,opt,name=platformID,proto3" json:"platformID,omitempty"`
+	// 用户token
+	Token         string `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -698,6 +737,7 @@ func (x *MultiTerminalLoginCheckReq) GetToken() string {
 	return ""
 }
 
+// 多端登录检查响应
 type MultiTerminalLoginCheckResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -734,12 +774,17 @@ func (*MultiTerminalLoginCheckResp) Descriptor() ([]byte, []int) {
 	return file_msggateway_msggateway_proto_rawDescGZIP(), []int{13}
 }
 
+// 单个平台的在线详情
 type GetUsersOnlineStatusResp_SuccessDetail struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlatformID    int32                  `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
-	ConnID        string                 `protobuf:"bytes,2,opt,name=connID,proto3" json:"connID,omitempty"`
-	IsBackground  bool                   `protobuf:"varint,3,opt,name=isBackground,proto3" json:"isBackground,omitempty"`
-	Token         string                 `protobuf:"bytes,4,opt,name=token,proto3" json:"token,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 平台ID
+	PlatformID int32 `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
+	// 连接ID
+	ConnID string `protobuf:"bytes,2,opt,name=connID,proto3" json:"connID,omitempty"`
+	// 是否后台运行
+	IsBackground bool `protobuf:"varint,3,opt,name=isBackground,proto3" json:"isBackground,omitempty"`
+	// 用户token
+	Token         string `protobuf:"bytes,4,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -802,9 +847,11 @@ func (x *GetUsersOnlineStatusResp_SuccessDetail) GetToken() string {
 	return ""
 }
 
+// 查询失败详情
 type GetUsersOnlineStatusResp_FailedDetail struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserID        string                 `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 查询失败的用户ID
+	UserID        string `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -846,10 +893,14 @@ func (x *GetUsersOnlineStatusResp_FailedDetail) GetUserID() string {
 	return ""
 }
 
+// 单个用户的查询成功结果
 type GetUsersOnlineStatusResp_SuccessResult struct {
-	state                protoimpl.MessageState                    `protogen:"open.v1"`
-	UserID               string                                    `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
-	Status               int32                                     `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 用户ID
+	UserID string `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`
+	// 在线状态（1=在线，0=离线）
+	Status int32 `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
+	// 各平台的详细在线状态
 	DetailPlatformStatus []*GetUsersOnlineStatusResp_SuccessDetail `protobuf:"bytes,3,rep,name=detailPlatformStatus,proto3" json:"detailPlatformStatus,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache

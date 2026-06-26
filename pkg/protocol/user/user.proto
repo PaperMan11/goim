@@ -468,6 +468,16 @@ message clientConfig {
   string value = 3;  // 配置值
 }
 
+// 是否为IM管理员请求
+message isIMAdminReq {
+  string userID = 1;  // 用户ID
+}
+
+// 是否为IM管理员响应
+message isIMAdminResp {
+  bool isIMAdmin = 1;  // 是否为IM管理员
+}
+
 // ================================ 服务定义 ================================
 
 // 用户管理服务
@@ -532,4 +542,6 @@ service user {
   rpc delUserClientConfig(delUserClientConfigReq) returns (delUserClientConfigResp);
   // 分页获取用户客户端配置
   rpc pageUserClientConfig(pageUserClientConfigReq) returns (pageUserClientConfigResp);
+  // 是否为IM管理员
+  rpc isIMAdmin(isIMAdminReq) returns (isIMAdminResp);
 }

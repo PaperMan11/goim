@@ -70,6 +70,8 @@ type UserService interface {
 	DelUserClientConfig(ctx context.Context, in *pbuser.DelUserClientConfigReq, opts ...grpc.CallOption) (*pbuser.DelUserClientConfigResp, error)
 	// 分页获取用户客户端配置
 	PageUserClientConfig(ctx context.Context, in *pbuser.PageUserClientConfigReq, opts ...grpc.CallOption) (*pbuser.PageUserClientConfigResp, error)
+	// 是否为IM管理员
+	IsIMAdmin(ctx context.Context, in *pbuser.IsIMAdminReq, opts ...grpc.CallOption) (*pbuser.IsIMAdminResp, error)
 }
 
 type defaultUserService struct {
@@ -262,6 +264,12 @@ func (s *defaultUserService) PageUserClientConfig(ctx context.Context, in *pbuse
 	return userClient.PageUserClientConfig(ctx, in, opts...)
 }
 
+// 是否为IM管理员
+func (s *defaultUserService) IsIMAdmin(ctx context.Context, in *pbuser.IsIMAdminReq, opts ...grpc.CallOption) (*pbuser.IsIMAdminResp, error) {
+	userClient := pbuser.NewUserClient(s.cli.Conn())
+	return userClient.IsIMAdmin(ctx, in, opts...)
+}
+
 // stub
 type stubUserService struct {
 }
@@ -420,4 +428,8 @@ func (s *stubUserService) DelUserClientConfig(ctx context.Context, in *pbuser.De
 // 分页获取用户客户端配置
 func (s *stubUserService) PageUserClientConfig(ctx context.Context, in *pbuser.PageUserClientConfigReq, opts ...grpc.CallOption) (*pbuser.PageUserClientConfigResp, error) {
 	return &pbuser.PageUserClientConfigResp{}, nil
+}
+
+func (s *stubUserService) IsIMAdmin(ctx context.Context, in *pbuser.IsIMAdminReq, opts ...grpc.CallOption) (*pbuser.IsIMAdminResp, error) {
+	return &pbuser.IsIMAdminResp{IsIMAdmin: true}, nil
 }

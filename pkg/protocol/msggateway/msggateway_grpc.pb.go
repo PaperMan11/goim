@@ -30,12 +30,20 @@ const (
 // MsgGatewayClient is the client API for MsgGateway service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// 消息网关服务接口定义
 type MsgGatewayClient interface {
+	// 在线推送单条消息给指定用户
 	OnlinePushMsg(ctx context.Context, in *OnlinePushMsgReq, opts ...grpc.CallOption) (*OnlinePushMsgResp, error)
+	// 获取多个用户的在线状态
 	GetUsersOnlineStatus(ctx context.Context, in *GetUsersOnlineStatusReq, opts ...grpc.CallOption) (*GetUsersOnlineStatusResp, error)
+	// 批量在线推送单条消息给多个用户
 	OnlineBatchPushOneMsg(ctx context.Context, in *OnlineBatchPushOneMsgReq, opts ...grpc.CallOption) (*OnlineBatchPushOneMsgResp, error)
+	// 超级群批量在线推送单条消息
 	SuperGroupOnlineBatchPushOneMsg(ctx context.Context, in *OnlineBatchPushOneMsgReq, opts ...grpc.CallOption) (*OnlineBatchPushOneMsgResp, error)
+	// 踢用户下线
 	KickUserOffline(ctx context.Context, in *KickUserOfflineReq, opts ...grpc.CallOption) (*KickUserOfflineResp, error)
+	// 多端登录检查
 	MultiTerminalLoginCheck(ctx context.Context, in *MultiTerminalLoginCheckReq, opts ...grpc.CallOption) (*MultiTerminalLoginCheckResp, error)
 }
 
@@ -110,12 +118,20 @@ func (c *msgGatewayClient) MultiTerminalLoginCheck(ctx context.Context, in *Mult
 // MsgGatewayServer is the server API for MsgGateway service.
 // All implementations must embed UnimplementedMsgGatewayServer
 // for forward compatibility.
+//
+// 消息网关服务接口定义
 type MsgGatewayServer interface {
+	// 在线推送单条消息给指定用户
 	OnlinePushMsg(context.Context, *OnlinePushMsgReq) (*OnlinePushMsgResp, error)
+	// 获取多个用户的在线状态
 	GetUsersOnlineStatus(context.Context, *GetUsersOnlineStatusReq) (*GetUsersOnlineStatusResp, error)
+	// 批量在线推送单条消息给多个用户
 	OnlineBatchPushOneMsg(context.Context, *OnlineBatchPushOneMsgReq) (*OnlineBatchPushOneMsgResp, error)
+	// 超级群批量在线推送单条消息
 	SuperGroupOnlineBatchPushOneMsg(context.Context, *OnlineBatchPushOneMsgReq) (*OnlineBatchPushOneMsgResp, error)
+	// 踢用户下线
 	KickUserOffline(context.Context, *KickUserOfflineReq) (*KickUserOfflineResp, error)
+	// 多端登录检查
 	MultiTerminalLoginCheck(context.Context, *MultiTerminalLoginCheckReq) (*MultiTerminalLoginCheckResp, error)
 	mustEmbedUnimplementedMsgGatewayServer()
 }

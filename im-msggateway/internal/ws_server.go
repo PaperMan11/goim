@@ -60,7 +60,7 @@ func NewWsServer(config *WsServerConfig, pipeline *MessagePipeline, webhookManag
 		messagePipeline: pipeline,
 		webhookManager:  webhookManager,
 	}
-	s.connManager = NewConnManager(config.MaxConns, config.LoginStrategyConfig, WithOnRemove(s.onConnRemove), WithOnAdd(s.onConnAdd))
+	s.connManager = NewConnManager(config.MaxConns, config.LoginStrategy, WithOnRemove(s.onConnRemove), WithOnAdd(s.onConnAdd))
 	return s
 }
 

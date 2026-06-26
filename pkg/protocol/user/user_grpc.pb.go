@@ -52,6 +52,7 @@ const (
 	User_SetUserClientConfig_FullMethodName           = "/openim.user.user/setUserClientConfig"
 	User_DelUserClientConfig_FullMethodName           = "/openim.user.user/delUserClientConfig"
 	User_PageUserClientConfig_FullMethodName          = "/openim.user.user/pageUserClientConfig"
+	User_IsIMAdmin_FullMethodName                     = "/openim.user.user/isIMAdmin"
 )
 
 // UserClient is the client API for User service.
@@ -120,6 +121,8 @@ type UserClient interface {
 	DelUserClientConfig(ctx context.Context, in *DelUserClientConfigReq, opts ...grpc.CallOption) (*DelUserClientConfigResp, error)
 	// 分页获取用户客户端配置
 	PageUserClientConfig(ctx context.Context, in *PageUserClientConfigReq, opts ...grpc.CallOption) (*PageUserClientConfigResp, error)
+	// 是否为IM管理员
+	IsIMAdmin(ctx context.Context, in *IsIMAdminReq, opts ...grpc.CallOption) (*IsIMAdminResp, error)
 }
 
 type userClient struct {
@@ -430,6 +433,16 @@ func (c *userClient) PageUserClientConfig(ctx context.Context, in *PageUserClien
 	return out, nil
 }
 
+func (c *userClient) IsIMAdmin(ctx context.Context, in *IsIMAdminReq, opts ...grpc.CallOption) (*IsIMAdminResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsIMAdminResp)
+	err := c.cc.Invoke(ctx, User_IsIMAdmin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServer is the server API for User service.
 // All implementations must embed UnimplementedUserServer
 // for forward compatibility.
@@ -496,6 +509,8 @@ type UserServer interface {
 	DelUserClientConfig(context.Context, *DelUserClientConfigReq) (*DelUserClientConfigResp, error)
 	// 分页获取用户客户端配置
 	PageUserClientConfig(context.Context, *PageUserClientConfigReq) (*PageUserClientConfigResp, error)
+	// 是否为IM管理员
+	IsIMAdmin(context.Context, *IsIMAdminReq) (*IsIMAdminResp, error)
 	mustEmbedUnimplementedUserServer()
 }
 
@@ -595,6 +610,9 @@ func (UnimplementedUserServer) DelUserClientConfig(context.Context, *DelUserClie
 }
 func (UnimplementedUserServer) PageUserClientConfig(context.Context, *PageUserClientConfigReq) (*PageUserClientConfigResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PageUserClientConfig not implemented")
+}
+func (UnimplementedUserServer) IsIMAdmin(context.Context, *IsIMAdminReq) (*IsIMAdminResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IsIMAdmin not implemented")
 }
 func (UnimplementedUserServer) mustEmbedUnimplementedUserServer() {}
 func (UnimplementedUserServer) testEmbeddedByValue()              {}
@@ -1157,6 +1175,24 @@ func _User_PageUserClientConfig_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _User_IsIMAdmin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsIMAdminReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServer).IsIMAdmin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: User_IsIMAdmin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServer).IsIMAdmin(ctx, req.(*IsIMAdminReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // User_ServiceDesc is the grpc.ServiceDesc for User service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1283,6 +1319,10 @@ var User_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "pageUserClientConfig",
 			Handler:    _User_PageUserClientConfig_Handler,
+		},
+		{
+			MethodName: "isIMAdmin",
+			Handler:    _User_IsIMAdmin_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

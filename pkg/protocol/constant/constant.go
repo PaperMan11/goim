@@ -146,10 +146,10 @@ const (
 	ExpiredToken = 3 // 过期 Token
 
 	// 多端登录策略
-	DefalutNotKick           = 0 // 默认不踢
-	AllLoginButSameTermKick  = 1 // 允许全端登录，但同端互斥
-	AllLoginButSameClassKick = 4 // PC 端互斥，移动端互斥，Web 端可同时在线
-	PCAndOther               = 5 // PC 端可同时在线，其他终端只能一个登录
+	LoginStrategyAllowMulti          = "allow_multi"           // 允许全端登录，但同端互斥
+	LoginStrategySingle              = "single"                // 允许单端登录
+	LoginStrategyReplace             = "replace"               // 替换登录
+	LoginStrategyReplaceSamePlatform = "replace_same_platform" // 替换相同平台登录
 
 	// 在线状态
 	Online  = 1 // 在线
@@ -331,9 +331,9 @@ const (
 	OpUserPlatform  = "platform"     // 用户平台
 	Token           = "token"        // 认证令牌
 	RpcCustomHeader = "customHeader" // 自定义 RPC 头 (用于 RPC 中间件)
-	CheckKey        = "CheckKey"     // 校验键
+	CheckKey        = "checkKey"     // 校验键
 	TriggerID       = "triggerID"    // 触发器 ID
-	RemoteAddr      = "remoteAddr"   // 远程地址
+	ClientIP        = "clientIP"     // 客户端 IP
 )
 
 // 好友添加方式

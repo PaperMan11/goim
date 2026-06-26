@@ -1,0 +1,11 @@
+Name: auth.rpc
+ListenOn: 0.0.0.0:8080
+Etcd:
+  Hosts:
+  - 127.0.0.1:2379
+  Key: auth.rpc
+
+Auth:
+  AccessSecret: goim-access-secret
+  AccessExpire: 86400
+  Issuer: goim

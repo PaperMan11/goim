@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/loginstrategy"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -105,14 +106,14 @@ func (m *MockConn) SendResponse(resp *Response) error {
 
 func TestConnManager_SingleLoginStrategy(t *testing.T) {
 	config := &WsServerConfig{
-		LoginStrategyConfig: LoginStrategyConfig{
-			LoginStrategy:             LoginStrategySingle,
+		LoginStrategy: LoginStrategyConf{
+			LoginStrategy:             loginstrategy.LoginStrategySingle,
 			MaxConnPerUser:            10,
 			MaxConnPerUserPerPlatform: 10,
 		},
 		MaxConns: 100,
 	}
-	connManager := NewConnManager(config.MaxConns, config.LoginStrategyConfig)
+	connManager := NewConnManager(config.MaxConns, config.LoginStrategy)
 
 	userID := "user1"
 	conn1 := NewMockConn("conn1", userID, 1, "device1")
@@ -130,14 +131,14 @@ func TestConnManager_SingleLoginStrategy(t *testing.T) {
 
 func TestConnManager_ReplaceLoginStrategy(t *testing.T) {
 	config := &WsServerConfig{
-		LoginStrategyConfig: LoginStrategyConfig{
-			LoginStrategy:             LoginStrategyReplace,
+		LoginStrategy: LoginStrategyConf{
+			LoginStrategy:             loginstrategy.LoginStrategyReplace,
 			MaxConnPerUser:            10,
 			MaxConnPerUserPerPlatform: 10,
 		},
 		MaxConns: 100,
 	}
-	connManager := NewConnManager(config.MaxConns, config.LoginStrategyConfig)
+	connManager := NewConnManager(config.MaxConns, config.LoginStrategy)
 
 	userID := "user1"
 	conn1 := NewMockConn("conn1", userID, 1, "device1")
@@ -163,14 +164,14 @@ func TestConnManager_ReplaceLoginStrategy(t *testing.T) {
 
 func TestConnManager_ReplaceSamePlatformLoginStrategy(t *testing.T) {
 	config := &WsServerConfig{
-		LoginStrategyConfig: LoginStrategyConfig{
-			LoginStrategy:             LoginStrategyReplaceSamePlatform,
+		LoginStrategy: LoginStrategyConf{
+			LoginStrategy:             loginstrategy.LoginStrategyReplaceSamePlatform,
 			MaxConnPerUser:            10,
 			MaxConnPerUserPerPlatform: 10,
 		},
 		MaxConns: 100,
 	}
-	connManager := NewConnManager(config.MaxConns, config.LoginStrategyConfig)
+	connManager := NewConnManager(config.MaxConns, config.LoginStrategy)
 
 	userID := "user1"
 	conn1 := NewMockConn("conn1", userID, 1, "device1")
@@ -204,14 +205,14 @@ func TestConnManager_ReplaceSamePlatformLoginStrategy(t *testing.T) {
 
 func TestConnManager_AllowMultiLoginStrategy(t *testing.T) {
 	config := &WsServerConfig{
-		LoginStrategyConfig: LoginStrategyConfig{
-			LoginStrategy:             LoginStrategyAllowMulti,
+		LoginStrategy: LoginStrategyConf{
+			LoginStrategy:             loginstrategy.LoginStrategyAllowMulti,
 			MaxConnPerUser:            3,
 			MaxConnPerUserPerPlatform: 2,
 		},
 		MaxConns: 100,
 	}
-	connManager := NewConnManager(config.MaxConns, config.LoginStrategyConfig)
+	connManager := NewConnManager(config.MaxConns, config.LoginStrategy)
 
 	userID := "user1"
 
@@ -245,14 +246,14 @@ func TestConnManager_AllowMultiLoginStrategy(t *testing.T) {
 
 func TestConnManager_MultipleUsers(t *testing.T) {
 	config := &WsServerConfig{
-		LoginStrategyConfig: LoginStrategyConfig{
-			LoginStrategy:             LoginStrategyAllowMulti,
+		LoginStrategy: LoginStrategyConf{
+			LoginStrategy:             loginstrategy.LoginStrategyAllowMulti,
 			MaxConnPerUser:            10,
 			MaxConnPerUserPerPlatform: 10,
 		},
 		MaxConns: 100,
 	}
-	connManager := NewConnManager(config.MaxConns, config.LoginStrategyConfig)
+	connManager := NewConnManager(config.MaxConns, config.LoginStrategy)
 
 	user1Conn1 := NewMockConn("user1_conn1", "user1", 1, "device1")
 	user1Conn2 := NewMockConn("user1_conn2", "user1", 2, "device2")
@@ -285,14 +286,14 @@ func TestConnManager_MultipleUsers(t *testing.T) {
 
 func TestConnManager_ConcurrentAccess(t *testing.T) {
 	config := &WsServerConfig{
-		LoginStrategyConfig: LoginStrategyConfig{
-			LoginStrategy:             LoginStrategyAllowMulti,
+		LoginStrategy: LoginStrategyConf{
+			LoginStrategy:             loginstrategy.LoginStrategyAllowMulti,
 			MaxConnPerUser:            100,
 			MaxConnPerUserPerPlatform: 100,
 		},
 		MaxConns: 100,
 	}
-	connManager := NewConnManager(config.MaxConns, config.LoginStrategyConfig)
+	connManager := NewConnManager(config.MaxConns, config.LoginStrategy)
 
 	userID := "user1"
 	done := make(chan bool, 10)
@@ -318,14 +319,14 @@ func TestConnManager_ConcurrentAccess(t *testing.T) {
 
 func BenchmarkConnManager_AddConnection(b *testing.B) {
 	config := &WsServerConfig{
-		LoginStrategyConfig: LoginStrategyConfig{
-			LoginStrategy:             LoginStrategyAllowMulti,
+		LoginStrategy: LoginStrategyConf{
+			LoginStrategy:             loginstrategy.LoginStrategyAllowMulti,
 			MaxConnPerUser:            10000,
 			MaxConnPerUserPerPlatform: 10000,
 		},
 		MaxConns: 100000,
 	}
-	connManager := NewConnManager(config.MaxConns, config.LoginStrategyConfig)
+	connManager := NewConnManager(config.MaxConns, config.LoginStrategy)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
