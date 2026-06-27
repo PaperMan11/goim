@@ -1,10 +1,12 @@
 package internal
 
 import (
+	"runtime"
 	"sync"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
+	"github.com/PaperMan11/goim/pkg/utils/workerpool"
 )
 
 type ConnManager interface {
@@ -20,9 +22,16 @@ type ConnManager interface {
 	SendTo(connID string, message []byte) error
 	SendToUser(userID string, message []byte) error
 	CloseAll()
+	MultiTerminalCheckStrategy(connID string) error
+	Stop()
 }
 
 type ConnChangeCallback func(conn Connection)
+
+type strategyCheckRequest struct {
+	conn   Connection
+	addSeq uint64
+}
 
 type connManager struct {
 	connections         map[string][]Connection // userID -> conn list
@@ -33,6 +42,13 @@ type connManager struct {
 	loginStrategyConfig LoginStrategyConf
 	onRemove            ConnChangeCallback
 	onAdd               ConnChangeCallback
+
+	strategyCheckPool *workerpool.WorkerPool[*strategyCheckRequest]
+	workerCount       int
+	queueSize         int
+
+	connSeq    uint64
+	connAddSeq map[string]uint64 // connID -> sequence number
 }
 
 type Option func(*connManager)
@@ -49,43 +65,246 @@ func WithOnAdd(onAdd ConnChangeCallback) Option {
 	}
 }
 
+func WithStrategyCheckQueue(queueSize int, workerCount int) Option {
+	return func(cm *connManager) {
+		cm.queueSize = queueSize
+		cm.workerCount = workerCount
+	}
+}
+
 func NewConnManager(maxConns int64, loginStrategy LoginStrategyConf, opts ...Option) *connManager {
 	manager := &connManager{
 		connections:         make(map[string][]Connection),
 		connIndex:           make(map[string]Connection),
 		maxConns:            maxConns,
 		loginStrategyConfig: loginStrategy,
+		workerCount:         runtime.NumCPU(),
+		queueSize:           1024,
+		connAddSeq:          make(map[string]uint64),
 	}
 	for _, opt := range opts {
 		opt(manager)
 	}
+
+	manager.strategyCheckPool = workerpool.New(manager.processStrategyCheck, manager.workerCount, manager.queueSize)
+	manager.strategyCheckPool.Start()
+
 	return manager
+}
+
+func (cm *connManager) Stop() {
+	cm.strategyCheckPool.Stop()
 }
 
 func (cm *connManager) Add(conn Connection) error {
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
 
 	if cm.connCount >= cm.maxConns {
+		cm.mu.Unlock()
 		return errx.ConnOverMaxNumLimit
 	}
 
 	if _, exists := cm.connIndex[conn.ID()]; exists {
+		cm.mu.Unlock()
 		return errx.ConnResetError
 	}
 
-	return cm.addWithStrategy(conn)
+	// handshakeInfo := conn.Context().HandshakeInfo()
+	// userID := handshakeInfo.GetUserID()
+	// platformID := handshakeInfo.GetPlatformID()
+
+	// if cm.loginStrategyConfig.LoginStrategy == loginstrategy.LoginStrategyAllowMulti {
+	// 	existingConns, exists := cm.connections[userID]
+	// 	if exists && int64(len(existingConns)) >= cm.loginStrategyConfig.MaxConnPerUser {
+	// 		cm.mu.Unlock()
+	// 		return errx.ConnOverMaxNumLimit.Wrap("user connection count exceeded")
+	// 	}
+
+	// 	samePlatformCount := int64(0)
+	// 	if exists {
+	// 		for _, existingConn := range existingConns {
+	// 			if existingConn.Context().HandshakeInfo().GetPlatformID() == platformID {
+	// 				samePlatformCount++
+	// 			}
+	// 		}
+	// 	}
+	// 	if samePlatformCount >= cm.loginStrategyConfig.MaxConnPerUserPerPlatform {
+	// 		cm.mu.Unlock()
+	// 		return errx.ConnOverMaxNumLimit.Wrap("user connection count exceeded for this platform")
+	// 	}
+	// }
+
+	// 分配序列号，确保在锁内进行
+	cm.connSeq++
+	addSeq := cm.connSeq
+
+	if err := cm.addDirectly(conn, addSeq); err != nil {
+		cm.mu.Unlock()
+		return err
+	}
+	cm.mu.Unlock()
+
+	// if cm.loginStrategyConfig.LoginStrategy != loginstrategy.LoginStrategyAllowMulti {
+	cm.strategyCheckPool.Submit(&strategyCheckRequest{conn: conn, addSeq: addSeq})
+	// }
+
+	return nil
 }
 
-func (cm *connManager) addDirectly(conn Connection) error {
+func (cm *connManager) addDirectly(conn Connection, addSeq uint64) error {
 	userID := conn.Context().HandshakeInfo().GetUserID()
 	cm.connections[userID] = append(cm.connections[userID], conn)
 	cm.connIndex[conn.ID()] = conn
+	cm.connAddSeq[conn.ID()] = addSeq
 	cm.connCount++
 
 	totalConnCounter.Inc()
 	activeConnGauge.Set(float64(cm.connCount))
 	return nil
+}
+
+func (cm *connManager) MultiTerminalCheckStrategy(connID string) error {
+	cm.mu.RLock()
+	conn, exists := cm.connIndex[connID]
+	if !exists {
+		cm.mu.RUnlock()
+		return errx.ConnResetError
+	}
+	addSeq, exists := cm.connAddSeq[connID]
+	if !exists {
+		cm.mu.RUnlock()
+		return errx.ConnResetError
+	}
+	cm.mu.RUnlock()
+
+	cm.strategyCheckPool.Submit(&strategyCheckRequest{conn: conn, addSeq: addSeq})
+	return nil
+}
+
+func (cm *connManager) processStrategyCheck(req *strategyCheckRequest) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	conn := req.conn
+	handshakeInfo := conn.Context().HandshakeInfo()
+	userID := handshakeInfo.GetUserID()
+	platformID := handshakeInfo.GetPlatformID()
+	connID := conn.ID()
+
+	if _, exists := cm.connIndex[connID]; !exists {
+		return
+	}
+
+	// 获取当前连接的序列号，如果已经被更新过则跳过
+	if currentSeq, exists := cm.connAddSeq[connID]; exists && currentSeq > req.addSeq {
+		return
+	}
+
+	switch cm.loginStrategyConfig.LoginStrategy {
+	case loginstrategy.LoginStrategySingle:
+		cm.checkSingleLoginAsync(userID, connID, req.addSeq)
+	case loginstrategy.LoginStrategyReplace:
+		cm.checkReplaceLoginAsync(userID, connID, req.addSeq)
+	case loginstrategy.LoginStrategyReplaceSamePlatform:
+		cm.checkReplaceSamePlatformLoginAsync(userID, platformID, connID, req.addSeq)
+	case loginstrategy.LoginStrategyAllowMulti:
+		fallthrough
+	default:
+		cm.checkAllowMultiLoginAsync(userID, platformID, connID, req.addSeq)
+	}
+
+	if cm.onAdd != nil {
+		cm.onAdd(conn)
+	}
+}
+
+func (cm *connManager) checkSingleLoginAsync(userID string, newConnID string, addSeq uint64) {
+	conns := cm.connections[userID]
+	if len(conns) <= 1 {
+		return
+	}
+
+	for _, existingConn := range conns {
+		if existingConn.ID() != newConnID {
+			// 只有当现有连接的序列号小于当前请求的序列号时才踢掉
+			if existingSeq, exists := cm.connAddSeq[existingConn.ID()]; !exists || existingSeq < addSeq {
+				_ = existingConn.SendResponse(&Response{
+					ReqIdentifier: WSKickOnlineMsg,
+				})
+				cm.removeLocked(existingConn.ID())
+			}
+		}
+	}
+}
+
+func (cm *connManager) checkReplaceLoginAsync(userID string, newConnID string, addSeq uint64) {
+	conns := cm.connections[userID]
+	for _, existingConn := range conns {
+		if existingConn.ID() != newConnID {
+			if existingSeq, exists := cm.connAddSeq[existingConn.ID()]; !exists || existingSeq < addSeq {
+				_ = existingConn.SendResponse(&Response{
+					ReqIdentifier: WSKickOnlineMsg,
+				})
+				cm.removeLocked(existingConn.ID())
+			}
+		}
+	}
+}
+
+func (cm *connManager) checkReplaceSamePlatformLoginAsync(userID string, platformID int32, newConnID string, addSeq uint64) {
+	conns := cm.connections[userID]
+	for _, existingConn := range conns {
+		if existingConn.ID() != newConnID && existingConn.Context().HandshakeInfo().GetPlatformID() == platformID {
+			if existingSeq, exists := cm.connAddSeq[existingConn.ID()]; !exists || existingSeq < addSeq {
+				_ = existingConn.SendResponse(&Response{
+					ReqIdentifier: WSKickOnlineMsg,
+				})
+				cm.removeLocked(existingConn.ID())
+			}
+		}
+	}
+}
+
+func (cm *connManager) checkAllowMultiLoginAsync(userID string, platformID int32, newConnID string, addSeq uint64) {
+	conns := cm.connections[userID]
+
+	// 检查总连接数限制
+	if int64(len(conns)) > cm.loginStrategyConfig.MaxConnPerUser {
+		// 踢掉最旧的连接（保留新连接）
+		for i := 0; i < len(conns)-int(cm.loginStrategyConfig.MaxConnPerUser); i++ {
+			if conns[i].ID() != newConnID {
+				if existingSeq, exists := cm.connAddSeq[conns[i].ID()]; !exists || existingSeq < addSeq {
+					_ = conns[i].SendResponse(&Response{
+						ReqIdentifier: WSKickOnlineMsg,
+					})
+					cm.removeLocked(conns[i].ID())
+				}
+			}
+		}
+	}
+
+	// 检查同平台连接数限制
+	conns = cm.connections[userID] //重新获取更新后的连接列表
+	samePlatformConns := make([]Connection, 0)
+	for _, c := range conns {
+		if c.Context().HandshakeInfo().GetPlatformID() == platformID {
+			samePlatformConns = append(samePlatformConns, c)
+		}
+	}
+
+	if int64(len(samePlatformConns)) > cm.loginStrategyConfig.MaxConnPerUserPerPlatform {
+		// 踢掉同平台最旧的连接（保留新连接）
+		for i := 0; i < len(samePlatformConns)-int(cm.loginStrategyConfig.MaxConnPerUserPerPlatform); i++ {
+			if samePlatformConns[i].ID() != newConnID {
+				if existingSeq, exists := cm.connAddSeq[samePlatformConns[i].ID()]; !exists || existingSeq < addSeq {
+					_ = samePlatformConns[i].SendResponse(&Response{
+						ReqIdentifier: WSKickOnlineMsg,
+					})
+					cm.removeLocked(samePlatformConns[i].ID())
+				}
+			}
+		}
+	}
 }
 
 func (cm *connManager) addWithStrategy(conn Connection) (err error) {
@@ -115,7 +334,8 @@ func (cm *connManager) handleSingleLogin(userID string, conn Connection) error {
 	if conns, exists := cm.connections[userID]; exists && len(conns) > 0 {
 		return errx.ConnResetError.Wrap("user already logged in on another device")
 	}
-	return cm.addDirectly(conn)
+	cm.connSeq++
+	return cm.addDirectly(conn, cm.connSeq)
 }
 
 func (cm *connManager) handleReplaceLogin(userID string, conn Connection) error {
@@ -127,7 +347,8 @@ func (cm *connManager) handleReplaceLogin(userID string, conn Connection) error 
 			cm.removeLocked(existingConn.ID())
 		}
 	}
-	return cm.addDirectly(conn)
+	cm.connSeq++
+	return cm.addDirectly(conn, cm.connSeq)
 }
 
 func (cm *connManager) handleReplaceSamePlatformLogin(userID string, platformID int32, conn Connection) error {
@@ -141,13 +362,15 @@ func (cm *connManager) handleReplaceSamePlatformLogin(userID string, platformID 
 			}
 		}
 	}
-	return cm.addDirectly(conn)
+	cm.connSeq++
+	return cm.addDirectly(conn, cm.connSeq)
 }
 
 func (cm *connManager) handleAllowMultiLogin(userID string, platformID int32, conn Connection) error {
 	existingConns, exists := cm.connections[userID]
 	if !exists {
-		return cm.addDirectly(conn)
+		cm.connSeq++
+		return cm.addDirectly(conn, cm.connSeq)
 	}
 
 	if int64(len(existingConns)) >= cm.loginStrategyConfig.MaxConnPerUser {
@@ -165,7 +388,8 @@ func (cm *connManager) handleAllowMultiLogin(userID string, platformID int32, co
 		return errx.ConnOverMaxNumLimit.Wrap("user connection count exceeded for this platform")
 	}
 
-	return cm.addDirectly(conn)
+	cm.connSeq++
+	return cm.addDirectly(conn, cm.connSeq)
 }
 
 func (cm *connManager) KickOut(connID string) error {
@@ -196,6 +420,7 @@ func (cm *connManager) removeLocked(connID string) error {
 	userID := conn.Context().HandshakeInfo().GetUserID()
 
 	delete(cm.connIndex, connID)
+	delete(cm.connAddSeq, connID)
 
 	if conns, ok := cm.connections[userID]; ok {
 		for i, c := range conns {
@@ -210,6 +435,11 @@ func (cm *connManager) removeLocked(connID string) error {
 	}
 
 	cm.connCount--
+
+	if cm.connCount == 0 {
+		cm.connSeq = 0
+		cm.connAddSeq = make(map[string]uint64)
+	}
 
 	if cm.onRemove != nil {
 		cm.onRemove(conn)
@@ -322,6 +552,8 @@ func (cm *connManager) CloseAll() {
 	cm.connections = make(map[string][]Connection)
 	cm.connIndex = make(map[string]Connection)
 	cm.connCount = 0
+	cm.connSeq = 0
+	cm.connAddSeq = make(map[string]uint64)
 
 	connCloseCounter.Add(float64(closedCount), "server_stop")
 	activeConnGauge.Set(0)

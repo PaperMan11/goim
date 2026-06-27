@@ -1,11 +1,9 @@
 package internal
 
 import (
-	"errors"
 	"testing"
 	"time"
 
-	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
 	"github.com/stretchr/testify/assert"
 )
@@ -104,8 +102,12 @@ func (m *MockConn) SendResponse(resp *Response) error {
 	return nil
 }
 
+func waitForStrategyCheck() {
+	time.Sleep(100 * time.Millisecond)
+}
+
 func TestConnManager_SingleLoginStrategy(t *testing.T) {
-	config := &WsServerConfig{
+	config := &WsServerConf{
 		LoginStrategy: LoginStrategyConf{
 			LoginStrategy:             loginstrategy.LoginStrategySingle,
 			MaxConnPerUser:            10,
@@ -124,13 +126,14 @@ func TestConnManager_SingleLoginStrategy(t *testing.T) {
 
 	conn2 := NewMockConn("conn2", userID, 2, "device2")
 	err = connManager.Add(conn2)
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, errx.ConnResetError))
+	assert.NoError(t, err)
+	waitForStrategyCheck()
 	assert.Equal(t, int64(1), connManager.Count())
+	assert.True(t, conn1.IsClosed())
 }
 
 func TestConnManager_ReplaceLoginStrategy(t *testing.T) {
-	config := &WsServerConfig{
+	config := &WsServerConf{
 		LoginStrategy: LoginStrategyConf{
 			LoginStrategy:             loginstrategy.LoginStrategyReplace,
 			MaxConnPerUser:            10,
@@ -151,19 +154,21 @@ func TestConnManager_ReplaceLoginStrategy(t *testing.T) {
 
 	err = connManager.Add(conn2)
 	assert.NoError(t, err)
+	waitForStrategyCheck()
 	assert.Equal(t, int64(1), connManager.Count())
 	assert.True(t, conn1.IsClosed())
 	assert.False(t, conn2.IsClosed())
 
 	err = connManager.Add(conn3)
 	assert.NoError(t, err)
+	waitForStrategyCheck()
 	assert.Equal(t, int64(1), connManager.Count())
 	assert.True(t, conn2.IsClosed())
 	assert.False(t, conn3.IsClosed())
 }
 
 func TestConnManager_ReplaceSamePlatformLoginStrategy(t *testing.T) {
-	config := &WsServerConfig{
+	config := &WsServerConf{
 		LoginStrategy: LoginStrategyConf{
 			LoginStrategy:             loginstrategy.LoginStrategyReplaceSamePlatform,
 			MaxConnPerUser:            10,
@@ -185,6 +190,7 @@ func TestConnManager_ReplaceSamePlatformLoginStrategy(t *testing.T) {
 
 	err = connManager.Add(conn2)
 	assert.NoError(t, err)
+	waitForStrategyCheck()
 	assert.Equal(t, int64(1), connManager.Count())
 	assert.True(t, conn1.IsClosed())
 	assert.False(t, conn2.IsClosed())
@@ -197,6 +203,7 @@ func TestConnManager_ReplaceSamePlatformLoginStrategy(t *testing.T) {
 
 	err = connManager.Add(conn4)
 	assert.NoError(t, err)
+	waitForStrategyCheck()
 	assert.Equal(t, int64(2), connManager.Count())
 	assert.True(t, conn3.IsClosed())
 	assert.False(t, conn2.IsClosed())
@@ -204,7 +211,7 @@ func TestConnManager_ReplaceSamePlatformLoginStrategy(t *testing.T) {
 }
 
 func TestConnManager_AllowMultiLoginStrategy(t *testing.T) {
-	config := &WsServerConfig{
+	config := &WsServerConf{
 		LoginStrategy: LoginStrategyConf{
 			LoginStrategy:             loginstrategy.LoginStrategyAllowMulti,
 			MaxConnPerUser:            3,
@@ -228,8 +235,8 @@ func TestConnManager_AllowMultiLoginStrategy(t *testing.T) {
 
 	conn3 := NewMockConn("conn3", userID, 1, "device3")
 	err = connManager.Add(conn3)
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, errx.ConnOverMaxNumLimit))
+	assert.NoError(t, err)
+	waitForStrategyCheck()
 	assert.Equal(t, int64(2), connManager.Count())
 
 	conn4 := NewMockConn("conn4", userID, 2, "device4")
@@ -239,13 +246,18 @@ func TestConnManager_AllowMultiLoginStrategy(t *testing.T) {
 
 	conn5 := NewMockConn("conn5", userID, 3, "device5")
 	err = connManager.Add(conn5)
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, errx.ConnOverMaxNumLimit))
+	assert.NoError(t, err)
+	waitForStrategyCheck()
 	assert.Equal(t, int64(3), connManager.Count())
+	assert.True(t, conn1.IsClosed())
+	assert.True(t, conn2.IsClosed())
+	assert.False(t, conn3.IsClosed())
+	assert.False(t, conn4.IsClosed())
+	assert.False(t, conn5.IsClosed())
 }
 
 func TestConnManager_MultipleUsers(t *testing.T) {
-	config := &WsServerConfig{
+	config := &WsServerConf{
 		LoginStrategy: LoginStrategyConf{
 			LoginStrategy:             loginstrategy.LoginStrategyAllowMulti,
 			MaxConnPerUser:            10,
@@ -285,7 +297,7 @@ func TestConnManager_MultipleUsers(t *testing.T) {
 }
 
 func TestConnManager_ConcurrentAccess(t *testing.T) {
-	config := &WsServerConfig{
+	config := &WsServerConf{
 		LoginStrategy: LoginStrategyConf{
 			LoginStrategy:             loginstrategy.LoginStrategyAllowMulti,
 			MaxConnPerUser:            100,
@@ -318,7 +330,7 @@ func TestConnManager_ConcurrentAccess(t *testing.T) {
 }
 
 func BenchmarkConnManager_AddConnection(b *testing.B) {
-	config := &WsServerConfig{
+	config := &WsServerConf{
 		LoginStrategy: LoginStrategyConf{
 			LoginStrategy:             loginstrategy.LoginStrategyAllowMulti,
 			MaxConnPerUser:            10000,

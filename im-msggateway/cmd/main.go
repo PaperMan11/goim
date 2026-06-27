@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/PaperMan11/goim/im-msggateway/internal"
+	"github.com/PaperMan11/goim/pkg/authverify"
+	pbmsggateway "github.com/PaperMan11/goim/pkg/protocol/msggateway"
 	authservice "github.com/PaperMan11/goim/pkg/rpcclient/authservice"
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	pushservice "github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
@@ -14,7 +16,10 @@ import (
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/proc"
+	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 var configFile = flag.String("f", "etc/msggateway.yaml", "config file")
@@ -29,13 +34,36 @@ func main() {
 	proc.AddShutdownListener(func() {
 		wsServer.Stop()
 	})
+	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
+		hubServer := internal.NewHubServer(wsServer, newAuthVerifier(&c), &c.HubServerConf)
+		pbmsggateway.RegisterMsgGatewayServer(grpcServer, hubServer)
+		if c.Mode == service.DevMode || c.Mode == service.TestMode {
+			reflection.Register(grpcServer)
+		}
+		hubServer.Start()
+		proc.AddWrapUpListener(func() {
+			hubServer.Stop()
+		})
+	})
+	go s.Start()
+	defer s.Stop()
 
 	if err := wsServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logx.Errorf("Failed to start server: %v", err)
 	}
 }
 
-func newWsServer(c *internal.MsgGatewayConfig) internal.Server {
+func newAuthVerifier(c *internal.MsgGatewayConfig) authverify.AuthVerifyService {
+	var userService userservice.UserService
+	if c.UserRpc.Stub {
+		userService = userservice.NewStubUserService()
+	} else {
+		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf))
+	}
+	return authverify.NewAuthVerify(userService)
+}
+
+func newWsServer(c *internal.MsgGatewayConfig) internal.WsServer {
 	var (
 		authService authservice.AuthService
 		userService userservice.UserService
@@ -45,26 +73,22 @@ func newWsServer(c *internal.MsgGatewayConfig) internal.Server {
 	if c.AuthRpc.Stub {
 		authService = authservice.NewStubAuthService()
 	} else {
-		authRpcClient := zrpc.MustNewClient(c.AuthRpc.RpcClientConf)
-		authService = authservice.NewAuthService(authRpcClient)
+		authService = authservice.NewAuthService(zrpc.MustNewClient(c.AuthRpc.RpcClientConf))
 	}
 	if c.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
-		userRpcClient := zrpc.MustNewClient(c.UserRpc.RpcClientConf)
-		userService = userservice.NewUserService(userRpcClient)
+		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf))
 	}
 	if c.MsgRpc.Stub {
 		msgService = msgservice.NewStubMsgService()
 	} else {
-		msgRpcClient := zrpc.MustNewClient(c.MsgRpc.RpcClientConf)
-		msgService = msgservice.NewMsgService(msgRpcClient)
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(c.MsgRpc.RpcClientConf))
 	}
 	if c.PushRpc.Stub {
 		pushService = pushservice.NewStubPushService()
 	} else {
-		pushRpcClient := zrpc.MustNewClient(c.PushRpc.RpcClientConf)
-		pushService = pushservice.NewPushService(pushRpcClient)
+		pushService = pushservice.NewPushService(zrpc.MustNewClient(c.PushRpc.RpcClientConf))
 	}
 
 	// 消息处理器

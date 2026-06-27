@@ -58,8 +58,6 @@ func (d *Dispatcher) Start() {
 
 // Stop 停止分发器
 func (d *Dispatcher) Stop() {
-	logx.Info("Stopping webhook dispatcher...")
-
 	close(d.stopChan)
 	d.wg.Wait()
 

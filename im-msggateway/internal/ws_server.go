@@ -26,15 +26,19 @@ type Server interface {
 
 type WsServer interface {
 	Server
-	Config() *WsServerConfig
+	Config() *WsServerConf
 	HandleMessage(conn Connection, message []byte) error
 	Disconnect(conn Connection) error
+	GetAllClients() []Connection
+	GetAllUserClients(userID string) []Connection
+	KickClient(conn Connection) error
+	MultiTerminalCheckStrategy(connID string) error
 }
 
 type wsServer struct {
 	upgrader        *websocket.Upgrader
 	connManager     ConnManager
-	config          *WsServerConfig
+	config          *WsServerConf
 	server          *http.Server
 	authService     authservice.AuthService
 	userService     userservice.UserService
@@ -42,7 +46,7 @@ type wsServer struct {
 	webhookManager  *webhooks.Manager
 }
 
-func NewWsServer(config *WsServerConfig, pipeline *MessagePipeline, webhookManager *webhooks.Manager,
+func NewWsServer(config *WsServerConf, pipeline *MessagePipeline, webhookManager *webhooks.Manager,
 	authService authservice.AuthService,
 	userService userservice.UserService,
 ) *wsServer {
@@ -60,11 +64,13 @@ func NewWsServer(config *WsServerConfig, pipeline *MessagePipeline, webhookManag
 		messagePipeline: pipeline,
 		webhookManager:  webhookManager,
 	}
-	s.connManager = NewConnManager(config.MaxConns, config.LoginStrategy, WithOnRemove(s.onConnRemove), WithOnAdd(s.onConnAdd))
+	s.connManager = NewConnManager(config.MaxConns, config.LoginStrategy,
+		WithOnRemove(s.onConnRemove),
+		WithOnAdd(s.onConnAdd))
 	return s
 }
 
-func (s *wsServer) Config() *WsServerConfig {
+func (s *wsServer) Config() *WsServerConf {
 	return s.config
 }
 
@@ -78,14 +84,15 @@ func (s *wsServer) Start() error {
 	return s.server.ListenAndServe()
 }
 
-func (s *wsServer) Stop() error {
+func (s *wsServer) Stop() (err error) {
 	s.connManager.CloseAll()
-	if s.server != nil {
-		return s.server.Shutdown(context.Background())
-	}
+	s.connManager.Stop()
 	s.webhookManager.Stop()
 	logx.Infof("WebSocket server stopped")
-	return nil
+	if s.server != nil {
+		err = s.server.Shutdown(context.Background())
+	}
+	return err
 }
 
 func (s *wsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +188,10 @@ func (s *wsServer) Disconnect(conn Connection) error {
 	return s.connManager.Remove(conn.ID())
 }
 
+func (s *wsServer) KickClient(conn Connection) error {
+	return s.connManager.KickOut(conn.ID())
+}
+
 // onConnAdded 触发用户上线webhook事件
 func (s *wsServer) onConnAdd(conn Connection) {
 	ctx := conn.Context()
@@ -264,4 +275,20 @@ func (s *wsServer) onConnRemove(conn Connection) {
 			logc.Errorf(ctx, "Failed to dispatch user offline webhook event: %v", err)
 		}
 	}
+}
+
+func (s *wsServer) GetAllClients() []Connection {
+	return s.connManager.GetAll()
+}
+
+func (s *wsServer) GetAllUserClients(userID string) []Connection {
+	conns, err := s.connManager.GetByUserID(userID)
+	if err != nil {
+		return nil
+	}
+	return conns
+}
+
+func (s *wsServer) MultiTerminalCheckStrategy(connID string) error {
+	return s.connManager.MultiTerminalCheckStrategy(connID)
 }

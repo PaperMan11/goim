@@ -6,15 +6,19 @@ import (
 )
 
 type MsgGatewayConfig struct {
-	zrpc.RpcServerConf
-	WsServer WsServerConfig
+	HubServerConf
+	WsServer WsServerConf
 	AuthRpc  RpcConf
 	UserRpc  RpcConf
 	MsgRpc   RpcConf
 	PushRpc  RpcConf
 }
 
-type WsServerConfig struct {
+type HubServerConf struct {
+	zrpc.RpcServerConf
+}
+
+type WsServerConf struct {
 	Host          string `json:",default=0.0.0.0"`
 	Port          int    `json:",default=50003"`
 	MaxConns      int64  `json:",default=1024096"`

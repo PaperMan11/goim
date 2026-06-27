@@ -30,9 +30,10 @@ WsServer:
   EnableAuth: false # 是否开启认证，默认开启
 
   # 多端登录策略配置
-  LoginStrategy: allow_multi # 登录策略: allow_multi(允许多端), single(单端), replace(踢掉旧连接), replace_same_platform(同平台替换)
-  MaxConnPerUser: 10 # 每个用户最大连接数(allow_multi策略下生效)
-  MaxConnPerUserPerPlatform: 3 # 每个用户每个平台最大连接数
+  LoginStrategy:
+    LoginStrategy: allow_multi # 登录策略: allow_multi(允许多端), single(单端), replace(踢掉旧连接), replace_same_platform(同平台替换)
+    MaxConnPerUser: 10 # 每个用户最大连接数(allow_multi策略下生效)
+    MaxConnPerUserPerPlatform: 3 # 每个用户每个平台最大连接数
 
 # RPC 配置
 AuthRpc:
