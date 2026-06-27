@@ -10,19 +10,29 @@ import (
 )
 
 type ConnManager interface {
+	// 连接管理
 	Add(conn Connection) error
+	// Remove 静默移除连接，不发送踢下线消息
 	Remove(connID string) error
-	KickOut(connID string) error
+	// Kick 踢下线连接，发送踢下线消息后移除
+	Kick(connID string) error
+
+	// 连接查询
 	Get(connID string) (Connection, error)
 	GetByUserID(userID string) ([]Connection, error)
 	GetAll() []Connection
 	Count() int64
 	CountByUserID(userID string) int64
+
+	// 消息发送
 	Broadcast(message []byte)
 	SendTo(connID string, message []byte) error
 	SendToUser(userID string, message []byte) error
+
+	// 批量操作
 	CloseAll()
-	MultiTerminalCheckStrategy(connID string) error
+	// CheckMultiTerminalLogin 检查多终端登录策略
+	CheckMultiTerminalLogin(connID string) error
 	Stop()
 }
 
@@ -163,7 +173,7 @@ func (cm *connManager) addDirectly(conn Connection, addSeq uint64) error {
 	return nil
 }
 
-func (cm *connManager) MultiTerminalCheckStrategy(connID string) error {
+func (cm *connManager) CheckMultiTerminalLogin(connID string) error {
 	cm.mu.RLock()
 	conn, exists := cm.connIndex[connID]
 	if !exists {
@@ -392,7 +402,7 @@ func (cm *connManager) handleAllowMultiLogin(userID string, platformID int32, co
 	return cm.addDirectly(conn, cm.connSeq)
 }
 
-func (cm *connManager) KickOut(connID string) error {
+func (cm *connManager) Kick(connID string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 	conn, exists := cm.connIndex[connID]

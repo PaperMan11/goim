@@ -27,10 +27,12 @@ type Connection interface {
 	ID() string
 	Start()
 	Close() error
+	// Send 发送原始消息
 	Send(message []byte) error
+	// SendResponse 发送响应消息，包含编码和压缩处理
 	SendResponse(resp *Response) error
 	Context() ConnContext
-	Error() error
+	CloseError() error
 	Server() WsServer
 }
 
@@ -248,6 +250,6 @@ func (c *WsConnection) closeWithError(err error) {
 	c.err.CompareAndSwap(nil, &err)
 }
 
-func (c *WsConnection) Error() error {
+func (c *WsConnection) CloseError() error {
 	return *c.err.Load()
 }

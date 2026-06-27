@@ -8,14 +8,15 @@ import (
 	"github.com/zeromicro/go-zero/rest/httpx"
 )
 
+// ConnContext 连接上下文接口，封装 WebSocket 连接的元数据和上下文信息
 type ConnContext interface {
 	context.Context
 	RemoteAddr() string
-	ParseHandshakeRequest() error
 	Close() error
 	HandshakeInfo() HandshakeInfo
 }
 
+// HandshakeInfo 握手信息接口，包含客户端连接时的元数据
 type HandshakeInfo interface {
 	GetPlatformID() int32
 	GetDeviceID() string

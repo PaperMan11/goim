@@ -27,12 +27,15 @@ type Server interface {
 type WsServer interface {
 	Server
 	Config() *WsServerConf
+	// HandleMessage 处理接收到的消息，由 Connection 内部调用
 	HandleMessage(conn Connection, message []byte) error
+	GetAllConnections() []Connection
+	GetUserConnections(userID string) []Connection
+	// Disconnect 静默断开连接，不发送踢下线消息
 	Disconnect(conn Connection) error
-	GetAllClients() []Connection
-	GetAllUserClients(userID string) []Connection
-	KickClient(conn Connection) error
-	MultiTerminalCheckStrategy(connID string) error
+	// Kick 踢下线连接，发送踢下线消息后断开
+	Kick(conn Connection) error
+	CheckMultiTerminalLogin(connID string) error
 }
 
 type wsServer struct {
@@ -188,8 +191,8 @@ func (s *wsServer) Disconnect(conn Connection) error {
 	return s.connManager.Remove(conn.ID())
 }
 
-func (s *wsServer) KickClient(conn Connection) error {
-	return s.connManager.KickOut(conn.ID())
+func (s *wsServer) Kick(conn Connection) error {
+	return s.connManager.Kick(conn.ID())
 }
 
 // onConnAdded 触发用户上线webhook事件
@@ -277,11 +280,11 @@ func (s *wsServer) onConnRemove(conn Connection) {
 	}
 }
 
-func (s *wsServer) GetAllClients() []Connection {
+func (s *wsServer) GetAllConnections() []Connection {
 	return s.connManager.GetAll()
 }
 
-func (s *wsServer) GetAllUserClients(userID string) []Connection {
+func (s *wsServer) GetUserConnections(userID string) []Connection {
 	conns, err := s.connManager.GetByUserID(userID)
 	if err != nil {
 		return nil
@@ -289,6 +292,6 @@ func (s *wsServer) GetAllUserClients(userID string) []Connection {
 	return conns
 }
 
-func (s *wsServer) MultiTerminalCheckStrategy(connID string) error {
-	return s.connManager.MultiTerminalCheckStrategy(connID)
+func (s *wsServer) CheckMultiTerminalLogin(connID string) error {
+	return s.connManager.CheckMultiTerminalLogin(connID)
 }

@@ -90,7 +90,7 @@ func (m *MockConn) IsClosed() bool {
 	return m.closed
 }
 
-func (m *MockConn) Error() error {
+func (m *MockConn) CloseError() error {
 	return m.connError
 }
 

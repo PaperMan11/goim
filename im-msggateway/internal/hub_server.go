@@ -63,7 +63,7 @@ func (h *HubServer) Stop() error {
 }
 
 func (h *HubServer) processPushTask(task *pushTask) {
-	userConns := h.wsServer.GetAllUserClients(task.userID)
+	userConns := h.wsServer.GetUserConnections(task.userID)
 	if len(userConns) == 0 {
 		task.result <- &pushResult{userID: task.userID, result: nil}
 		return
@@ -109,7 +109,7 @@ func (h *HubServer) GetUsersOnlineStatus(ctx context.Context, req *pbmsggateway.
 		FailedResult:  make([]*pbmsggateway.GetUsersOnlineStatusResp_FailedDetail, 0),
 	}
 	for _, userID := range req.UserIDs {
-		userConns := h.wsServer.GetAllUserClients(userID)
+		userConns := h.wsServer.GetUserConnections(userID)
 		successResult := &pbmsggateway.GetUsersOnlineStatusResp_SuccessResult{
 			UserID:               userID,
 			Status:               constant.Offline,
@@ -196,15 +196,15 @@ func (h *HubServer) SuperGroupOnlineBatchPushOneMsg(ctx context.Context, req *pb
 
 func (h *HubServer) KickUserOffline(ctx context.Context, req *pbmsggateway.KickUserOfflineReq) (*pbmsggateway.KickUserOfflineResp, error) {
 	for _, userID := range req.KickUserIDList {
-		userConns := h.wsServer.GetAllUserClients(userID)
+		userConns := h.wsServer.GetUserConnections(userID)
 		if req.PlatformID == 0 {
 			for _, conn := range userConns {
-				h.wsServer.KickClient(conn)
+				h.wsServer.Kick(conn)
 			}
 		} else {
 			for _, conn := range userConns {
 				if conn.Context().HandshakeInfo().GetPlatformID() == req.PlatformID {
-					h.wsServer.KickClient(conn)
+					h.wsServer.Kick(conn)
 				}
 			}
 		}
@@ -214,13 +214,13 @@ func (h *HubServer) KickUserOffline(ctx context.Context, req *pbmsggateway.KickU
 }
 
 func (h *HubServer) MultiTerminalLoginCheck(ctx context.Context, req *pbmsggateway.MultiTerminalLoginCheckReq) (*pbmsggateway.MultiTerminalLoginCheckResp, error) {
-	clients := h.wsServer.GetAllUserClients(req.UserID)
+	clients := h.wsServer.GetUserConnections(req.UserID)
 	if len(clients) == 0 {
 		return nil, errx.ConnResetError
 	}
 	for _, conn := range clients {
 		if conn.Context().HandshakeInfo().GetPlatformID() == req.PlatformID {
-			err := h.wsServer.MultiTerminalCheckStrategy(conn.ID())
+			err := h.wsServer.CheckMultiTerminalLogin(conn.ID())
 			if err != nil {
 				logc.Errorf(ctx, "failed to check multi terminal login: userID %s, platformID %d, err: %v", req.UserID, req.PlatformID, err)
 				return nil, errx.InternalError
