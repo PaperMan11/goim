@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -34,6 +35,7 @@ type Connection interface {
 	Context() ConnContext
 	CloseError() error
 	Server() WsServer
+	IsClosed() bool
 }
 
 type WsConnection struct {
@@ -45,6 +47,7 @@ type WsConnection struct {
 	doneCh chan struct{}
 	closed atomic.Bool
 	err    atomic.Pointer[error]
+	wg     sync.WaitGroup
 }
 
 func NewWsConnection(ctx ConnContext, conn *websocket.Conn, server WsServer) *WsConnection {
@@ -59,12 +62,14 @@ func NewWsConnection(ctx ConnContext, conn *websocket.Conn, server WsServer) *Ws
 }
 
 func (c *WsConnection) Start() {
+	c.wg.Add(2)
 	go c.readPump()
 	go c.writePump()
 }
 
 func (c *WsConnection) readPump() {
 	defer func() {
+		c.wg.Done()
 		c.server.Disconnect(c)
 		logc.Debugf(c.ctx, "conn read pump %s closed", c.ID())
 	}()
@@ -114,6 +119,8 @@ func (c *WsConnection) readPump() {
 					if !errors.Is(err, errx.LogoutError) {
 						logc.Errorf(c.ctx, "conn %s handle message error: %v", c.ID(), err)
 						msgHandleErrorCounter.Inc("handle_failed")
+					} else {
+						logc.Debugf(c.ctx, "conn %s logout", c.ID())
 					}
 					return
 				}
@@ -132,6 +139,7 @@ func (c *WsConnection) readPump() {
 func (c *WsConnection) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
+		c.wg.Done()
 		c.server.Disconnect(c)
 		ticker.Stop()
 		logc.Debugf(c.ctx, "conn write pump %s closed", c.ID())
@@ -186,7 +194,7 @@ func (c *WsConnection) Server() WsServer {
 }
 
 func (c *WsConnection) Close() error {
-	if c.closed.Load() {
+	if c.IsClosed() {
 		return ErrConnClosed
 	}
 	logc.Debugf(c.ctx, "conn %s closed", c.ID())
@@ -196,6 +204,7 @@ func (c *WsConnection) Close() error {
 	close(c.doneCh)
 	c.flushSendQueue()
 	c.ctx.Close()
+	c.wg.Wait()
 	return c.conn.Close()
 }
 
@@ -252,4 +261,8 @@ func (c *WsConnection) closeWithError(err error) {
 
 func (c *WsConnection) CloseError() error {
 	return *c.err.Load()
+}
+
+func (c *WsConnection) IsClosed() bool {
+	return c.closed.Load()
 }
