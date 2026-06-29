@@ -6,7 +6,7 @@ import (
 
 	"github.com/PaperMan11/goim/im-rpc/auth/internal/svc"
 	"github.com/PaperMan11/goim/pkg/protocol/auth"
-	"github.com/PaperMan11/goim/pkg/storage/cache/token"
+	"github.com/PaperMan11/goim/pkg/storage/token"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 

@@ -8,7 +8,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/rpcclient/msggatewayservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
-	"github.com/PaperMan11/goim/pkg/storage/cache/token"
+	"github.com/PaperMan11/goim/pkg/storage/token"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"

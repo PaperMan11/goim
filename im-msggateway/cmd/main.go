@@ -12,11 +12,14 @@ import (
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	pushservice "github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
 	userservice "github.com/PaperMan11/goim/pkg/rpcclient/userservice"
+	webhookStore "github.com/PaperMan11/goim/pkg/storage/webhook"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/core/service"
+	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -95,7 +98,9 @@ func newWsServer(c *internal.MsgGatewayConfig) internal.WsServer {
 	pipeline := internal.NewMessagePipeline(internal.NewBusinessHandler(pushService, msgService))
 
 	// 创建webhook manager
-	webhookManager := webhooks.NewManager(webhooks.NewMemoryDeliveryRepository(), 5)
+	redisCli := redis.MustNewRedis(c.Redis.RedisConf)
+	monCli := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, "webhook")
+	webhookManager := webhooks.NewManager(webhookStore.NewWebhookMongoStore(monCli, redisCli), 5)
 
 	return internal.NewWsServer(&c.WsServer, pipeline, webhookManager, authService, userService)
 }

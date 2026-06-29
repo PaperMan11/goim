@@ -16,6 +16,10 @@ type MsgGatewayConfig struct {
 
 type HubServerConf struct {
 	zrpc.RpcServerConf
+	Mongo struct {
+		Uri      string
+		Database string
+	}
 }
 
 type WsServerConf struct {

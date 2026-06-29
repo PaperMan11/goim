@@ -8,7 +8,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/protocol/auth"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
-	"github.com/PaperMan11/goim/pkg/storage/cache/token"
+	"github.com/PaperMan11/goim/pkg/storage/token"
 	"github.com/PaperMan11/goim/pkg/utils/jwtx"
 	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
