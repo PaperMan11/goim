@@ -24,7 +24,8 @@ func TestUsage(t *testing.T) {
 		RetryInterval: 5 * time.Second,
 		Enabled:       true,
 		Events: []webhooks.EventType{
-			webhooks.EventMessageSent,
+			webhooks.EventMessageSentBefore,
+			webhooks.EventMessageSentAfter,
 			webhooks.EventUserOnline,
 			webhooks.EventUserOffline,
 		},
@@ -37,7 +38,7 @@ func TestUsage(t *testing.T) {
 		t.Fatalf("Failed to add webhook: %v", err)
 	}
 
-	messageEvent := webhooks.NewMessageEvent(&webhooks.MessageEventData{
+	messageEvent := webhooks.NewMessageSentBeforeEvent(&webhooks.MessageEventData{
 		MessageID:      "msg_001",
 		ServerMsgID:    "server_msg_001",
 		ClientMsgID:    "client_msg_001",
@@ -87,7 +88,8 @@ func TestSyncDispatch(t *testing.T) {
 		RetryInterval: 5 * time.Second,
 		Enabled:       true,
 		Events: []webhooks.EventType{
-			webhooks.EventMessageSent,
+			webhooks.EventMessageSentBefore,
+			webhooks.EventMessageSentAfter,
 		},
 	}
 
@@ -95,7 +97,7 @@ func TestSyncDispatch(t *testing.T) {
 		t.Fatalf("Failed to add webhook: %v", err)
 	}
 
-	messageEvent := webhooks.NewMessageEvent(&webhooks.MessageEventData{
+	messageEvent := webhooks.NewMessageSentBeforeEvent(&webhooks.MessageEventData{
 		MessageID:      "msg_002",
 		ServerMsgID:    "server_msg_002",
 		ClientMsgID:    "client_msg_002",
@@ -175,8 +177,8 @@ func TestWebhookManagement(t *testing.T) {
 			RetryInterval: 5 * time.Second,
 			Enabled:       true,
 			Events: []webhooks.EventType{
-				webhooks.EventMessageSent,
-				webhooks.EventMessageReceived,
+				webhooks.EventMessageSentBefore,
+				webhooks.EventMessageSentAfter,
 			},
 		},
 		{

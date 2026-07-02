@@ -196,19 +196,19 @@ const (
 
 // DeliveryRecord 投递记录
 type DeliveryRecord struct {
-	ID           string         `json:"id" bson:"_id"`                     // 投递记录ID
-	EventID      string         `json:"eventId" bson:"event_id"`           // 事件ID
-	EventType    EventType      `json:"eventType" bson:"event_type"`       // 事件类型
-	EventPayload string         `json:"eventPayload" bson:"event_payload"` // 事件数据（JSON序列化）
-	WebhookURL   string         `json:"webhookUrl" bson:"webhook_url"`     // webhook URL
-	Status       DeliveryStatus `json:"status" bson:"status"`              // 投递状态
-	StatusCode   int            `json:"statusCode" bson:"status_code"`     // HTTP状态码
-	AttemptCount int            `json:"attemptCount" bson:"attempt_count"` // 尝试次数
-	LastAttempt  time.Time      `json:"lastAttempt" bson:"last_attempt"`   // 最后尝试时间
-	NextAttempt  time.Time      `json:"nextAttempt" bson:"next_attempt"`   // 下次尝试时间
-	ErrorMessage string         `json:"errorMessage" bson:"error_message"` // 错误信息
-	Response     string         `json:"response" bson:"response"`          // 响应内容
-	Duration     time.Duration  `json:"duration" bson:"duration"`          // 请求耗时
-	CreatedAt    time.Time      `json:"createdAt" bson:"created_at"`       // 创建时间
-	UpdatedAt    time.Time      `json:"updatedAt" bson:"updated_at"`       // 更新时间
+	ID           string         `json:"id"`           // 投递记录ID
+	EventID      string         `json:"eventId"`      // 事件ID
+	EventType    EventType      `json:"eventType"`    // 事件类型
+	EventPayload string         `json:"eventPayload"` // 事件数据（JSON序列化）
+	WebhookURL   string         `json:"webhookUrl"`   // webhook URL
+	Status       DeliveryStatus `json:"status"`       // 投递状态
+	StatusCode   int            `json:"statusCode"`   // HTTP状态码
+	AttemptCount int            `json:"attemptCount"` // 尝试次数
+	LastAttempt  time.Time      `json:"lastAttempt"`  // 最后尝试时间
+	NextAttempt  time.Time      `json:"nextAttempt"`  // 下次尝试时间
+	ErrorMessage string         `json:"errorMessage"` // 错误信息
+	Response     string         `json:"response"`     // 响应内容
+	Duration     time.Duration  `json:"duration"`     // 请求耗时
+	CreatedAt    time.Time      `json:"createdAt"`    // 创建时间
+	UpdatedAt    time.Time      `json:"updatedAt"`    // 更新时间
 }

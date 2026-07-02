@@ -3,13 +3,13 @@ module github.com/PaperMan11/goim
 go 1.25.0
 
 require (
-	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/mojocn/base64Captcha v1.3.8
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.19.0
+	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.10.2
 	go.mongodb.org/mongo-driver/v2 v2.6.0
@@ -33,6 +33,7 @@ require (
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
@@ -51,6 +52,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/openzipkin/zipkin-go v0.4.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
+	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect

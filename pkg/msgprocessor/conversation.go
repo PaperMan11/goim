@@ -5,7 +5,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
-	"github.com/gogo/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 func IsGroupConversationID(conversationID string) bool {
@@ -13,11 +13,11 @@ func IsGroupConversationID(conversationID string) bool {
 }
 
 func buildSortedConversationID(prefix string, id1, id2 string) string {
-	// if id1 < id2 {
-	// 	return prefix + id1 + "_" + id2
-	// }
-	// return prefix + id2 + "_" + id1
-	return prefix + id1 + "_" + id2
+	if id1 < id2 {
+		return prefix + id1 + "_" + id2
+	}
+	return prefix + id2 + "_" + id1
+	// return prefix + id1 + "_" + id2
 }
 
 func GetNotificationConversationIDByMsg(msg *sdkws.MsgData) string {

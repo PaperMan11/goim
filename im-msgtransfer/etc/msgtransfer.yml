@@ -1,0 +1,76 @@
+Name: msgtransfer
+Host: 0.0.0.0
+Port: 8080
+
+MsgTransferConsumer:
+  Brokers:
+    - 127.0.0.1:9092
+  Topic: msg_transfer
+  GroupID: msg_transfer_group
+  Offset: last
+  MinBytes: 1024
+  MaxBytes: 1048576
+  Processors: 4
+  Consumers: 2
+
+MsgPersistentProducer:
+  Brokers:
+    - 127.0.0.1:9092
+  Topic: msg_persistent
+
+Redis:
+  Host: 127.0.0.1:6379
+  Type: node
+
+Mongo:
+  Uri: mongodb://127.0.0.1:27017
+  Database: openim
+
+AuthRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: auth.rpc
+  Stub: false
+
+UserRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: user.rpc
+  Stub: false
+
+MsgRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: msg.rpc
+  Stub: false
+
+PushRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: push.rpc
+  Stub: false
+
+GatewayRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: msggateway.rpc
+  Stub: false
+
+GroupRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: group.rpc
+  Stub: false
+
+ConversationRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: conversation.rpc
+  Stub: false
