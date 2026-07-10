@@ -135,8 +135,8 @@ const (
 	// 会话类型
 	SingleChatType = 1 // 单聊
 	// WriteGroupChatType Not enabled temporarily // 写扩散群聊 (暂未启用)
-	WriteGroupChatType   = 2 // 写扩散群聊
-	ReadGroupChatType    = 3 // 读扩散群聊
+	WriteGroupChatType   = 2 // 写扩散群聊 (消息写入所有成员的收件箱)
+	ReadGroupChatType    = 3 // 读扩散群聊 (消息只写入发件人收件箱，成员读取时同步)
 	NotificationChatType = 4 // 通知会话
 
 	// Token 状态

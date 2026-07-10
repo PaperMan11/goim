@@ -3,20 +3,22 @@ package authverify
 import (
 	"context"
 
+	"github.com/PaperMan11/goim/pkg/mcontext"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
-	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
+	"github.com/PaperMan11/goim/pkg/rpccache/userservice"
 )
 
 type AuthVerifyService interface {
 	IsIMAdmin(ctx context.Context, userID string) (bool, error)
 	IsValidUser(ctx context.Context, userID string) (bool, error)
+	CheckAccess(ctx context.Context, userID string) (bool, error)
 }
 
 type AuthVerify struct {
-	userService userservice.UserService
+	userService userservice.UserServiceWrapperCache
 }
 
-func NewAuthVerify(userService userservice.UserService) *AuthVerify {
+func NewAuthVerify(userService userservice.UserServiceWrapperCache) *AuthVerify {
 	return &AuthVerify{
 		userService: userService,
 	}
@@ -48,4 +50,17 @@ func (a *AuthVerify) IsValidUser(ctx context.Context, userID string) (bool, erro
 		}
 	}
 	return false, nil
+}
+
+// 检查用户是否有访问权限
+func (a *AuthVerify) CheckAccess(ctx context.Context, userID string) (bool, error) {
+	valid, err := a.IsValidUser(ctx, userID)
+	if err != nil || !valid {
+		return false, err
+	}
+	opUserID := mcontext.GetOpUserIDFromContext(ctx)
+	if opUserID == userID {
+		return true, nil
+	}
+	return a.IsIMAdmin(ctx, opUserID)
 }
