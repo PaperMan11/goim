@@ -82,36 +82,106 @@ func TestLocalCache_Take(t *testing.T) {
 	assert.False(t, fetchCalled)
 }
 
-func TestLocalCache_AddDelListener(t *testing.T) {
+func TestLocalCache_SetGetDel(t *testing.T) {
 	cache := setupLocalCache(t, nil)
 
-	obj := "test-obj"
-	listenerCalled := false
-	delKey := "test-del-key"
+	key := "test-key-setget"
+	value := "test-value-setget"
 
-	getDelKey := func(key string, value any) string {
-		return delKey
-	}
+	cache.Set(key, value)
+	retrieved, ok := cache.Get(key)
+	assert.True(t, ok)
+	assert.Equal(t, value, retrieved)
 
-	cache.AddDelListener(obj, getDelKey)
+	cache.Del(key)
+	retrieved, ok = cache.Get(key)
+	assert.False(t, ok)
+	assert.Nil(t, retrieved)
+}
 
-	assert.Len(t, cache.getDelKeyFuncs[obj], 1)
+func TestLocalCache_SetWithExpire(t *testing.T) {
+	cache := setupLocalCache(t, nil)
 
-	cache.Set(delKey, "test-value")
-	_, ok := cache.Get(delKey)
+	key := "test-key-expire"
+	value := "test-value-expire"
+	expire := 2 * time.Second
+
+	cache.SetWithExpire(key, value, expire)
+	retrieved, ok := cache.Get(key)
+	assert.True(t, ok)
+	assert.Equal(t, value, retrieved)
+
+	time.Sleep(3 * time.Second)
+
+	retrieved, ok = cache.Get(key)
+	assert.False(t, ok)
+	assert.Nil(t, retrieved)
+}
+
+func TestLocalCache_HandleEvent(t *testing.T) {
+	cache := setupLocalCache(t, nil)
+
+	key1 := "test-key-1"
+	key2 := "test-key-2"
+	key3 := "test-key-3"
+
+	cache.Set(key1, "value1")
+	cache.Set(key2, "value2")
+	cache.Set(key3, "value3")
+
+	_, ok := cache.Get(key1)
+	assert.True(t, ok)
+	_, ok = cache.Get(key2)
+	assert.True(t, ok)
+	_, ok = cache.Get(key3)
 	assert.True(t, ok)
 
-	event := CacheEvent{
-		Action: "del",
-		Key:    obj,
-	}
-	payload, _ := json.Marshal(event)
+	keysToDelete := []string{key1, key3}
+	payload, _ := json.Marshal(keysToDelete)
 	cache.handleEvent(string(payload))
 
-	listenerCalled = true
-	_, ok = cache.Get(delKey)
+	_, ok = cache.Get(key1)
 	assert.False(t, ok)
-	assert.True(t, listenerCalled)
+
+	_, ok = cache.Get(key2)
+	assert.True(t, ok)
+
+	_, ok = cache.Get(key3)
+	assert.False(t, ok)
+}
+
+func TestLocalCache_HandleEvent_InvalidPayload(t *testing.T) {
+	cache := setupLocalCache(t, nil)
+
+	key := "test-key-valid"
+	cache.Set(key, "value")
+
+	invalidPayloads := []string{
+		`{"action": "del", "key": "test"}`,
+		`"not-an-array"`,
+		`123`,
+		`invalid-json`,
+	}
+
+	for _, payload := range invalidPayloads {
+		cache.handleEvent(payload)
+	}
+
+	_, ok := cache.Get(key)
+	assert.True(t, ok)
+}
+
+func TestLocalCache_HandleEvent_EmptyArray(t *testing.T) {
+	cache := setupLocalCache(t, nil)
+
+	key := "test-key-empty"
+	cache.Set(key, "value")
+
+	payload, _ := json.Marshal([]string{})
+	cache.handleEvent(string(payload))
+
+	_, ok := cache.Get(key)
+	assert.True(t, ok)
 }
 
 func TestLocalCache_ConcurrentAccess(t *testing.T) {
@@ -158,35 +228,100 @@ func TestLocalCache_ConcurrentAccess(t *testing.T) {
 	}
 }
 
+func TestLocalCache_Publish_NoRedis(t *testing.T) {
+	cache := setupLocalCache(t, nil)
+
+	key1 := "test-key-publish-1"
+	key2 := "test-key-publish-2"
+
+	cache.Set(key1, "value1")
+	cache.Set(key2, "value2")
+
+	err := cache.PublishDelete([]string{key1})
+	assert.NoError(t, err)
+
+	_, ok := cache.Get(key1)
+	assert.False(t, ok)
+
+	_, ok = cache.Get(key2)
+	assert.True(t, ok)
+}
+
+func TestLocalCache_Publish_WithRedis(t *testing.T) {
+	r := setupTestRedis(t)
+	cache1 := setupLocalCache(t, r)
+	cache2 := setupLocalCache(t, r)
+	cleanupRedisTopic(t, r, cache1.cfg.Topic)
+
+	key1 := "test-key-publish-redis-1"
+	key2 := "test-key-publish-redis-2"
+
+	cache1.Set(key1, "value1")
+	cache1.Set(key2, "value2")
+
+	cache2.Set(key1, "value1")
+	cache2.Set(key2, "value2")
+
+	cache1.Start()
+	cache2.Start()
+
+	time.Sleep(200 * time.Millisecond)
+
+	err := cache1.PublishDelete([]string{key1})
+	assert.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+
+	_, ok := cache1.Get(key1)
+	assert.False(t, ok)
+	_, ok = cache1.Get(key2)
+	assert.True(t, ok)
+
+	_, ok = cache2.Get(key1)
+	assert.False(t, ok)
+	_, ok = cache2.Get(key2)
+	assert.True(t, ok)
+}
+
+func TestLocalCache_Publish_EmptyKeys(t *testing.T) {
+	cache := setupLocalCache(t, nil)
+
+	key := "test-key-empty-publish"
+	cache.Set(key, "value")
+
+	err := cache.PublishDelete([]string{})
+	assert.NoError(t, err)
+
+	_, ok := cache.Get(key)
+	assert.True(t, ok)
+}
+
 func TestLocalCache_PubSub(t *testing.T) {
 	r := setupTestRedis(t)
 	cache := setupLocalCache(t, r)
 	cleanupRedisTopic(t, r, cache.cfg.Topic)
 
-	obj := "test-obj-pubsub"
-	delKey := "test-del-key-pubsub"
+	key1 := "test-key-pubsub-1"
+	key2 := "test-key-pubsub-2"
 
-	getDelKey := func(key string, value any) string {
-		return delKey
-	}
-
-	cache.AddDelListener(obj, getDelKey)
-	cache.Set(delKey, "test-value")
+	cache.Set(key1, "value1")
+	cache.Set(key2, "value2")
 
 	cache.Start()
 
 	time.Sleep(200 * time.Millisecond)
 
-	event := CacheEvent{
-		Action: "del",
-		Key:    obj,
-	}
-	payload, _ := json.Marshal(event)
+	keysToDelete := []string{key1}
+	payload, _ := json.Marshal(keysToDelete)
 	_ = r.Publish(context.Background(), cache.cfg.Topic, payload).Err()
 
 	time.Sleep(200 * time.Millisecond)
 
-	retrieved, ok := cache.Get(delKey)
+	retrieved, ok := cache.Get(key1)
 	assert.False(t, ok)
 	assert.Nil(t, retrieved)
+
+	retrieved, ok = cache.Get(key2)
+	assert.True(t, ok)
+	assert.Equal(t, "value2", retrieved)
 }

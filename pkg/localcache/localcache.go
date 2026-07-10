@@ -17,7 +17,7 @@ type LocalCache interface {
 	Set(key string, value any)
 	SetWithExpire(key string, value any, expire time.Duration)
 	Take(key string, fetch func() (any, error)) (any, error)
-	AddDelListener(obj string, getDelKey func(key string, value any) string)
+	PublishDelete(keys []string) error
 	Close() error
 }
 
@@ -29,22 +29,15 @@ type CacheConfig struct {
 }
 
 type localCache struct {
-	cfg            CacheConfig
-	cache          *collection.Cache
-	ctx            context.Context
-	cancel         context.CancelFunc
-	redis          redis.UniversalClient
-	mu             sync.Mutex
-	running        bool
-	observers      sync.Map
-	closed         bool
-	getDelKeyFuncs map[string][]func(string, any) string // 构造del key方法
-}
-
-type CacheEvent struct {
-	Action string `json:"action"`
-	Key    string `json:"key"`
-	Value  any    `json:"value,omitempty"`
+	cfg       CacheConfig
+	cache     *collection.Cache
+	ctx       context.Context
+	cancel    context.CancelFunc
+	redis     redis.UniversalClient
+	mu        sync.Mutex
+	running   bool
+	observers sync.Map
+	closed    bool
 }
 
 func NewLocalCache(cfg CacheConfig, redis redis.UniversalClient) (*localCache, error) {
@@ -61,13 +54,12 @@ func NewLocalCache(cfg CacheConfig, redis redis.UniversalClient) (*localCache, e
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &localCache{
-		cfg:            cfg,
-		cache:          cache,
-		redis:          redis,
-		ctx:            ctx,
-		cancel:         cancel,
-		running:        false,
-		getDelKeyFuncs: make(map[string][]func(string, any) string),
+		cfg:     cfg,
+		cache:   cache,
+		redis:   redis,
+		ctx:     ctx,
+		cancel:  cancel,
+		running: false,
 	}, nil
 }
 
@@ -109,25 +101,14 @@ func (c *localCache) runSubscriber() {
 }
 
 func (c *localCache) handleEvent(payload string) {
-	var event CacheEvent
-	if err := json.Unmarshal([]byte(payload), &event); err != nil {
+	var keys []string
+	if err := json.Unmarshal([]byte(payload), &keys); err != nil {
 		return
 	}
 
-	switch event.Action {
-	case "del":
-		objs := c.getDelKeyFuncs[event.Key]
-		for _, getDelKey := range objs {
-			delKey := getDelKey(event.Key, event.Value)
-			c.Del(delKey)
-		}
-	default:
-		return
+	for _, key := range keys {
+		c.cache.Del(key)
 	}
-}
-
-func (c *localCache) AddDelListener(obj string, getDelKey func(key string, value any) string) {
-	c.getDelKeyFuncs[obj] = append(c.getDelKeyFuncs[obj], getDelKey)
 }
 
 func (c *localCache) Del(key string) {
@@ -148,6 +129,26 @@ func (c *localCache) SetWithExpire(key string, value any, expire time.Duration) 
 
 func (c *localCache) Take(key string, fetch func() (any, error)) (any, error) {
 	return c.cache.Take(key, fetch)
+}
+
+func (c *localCache) PublishDelete(keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	for _, key := range keys {
+		c.cache.Del(key)
+	}
+
+	if c.redis == nil {
+		return nil
+	}
+
+	payload, err := json.Marshal(keys)
+	if err != nil {
+		return err
+	}
+
+	return c.redis.Publish(c.ctx, c.cfg.Topic, payload).Err()
 }
 
 func (c *localCache) Close() error {
