@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/utils/randx"
 	"github.com/gorilla/websocket"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -258,8 +258,14 @@ func sendCloseMessage(c *websocket.Conn) {
 }
 
 func generateOperationID() string {
-	b := make([]byte, 16)
-	rand.Read(b)
+	b, err := randx.SecureBytes(16)
+	if err != nil || len(b) < 16 {
+		buf := make([]byte, 16)
+		for i := range buf {
+			buf[i] = byte(i * 31)
+		}
+		b = buf
+	}
 	return base64.URLEncoding.EncodeToString(b)[:20]
 }
 

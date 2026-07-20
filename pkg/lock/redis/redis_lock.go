@@ -3,10 +3,10 @@ package redis
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/lock"
+	"github.com/PaperMan11/goim/pkg/utils/randx"
 	red "github.com/redis/go-redis/v9"
 	zredis "github.com/zeromicro/go-zero/core/stores/redis"
 )
@@ -26,12 +26,7 @@ else
 end`
 
 	randomLen = 16
-	letters   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 )
-
-func init() {
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-}
 
 type RedisLocker struct {
 	redisClient   *zredis.Redis
@@ -139,11 +134,7 @@ func (r *RedisLocker) tryObtainOnce(ctx context.Context, key string) (*lockObj, 
 }
 
 func randomStr(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
+	return randx.AlphaString(n)
 }
 
 type lockObj struct {
