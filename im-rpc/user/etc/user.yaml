@@ -1,0 +1,45 @@
+Name: user.rpc
+Host: 0.0.0.0
+Port: 8080
+Mode: dev
+
+Redis:
+  Host: 192.168.241.128:6379
+  Pass: 123456
+
+Mongo:
+  Uri: mongodb://localhost:27017
+  Database: goim
+
+MsgTransferProducer:
+  Addrs:
+    - 192.168.241.128:9092
+  Topic: im_msg_transfer
+  Version: 0.11.0
+
+UserRpc:
+  Etcd:
+    Hosts:
+      - 192.168.241.128:2379
+    Key: user.rpc
+  Stub: true
+
+RelationRpc:
+  Etcd:
+    Hosts:
+      - 192.168.241.128:2379
+    Key: relation.rpc
+  Stub: true
+
+GroupRpc:
+  Etcd:
+    Hosts:
+      - 192.168.241.128:2379
+    Key: group.rpc
+  Stub: true
+
+LocalCacheConf:
+  Expire: 5m
+  Limit: 1000
+  Name: user-cache
+  Topic: user-cache-topic

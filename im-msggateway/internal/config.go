@@ -1,22 +1,25 @@
 package internal
 
 import (
+	"github.com/PaperMan11/goim/pkg/localcache"
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
+	"github.com/PaperMan11/goim/pkg/rpcclient"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type MsgGatewayConfig struct {
 	HubServerConf
 	WsServer WsServerConf
-	AuthRpc  RpcConf
-	UserRpc  RpcConf
-	MsgRpc   RpcConf
-	PushRpc  RpcConf
+	AuthRpc  rpcclient.RpcConf
+	UserRpc  rpcclient.RpcConf
+	MsgRpc   rpcclient.RpcConf
+	PushRpc  rpcclient.RpcConf
 }
 
 type HubServerConf struct {
 	zrpc.RpcServerConf
-	Mongo struct {
+	LocalCacheConf localcache.CacheConfig
+	Mongo          struct {
 		Uri      string
 		Database string
 	}
@@ -32,11 +35,6 @@ type WsServerConf struct {
 	PingPeriod    int64  `json:",default=5"`       // 心跳周期
 	EnableAuth    bool   `json:",default=true"`    // 是否开启认证，默认开启
 	LoginStrategy LoginStrategyConf
-}
-
-type RpcConf struct {
-	zrpc.RpcClientConf
-	Stub bool `json:",default=false"`
 }
 
 type LoginStrategyConf = loginstrategy.LoginStrategyConf

@@ -12,11 +12,11 @@ import (
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
+	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	webhookStore "github.com/PaperMan11/goim/pkg/storage/webhook"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/mon"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -61,7 +61,7 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 	msgPushProducer := kafkax.MustNewProducer(cfg.MsgPushProducer)
 
 	monClient := mon.MustNewModel(cfg.Mongo.Uri, cfg.Mongo.Database, "webhook")
-	redisClient := redis.MustNewRedis(cfg.Redis)
+	redisClient := sredis.MustNewRedis(cfg.Redis)
 	webhookStore := webhookStore.NewWebhookMongoStore(monClient, redisClient)
 	webhookManager := webhooks.NewManager(webhookStore, runtime.NumCPU())
 

@@ -6,27 +6,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
-func setupTestRedis(t *testing.T) *redis.Redis {
+func setupTestRedis(t *testing.T) goredis.UniversalClient {
 	redisHost := "192.168.241.128:6379"
 	redisPass := "123456"
-	r, err := redis.NewRedis(redis.RedisConf{
-		Host: redisHost,
-		Type: "node",
-		Pass: redisPass,
+	r := goredis.NewClient(&goredis.Options{
+		Addr:     redisHost,
+		Password: redisPass,
+		DB:       0,
 	})
-	if err != nil {
+
+	ctx := context.Background()
+	if err := r.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis not available at %s: %v", redisHost, err)
 	}
 
 	t.Cleanup(func() {
-		ctx := context.Background()
-		keys, _ := r.KeysCtx(ctx, "goim:msg:seq:*")
-		if len(keys) > 0 {
-			r.DelCtx(ctx, keys...)
+		iter := r.Scan(ctx, 0, "goim:msg:seq:*", 0).Iterator()
+		var keys []string
+		for iter.Next(ctx) {
+			keys = append(keys, iter.Val())
 		}
+		if len(keys) > 0 {
+			_ = r.Del(ctx, keys...).Err()
+		}
+		_ = r.Close()
 	})
 
 	return r
@@ -314,8 +320,8 @@ func TestRedisSeqAllocator_MaxRetries(t *testing.T) {
 	conversationID := "test-conv-lock"
 
 	r := setupTestRedis(t)
-	_ = r.HsetCtx(ctx, "goim:msg:seq:"+conversationID, "LOCK", "12345")
-	_ = r.ExpireCtx(ctx, "goim:msg:seq:"+conversationID, 5)
+	_ = r.HSet(ctx, "goim:msg:seq:"+conversationID, "LOCK", "12345").Err()
+	_ = r.Expire(ctx, "goim:msg:seq:"+conversationID, 5*time.Second).Err()
 
 	_, err := allocator.Allocate(ctx, conversationID)
 	if err != ErrRetryExhausted {

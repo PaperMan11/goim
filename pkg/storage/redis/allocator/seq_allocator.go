@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/utils/convert"
-	zredis "github.com/zeromicro/go-zero/core/stores/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 //go:embed lua/*.lua
@@ -19,8 +19,6 @@ var (
 	ErrLockTimeout    = errors.New("lock timeout")
 )
 
-// SeqAllocator 分布式序列号分配器接口
-// 基于预分配池模式，减少 Redis 写次数，提高高并发性能
 type SeqAllocator interface {
 	Allocate(ctx context.Context, conversationID string) (int64, error)
 	AllocateBatch(ctx context.Context, conversationID string, count int) (start, end int64, err error)
@@ -31,87 +29,68 @@ type SeqAllocator interface {
 	SyncFromDB(ctx context.Context, conversationID string, getMaxSeqFn func(ctx context.Context, conversationID string) (int64, error)) error
 }
 
-// RedisSeqAllocator Redis 序列号分配器实现
-// 使用预分配池模式：维护 [CURR, LAST] 区间作为可用序列号池
-// 当 CURR + size <= LAST 时，直接从池中分配，无需写数据库
-// 当 CURR + size > LAST 时，触发扩容流程
 type RedisSeqAllocator struct {
-	redisClient    *zredis.Redis
-	allocateSeq    string         // 分配脚本
-	commitSeq      string         // 提交脚本
-	allocateScript *zredis.Script // 分配脚本
-	commitScript   *zredis.Script // 提交脚本
-	poolSize       int            // 预分配池大小
-	lockSecond     int            // 锁过期时间（秒）
-	dataSecond     int            // 数据过期时间（秒）
-	getMaxSeqFn    GetMaxSeqFn    // 获取最大序列号回调
-	maxRetries     int            // 最大重试次数
-	retryInterval  time.Duration  // 重试间隔
-	retryBackoff   bool           // 是否启用指数退避
+	redisClient    goredis.UniversalClient
+	allocateSeq    string
+	commitSeq      string
+	allocateScript *goredis.Script
+	commitScript   *goredis.Script
+	poolSize       int
+	lockSecond     int
+	dataSecond     int
+	getMaxSeqFn    GetMaxSeqFn
+	maxRetries     int
+	retryInterval  time.Duration
+	retryBackoff   bool
 }
 
-// GetMaxSeqFn 获取最大序列号的回调函数
-// 用于从数据库同步初始值或扩容时获取新的边界
 type GetMaxSeqFn func(ctx context.Context, conversationID string) (int64, error)
 
-// RedisSeqAllocatorOption RedisSeqAllocator 配置选项
 type RedisSeqAllocatorOption func(*RedisSeqAllocator)
 
-// WithPoolSize 设置预分配池大小，默认 1000
 func WithPoolSize(poolSize int) RedisSeqAllocatorOption {
 	return func(r *RedisSeqAllocator) {
 		r.poolSize = poolSize
 	}
 }
 
-// WithLockSecond 设置锁过期时间（秒），默认 30
 func WithLockSecond(lockSecond int) RedisSeqAllocatorOption {
 	return func(r *RedisSeqAllocator) {
 		r.lockSecond = lockSecond
 	}
 }
 
-// WithDataSecond 设置数据过期时间（秒），默认 86400（24小时）
 func WithDataSecond(dataSecond int) RedisSeqAllocatorOption {
 	return func(r *RedisSeqAllocator) {
 		r.dataSecond = dataSecond
 	}
 }
 
-// WithGetMaxSeqFn 设置获取最大序列号的回调函数
 func WithGetMaxSeqFn(fn GetMaxSeqFn) RedisSeqAllocatorOption {
 	return func(r *RedisSeqAllocator) {
 		r.getMaxSeqFn = fn
 	}
 }
 
-// WithMaxRetries 设置最大重试次数，默认 10
-// 当被其他节点锁定时，会重试最多 maxRetries 次
 func WithMaxRetries(maxRetries int) RedisSeqAllocatorOption {
 	return func(r *RedisSeqAllocator) {
 		r.maxRetries = maxRetries
 	}
 }
 
-// WithRetryInterval 设置重试间隔，默认 50ms
 func WithRetryInterval(retryInterval time.Duration) RedisSeqAllocatorOption {
 	return func(r *RedisSeqAllocator) {
 		r.retryInterval = retryInterval
 	}
 }
 
-// WithRetryBackoff 启用指数退避，重试间隔会翻倍增长
-// 例如：50ms → 100ms → 200ms → ...
 func WithRetryBackoff(enable bool) RedisSeqAllocatorOption {
 	return func(r *RedisSeqAllocator) {
 		r.retryBackoff = enable
 	}
 }
 
-// NewRedisSeqAllocator 创建 RedisSeqAllocator 实例
-// redisClient: Redis 客户端
-// options: 配置选项
-func NewRedisSeqAllocator(redisClient *zredis.Redis, options ...RedisSeqAllocatorOption) (*RedisSeqAllocator, error) {
+func NewRedisSeqAllocator(redisClient goredis.UniversalClient, options ...RedisSeqAllocatorOption) (*RedisSeqAllocator, error) {
 	allocateSeq, err := luaScripts.ReadFile("lua/allocate_seq.lua")
 	if err != nil {
 		return nil, err
@@ -125,8 +104,8 @@ func NewRedisSeqAllocator(redisClient *zredis.Redis, options ...RedisSeqAllocato
 		redisClient:    redisClient,
 		allocateSeq:    string(allocateSeq),
 		commitSeq:      string(commitSeq),
-		allocateScript: zredis.NewScript(string(allocateSeq)),
-		commitScript:   zredis.NewScript(string(commitSeq)),
+		allocateScript: goredis.NewScript(string(allocateSeq)),
+		commitScript:   goredis.NewScript(string(commitSeq)),
 		poolSize:       1000,
 		lockSecond:     30,
 		dataSecond:     86400,
@@ -142,14 +121,11 @@ func NewRedisSeqAllocator(redisClient *zredis.Redis, options ...RedisSeqAllocato
 	return allocator, nil
 }
 
-// Allocate 分配单个序列号
 func (a *RedisSeqAllocator) Allocate(ctx context.Context, conversationID string) (int64, error) {
 	start, _, err := a.AllocateBatch(ctx, conversationID, 1)
 	return start, err
 }
 
-// AllocateBatch 批量分配多个连续序列号
-// 返回起始序列号和结束序列号 [start, end]，包含两端
 func (a *RedisSeqAllocator) AllocateBatch(ctx context.Context, conversationID string, count int) (start, end int64, err error) {
 	if count <= 0 {
 		return 0, 0, nil
@@ -162,8 +138,8 @@ func (a *RedisSeqAllocator) AllocateBatch(ctx context.Context, conversationID st
 	backoffInterval := a.retryInterval
 
 	for {
-		result, err := a.redisClient.ScriptRunCtx(ctx, a.allocateScript, []string{key},
-			[]interface{}{count, a.lockSecond, a.dataSecond, mallocTime})
+		result, err := a.allocateScript.Run(ctx, a.redisClient, []string{key},
+			count, a.lockSecond, a.dataSecond, mallocTime).Result()
 		if err != nil {
 			return 0, 0, err
 		}
@@ -208,13 +184,11 @@ func (a *RedisSeqAllocator) AllocateBatch(ctx context.Context, conversationID st
 	}
 }
 
-// GetCurrent 获取当前序列号（CURR）
 func (a *RedisSeqAllocator) GetCurrent(ctx context.Context, conversationID string) (int64, error) {
 	curr, _, err := a.GetSeqRange(ctx, conversationID)
 	return curr, err
 }
 
-// GetSeqRange 获取序列号范围（CURR 和 LAST）
 func (a *RedisSeqAllocator) GetSeqRange(ctx context.Context, conversationID string) (curr, last int64, err error) {
 	key := GetMessageSeqKey(conversationID)
 	mallocTime := strconv.FormatInt(time.Now().UnixMilli(), 10)
@@ -223,8 +197,8 @@ func (a *RedisSeqAllocator) GetSeqRange(ctx context.Context, conversationID stri
 	backoffInterval := a.retryInterval
 
 	for {
-		result, err := a.redisClient.ScriptRunCtx(ctx, a.allocateScript, []string{key},
-			[]interface{}{0, a.lockSecond, a.dataSecond, mallocTime})
+		result, err := a.allocateScript.Run(ctx, a.redisClient, []string{key},
+			0, a.lockSecond, a.dataSecond, mallocTime).Result()
 		if err != nil {
 			return 0, 0, err
 		}
@@ -266,36 +240,30 @@ func (a *RedisSeqAllocator) GetSeqRange(ctx context.Context, conversationID stri
 	}
 }
 
-// Set 设置序列号（直接覆盖）
 func (a *RedisSeqAllocator) Set(ctx context.Context, conversationID string, value int64) error {
 	key := GetMessageSeqKey(conversationID)
-	// mallocTime := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	mallocTime := convert.ToString(time.Now().UnixMilli())
 
-	_, err := a.redisClient.ScriptRunCtx(ctx, a.commitScript, []string{key},
-		[]interface{}{"", a.dataSecond, value, value + int64(a.poolSize), mallocTime})
+	_, err := a.commitScript.Run(ctx, a.redisClient, []string{key},
+		"", a.dataSecond, value, value+int64(a.poolSize), mallocTime).Result()
 	return err
 }
 
-// Reset 重置序列号（删除 key）
 func (a *RedisSeqAllocator) Reset(ctx context.Context, conversationID string) error {
 	key := GetMessageSeqKey(conversationID)
-	_, err := a.redisClient.DelCtx(ctx, key)
-	return err
+	return a.redisClient.Del(ctx, key).Err()
 }
 
-// SyncFromDB 从数据库同步初始值
 func (a *RedisSeqAllocator) SyncFromDB(ctx context.Context, conversationID string, getMaxSeqFn func(ctx context.Context, conversationID string) (int64, error)) error {
 	key := GetMessageSeqKey(conversationID)
-	// mallocTime := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	mallocTime := convert.ToString(time.Now().UnixMilli())
 
 	retryCount := 0
 	backoffInterval := a.retryInterval
 
 	for {
-		result, err := a.redisClient.ScriptRunCtx(ctx, a.allocateScript, []string{key},
-			[]interface{}{0, a.lockSecond, a.dataSecond, mallocTime})
+		result, err := a.allocateScript.Run(ctx, a.redisClient, []string{key},
+			0, a.lockSecond, a.dataSecond, mallocTime).Result()
 		if err != nil {
 			return err
 		}
@@ -336,7 +304,6 @@ func (a *RedisSeqAllocator) SyncFromDB(ctx context.Context, conversationID strin
 	}
 }
 
-// syncFromDBWithLock 从数据库同步初始值（带锁）
 func (a *RedisSeqAllocator) syncFromDBWithLock(ctx context.Context, key string, resultArray []interface{}) error {
 	if len(resultArray) < 3 {
 		return errors.New("invalid result array length")
@@ -355,12 +322,11 @@ func (a *RedisSeqAllocator) syncFromDBWithLock(ctx context.Context, key string, 
 	}
 
 	newLastSeq := dbMaxSeq + int64(a.poolSize)
-	_, err := a.redisClient.ScriptRunCtx(ctx, a.commitScript, []string{key},
-		[]interface{}{lockValue, a.dataSecond, dbMaxSeq, newLastSeq, mallocTime})
+	_, err := a.commitScript.Run(ctx, a.redisClient, []string{key},
+		lockValue, a.dataSecond, dbMaxSeq, newLastSeq, mallocTime).Result()
 	return err
 }
 
-// expandPool 扩容预分配池
 func (a *RedisSeqAllocator) expandPool(ctx context.Context, key string, resultArray []interface{}) error {
 	if len(resultArray) < 5 {
 		return errors.New("invalid result array length")
@@ -379,7 +345,7 @@ func (a *RedisSeqAllocator) expandPool(ctx context.Context, key string, resultAr
 	}
 
 	newLastSeq := dbMaxSeq + int64(a.poolSize)
-	_, err := a.redisClient.ScriptRunCtx(ctx, a.commitScript, []string{key},
-		[]interface{}{lockValue, a.dataSecond, dbMaxSeq, newLastSeq, mallocTime})
+	_, err := a.commitScript.Run(ctx, a.redisClient, []string{key},
+		lockValue, a.dataSecond, dbMaxSeq, newLastSeq, mallocTime).Result()
 	return err
 }

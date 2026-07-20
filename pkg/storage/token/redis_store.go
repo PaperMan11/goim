@@ -3,18 +3,20 @@ package token
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 type RedisStore struct {
-	redisClient *redis.Redis
+	redisClient goredis.UniversalClient
 }
 
-func NewRedisStore(redisClient *redis.Redis) *RedisStore {
+func NewRedisStore(redisClient goredis.UniversalClient) *RedisStore {
 	return &RedisStore{
 		redisClient: redisClient,
 	}
@@ -41,35 +43,42 @@ func (rs *RedisStore) StoreToken(ctx context.Context, info *TokenInfo) error {
 	}
 
 	if ttl > 0 {
-		err = rs.redisClient.SetexCtx(ctx, GetTokenKey(info.UUID), string(data), int(ttl.Seconds()))
+		err = rs.redisClient.Set(ctx, GetTokenKey(info.UUID), string(data), ttl).Err()
 	} else {
-		err = rs.redisClient.SetCtx(ctx, GetTokenKey(info.UUID), string(data))
+		err = rs.redisClient.Set(ctx, GetTokenKey(info.UUID), string(data), 0).Err()
 	}
 	if err != nil {
 		return err
 	}
 
-	_, err = rs.redisClient.ZaddCtx(ctx, GetUserTokensKey(info.UserID), info.ExpireAt, info.UUID)
+	_, err = rs.redisClient.ZAdd(ctx, GetUserTokensKey(info.UserID), goredis.Z{
+		Score:  float64(info.ExpireAt),
+		Member: info.UUID,
+	}).Result()
 	if err != nil {
 		return err
 	}
 
-	_, err = rs.redisClient.ZaddCtx(ctx, GetPlatformTokenKey(info.UserID, info.PlatformID), info.ExpireAt, info.UUID)
+	_, err = rs.redisClient.ZAdd(ctx, GetPlatformTokenKey(info.UserID, info.PlatformID), goredis.Z{
+		Score:  float64(info.ExpireAt),
+		Member: info.UUID,
+	}).Result()
 	if err != nil {
 		return err
 	}
-
-	// if ttl > 0 {
-	// 	rs.redisClient.ExpireCtx(ctx, GetUserTokensKey(info.UserID), int(ttl.Seconds())+3600)
-	// 	rs.redisClient.ExpireCtx(ctx, GetPlatformTokenKey(info.UserID, info.PlatformID), int(ttl.Seconds())+3600)
-	// }
 
 	return nil
 }
 
 func (rs *RedisStore) GetToken(ctx context.Context, uuid string) (*TokenInfo, error) {
-	data, err := rs.redisClient.GetCtx(ctx, GetTokenKey(uuid))
-	if err != nil || data == "" {
+	data, err := rs.redisClient.Get(ctx, GetTokenKey(uuid)).Result()
+	if err != nil {
+		if errors.Is(err, goredis.Nil) {
+			return nil, ErrTokenNotFound
+		}
+		return nil, ErrTokenNotFound
+	}
+	if data == "" {
 		return nil, ErrTokenNotFound
 	}
 
@@ -87,7 +96,7 @@ func (rs *RedisStore) GetToken(ctx context.Context, uuid string) (*TokenInfo, er
 }
 
 func (rs *RedisStore) DeleteToken(ctx context.Context, uuid string) error {
-	data, err := rs.redisClient.GetCtx(ctx, GetTokenKey(uuid))
+	data, err := rs.redisClient.Get(ctx, GetTokenKey(uuid)).Result()
 	if err != nil || data == "" {
 		return nil
 	}
@@ -109,7 +118,7 @@ func (rs *RedisStore) DeleteTokens(ctx context.Context, uuids []string) error {
 	var infos []*TokenInfo
 
 	for _, uuid := range uuids {
-		data, err := rs.redisClient.GetCtx(ctx, GetTokenKey(uuid))
+		data, err := rs.redisClient.Get(ctx, GetTokenKey(uuid)).Result()
 		if err != nil || data == "" {
 			continue
 		}
@@ -124,11 +133,11 @@ func (rs *RedisStore) DeleteTokens(ctx context.Context, uuids []string) error {
 	}
 
 	if len(tokenKeys) > 0 {
-		_, _ = rs.redisClient.DelCtx(ctx, tokenKeys...)
+		_ = rs.redisClient.Del(ctx, tokenKeys...).Err()
 
 		for _, info := range infos {
-			_, _ = rs.redisClient.ZremCtx(ctx, GetUserTokensKey(info.UserID), info.UUID)
-			_, _ = rs.redisClient.ZremCtx(ctx, GetPlatformTokenKey(info.UserID, info.PlatformID), info.UUID)
+			_, _ = rs.redisClient.ZRem(ctx, GetUserTokensKey(info.UserID), info.UUID).Result()
+			_, _ = rs.redisClient.ZRem(ctx, GetPlatformTokenKey(info.UserID, info.PlatformID), info.UUID).Result()
 			_ = rs.publishTokenDelete(ctx, info.UUID)
 		}
 	}
@@ -137,17 +146,13 @@ func (rs *RedisStore) DeleteTokens(ctx context.Context, uuids []string) error {
 }
 
 func (rs *RedisStore) deleteTokenInternal(ctx context.Context, info *TokenInfo) error {
-	_, err := rs.redisClient.DelCtx(ctx, GetTokenKey(info.UUID))
-	if err != nil {
+	if err := rs.redisClient.Del(ctx, GetTokenKey(info.UUID)).Err(); err != nil {
 		return err
 	}
-	_, err = rs.redisClient.ZremCtx(ctx, GetUserTokensKey(info.UserID), info.UUID)
-	if err != nil {
+	if _, err := rs.redisClient.ZRem(ctx, GetUserTokensKey(info.UserID), info.UUID).Result(); err != nil {
 		return err
 	}
-
-	_, err = rs.redisClient.ZremCtx(ctx, GetPlatformTokenKey(info.UserID, info.PlatformID), info.UUID)
-	if err != nil {
+	if _, err := rs.redisClient.ZRem(ctx, GetPlatformTokenKey(info.UserID, info.PlatformID), info.UUID).Result(); err != nil {
 		return err
 	}
 
@@ -159,7 +164,7 @@ func (rs *RedisStore) deleteTokenInternal(ctx context.Context, info *TokenInfo) 
 func (rs *RedisStore) DeleteUserTokens(ctx context.Context, userID string, platformID ...int32) error {
 	if len(platformID) > 0 {
 		platformTokensKey := GetPlatformTokenKey(userID, platformID[0])
-		tokenUUIDs, err := rs.redisClient.ZrangeCtx(ctx, platformTokensKey, 0, -1)
+		tokenUUIDs, err := rs.redisClient.ZRange(ctx, platformTokensKey, 0, -1).Result()
 		if err != nil {
 			return err
 		}
@@ -170,14 +175,14 @@ func (rs *RedisStore) DeleteUserTokens(ctx context.Context, userID string, platf
 				tokenKeys[i] = GetTokenKey(uuid)
 				tokenValues[i] = uuid
 			}
-			_, _ = rs.redisClient.DelCtx(ctx, tokenKeys...)
-			_, _ = rs.redisClient.ZremCtx(ctx, GetUserTokensKey(userID), tokenValues...)
+			_ = rs.redisClient.Del(ctx, tokenKeys...).Err()
+			_, _ = rs.redisClient.ZRem(ctx, GetUserTokensKey(userID), tokenValues...).Result()
 			_ = rs.publishTokenDeleteBatch(ctx, tokenUUIDs)
 		}
-		_, _ = rs.redisClient.DelCtx(ctx, platformTokensKey)
+		_ = rs.redisClient.Del(ctx, platformTokensKey).Err()
 	} else {
 		userTokensKey := GetUserTokensKey(userID)
-		tokenUUIDs, err := rs.redisClient.ZrangeCtx(ctx, userTokensKey, 0, -1)
+		tokenUUIDs, err := rs.redisClient.ZRange(ctx, userTokensKey, 0, -1).Result()
 		if err != nil {
 			return err
 		}
@@ -186,22 +191,23 @@ func (rs *RedisStore) DeleteUserTokens(ctx context.Context, userID string, platf
 			for i, uuid := range tokenUUIDs {
 				tokenKeys[i] = GetTokenKey(uuid)
 			}
-			_, _ = rs.redisClient.DelCtx(ctx, tokenKeys...)
+			_ = rs.redisClient.Del(ctx, tokenKeys...).Err()
 			_ = rs.publishTokenDeleteBatch(ctx, tokenUUIDs)
 		}
 		platformKeys := make([]string, 0, constant.BotPlatformID-constant.IOSPlatformID+1)
 		for pid := constant.IOSPlatformID; pid <= constant.BotPlatformID; pid++ {
 			platformKeys = append(platformKeys, GetPlatformTokenKey(userID, int32(pid)))
 		}
-		_, _ = rs.redisClient.DelCtx(ctx, platformKeys...)
-		_, _ = rs.redisClient.DelCtx(ctx, userTokensKey)
+		_ = rs.redisClient.Del(ctx, platformKeys...).Err()
+		_ = rs.redisClient.Del(ctx, userTokensKey).Err()
 	}
 	return nil
 }
 
 func (rs *RedisStore) CheckTokenExists(ctx context.Context, userID string, platformID int32) (bool, error) {
 	now := time.Now().Unix()
-	count, err := rs.redisClient.ZcountCtx(ctx, GetPlatformTokenKey(userID, platformID), now, 9223372036854775807)
+	count, err := rs.redisClient.ZCount(ctx, GetPlatformTokenKey(userID, platformID),
+		strconv.FormatInt(now, 10), "9223372036854775807").Result()
 	if err != nil {
 		return false, err
 	}
@@ -211,18 +217,22 @@ func (rs *RedisStore) CheckTokenExists(ctx context.Context, userID string, platf
 func (rs *RedisStore) GetUserTokens(ctx context.Context, userID string) ([]*TokenInfo, error) {
 	userTokensKey := GetUserTokensKey(userID)
 	now := time.Now().Unix()
-	pairs, err := rs.redisClient.ZrangebyscoreWithScoresCtx(ctx, userTokensKey, now, 9223372036854775807)
+	zs, err := rs.redisClient.ZRangeByScoreWithScores(ctx, userTokensKey, &goredis.ZRangeBy{
+		Min: strconv.FormatInt(now, 10),
+		Max: "9223372036854775807",
+	}).Result()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(pairs) == 0 {
+	if len(zs) == 0 {
 		return nil, ErrTokenNotFound
 	}
 
 	var tokens []*TokenInfo
-	for _, pair := range pairs {
-		data, err := rs.redisClient.Get(GetTokenKey(pair.Key))
+	for _, z := range zs {
+		uuid, _ := z.Member.(string)
+		data, err := rs.redisClient.Get(ctx, GetTokenKey(uuid)).Result()
 		if err != nil || data == "" {
 			continue
 		}
@@ -243,18 +253,22 @@ func (rs *RedisStore) GetUserTokens(ctx context.Context, userID string) ([]*Toke
 func (rs *RedisStore) GetUserTokensByPlatform(ctx context.Context, userID string, platformID int32) ([]*TokenInfo, error) {
 	platformTokensKey := GetPlatformTokenKey(userID, platformID)
 	now := time.Now().Unix()
-	pairs, err := rs.redisClient.ZrangebyscoreWithScoresCtx(ctx, platformTokensKey, now, 9223372036854775807)
+	zs, err := rs.redisClient.ZRangeByScoreWithScores(ctx, platformTokensKey, &goredis.ZRangeBy{
+		Min: strconv.FormatInt(now, 10),
+		Max: "9223372036854775807",
+	}).Result()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(pairs) == 0 {
+	if len(zs) == 0 {
 		return nil, ErrTokenNotFound
 	}
 
 	var tokens []*TokenInfo
-	for _, pair := range pairs {
-		data, err := rs.redisClient.Get(GetTokenKey(pair.Key))
+	for _, z := range zs {
+		uuid, _ := z.Member.(string)
+		data, err := rs.redisClient.Get(ctx, GetTokenKey(uuid)).Result()
 		if err != nil || data == "" {
 			continue
 		}
@@ -273,7 +287,7 @@ func (rs *RedisStore) GetUserTokensByPlatform(ctx context.Context, userID string
 }
 
 func (rs *RedisStore) publishTokenDelete(ctx context.Context, uuid string) error {
-	_, err := rs.redisClient.PublishCtx(ctx, TokenDeleteChannel, uuid)
+	_, err := rs.redisClient.Publish(ctx, TokenDeleteChannel, uuid).Result()
 	return err
 }
 
@@ -286,29 +300,30 @@ func (rs *RedisStore) publishTokenDeleteBatch(ctx context.Context, uuids []strin
 
 func (rs *RedisStore) CleanExpiredTokens(ctx context.Context, userID string) error {
 	now := time.Now().Unix()
+	nowStr := strconv.FormatInt(now-1, 10)
 
-	_, _ = rs.redisClient.ZremrangebyscoreCtx(ctx, GetUserTokensKey(userID), 0, now-1)
+	_, _ = rs.redisClient.ZRemRangeByScore(ctx, GetUserTokensKey(userID), "0", nowStr).Result()
 	for pid := constant.IOSPlatformID; pid <= constant.BotPlatformID; pid++ {
-		_, _ = rs.redisClient.ZremrangebyscoreCtx(ctx, GetPlatformTokenKey(userID, int32(pid)), 0, now-1)
+		_, _ = rs.redisClient.ZRemRangeByScore(ctx, GetPlatformTokenKey(userID, int32(pid)), "0", nowStr).Result()
 	}
 	return nil
 }
 
 func (rs *RedisStore) ClearAll(ctx context.Context) error {
-	keys, err := rs.redisClient.KeysCtx(ctx, fmt.Sprintf("%s*", TokenPrefix))
+	keys, err := rs.redisClient.Keys(ctx, fmt.Sprintf("%s*", TokenPrefix)).Result()
 	if err != nil {
 		return err
 	}
 	for _, key := range keys {
-		_, _ = rs.redisClient.DelCtx(ctx, key)
+		_ = rs.redisClient.Del(ctx, key).Err()
 	}
 
-	userKeys, err := rs.redisClient.KeysCtx(ctx, fmt.Sprintf("%s*", UserTokensPrefix))
+	userKeys, err := rs.redisClient.Keys(ctx, fmt.Sprintf("%s*", UserTokensPrefix)).Result()
 	if err != nil {
 		return err
 	}
 	for _, key := range userKeys {
-		_, _ = rs.redisClient.DelCtx(ctx, key)
+		_ = rs.redisClient.Del(ctx, key).Err()
 	}
 
 	return nil

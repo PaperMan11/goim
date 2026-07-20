@@ -5,25 +5,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
-func setupTestRedis(t *testing.T) *redis.Redis {
+func setupTestRedis(t *testing.T) goredis.UniversalClient {
 	redisHost := "192.168.241.128:6379"
 	redisPass := "123456"
-	r, err := redis.NewRedis(redis.RedisConf{
-		Host: redisHost,
-		Type: "node",
-		Pass: redisPass,
+	r := goredis.NewClient(&goredis.Options{
+		Addr:     redisHost,
+		Password: redisPass,
+		DB:       0,
 	})
-	if err != nil {
+
+	ctx := context.Background()
+	if err := r.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis not available at %s: %v", redisHost, err)
 	}
 
 	t.Cleanup(func() {
-		ctx := context.Background()
-		r.DelCtx(ctx, "token:*")
-		r.DelCtx(ctx, "user:*")
+		iter := r.Scan(ctx, 0, "token:*", 0).Iterator()
+		for iter.Next(ctx) {
+			_ = r.Del(ctx, iter.Val()).Err()
+		}
+		iter = r.Scan(ctx, 0, "user:*", 0).Iterator()
+		for iter.Next(ctx) {
+			_ = r.Del(ctx, iter.Val()).Err()
+		}
+		_ = r.Close()
 	})
 
 	return r

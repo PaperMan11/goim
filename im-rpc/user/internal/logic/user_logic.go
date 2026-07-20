@@ -1,0 +1,151 @@
+package logic
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
+	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
+	"github.com/PaperMan11/goim/pkg/storage/model"
+)
+
+func (l *Logic) GetDesignateUsers(ctx context.Context, req *pbuser.GetDesignateUsersReq) (*pbuser.GetDesignateUsersResp, error) {
+	users, err := l.svcCtx.UserModel.FindByIDs(ctx, req.GetUserIDs())
+	if err != nil {
+		return nil, err
+	}
+
+	var usersInfo []*sdkws.UserInfo
+	for _, user := range users {
+		usersInfo = append(usersInfo, modelToUserInfo(user))
+	}
+
+	return &pbuser.GetDesignateUsersResp{UsersInfo: usersInfo}, nil
+}
+
+func (l *Logic) UpdateUserInfo(ctx context.Context, req *pbuser.UpdateUserInfoReq) (*pbuser.UpdateUserInfoResp, error) {
+	userInfo := req.GetUserInfo()
+	if userInfo == nil {
+		return nil, fmt.Errorf("user info is nil")
+	}
+
+	user := userInfoToModel(userInfo)
+	err := l.svcCtx.UserModel.Update(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbuser.UpdateUserInfoResp{}, nil
+}
+
+func (l *Logic) UpdateUserInfoEx(ctx context.Context, req *pbuser.UpdateUserInfoExReq) (*pbuser.UpdateUserInfoExResp, error) {
+	userInfo := req.GetUserInfo()
+	if userInfo == nil {
+		return nil, fmt.Errorf("user info is nil")
+	}
+
+	updates := make(map[string]any)
+	if userInfo.Nickname != nil {
+		updates["nickname"] = userInfo.GetNickname().GetValue()
+	}
+	if userInfo.FaceURL != nil {
+		updates["face_url"] = userInfo.GetFaceURL().GetValue()
+	}
+	if userInfo.Ex != nil {
+		updates["extra"] = userInfo.GetEx().GetValue()
+	}
+
+	err := l.svcCtx.UserModel.UpdateEx(ctx, userInfo.GetUserID(), updates)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbuser.UpdateUserInfoExResp{}, nil
+}
+
+func (l *Logic) AccountCheck(ctx context.Context, req *pbuser.AccountCheckReq) (*pbuser.AccountCheckResp, error) {
+	results, err := l.svcCtx.UserModel.CheckExists(ctx, req.GetCheckUserIDs())
+	if err != nil {
+		return nil, err
+	}
+
+	var respResults []*pbuser.AccountCheckRespSingleUserStatus
+	for userID, exists := range results {
+		respResults = append(respResults, &pbuser.AccountCheckRespSingleUserStatus{
+			UserID:        userID,
+			AccountStatus: boolToStatus(exists),
+		})
+	}
+
+	return &pbuser.AccountCheckResp{Results: respResults}, nil
+}
+
+func (l *Logic) GetPaginationUsers(ctx context.Context, req *pbuser.GetPaginationUsersReq) (*pbuser.GetPaginationUsersResp, error) {
+	pagination := req.GetPagination()
+	page := int64(1)
+	size := int64(20)
+	if pagination != nil {
+		page = int64(pagination.GetPageNumber())
+		size = int64(pagination.GetShowNumber())
+	}
+
+	users, total, err := l.svcCtx.UserModel.Page(ctx, page, size, req.GetUserID(), req.GetNickName())
+	if err != nil {
+		return nil, err
+	}
+
+	var usersInfo []*sdkws.UserInfo
+	for _, user := range users {
+		usersInfo = append(usersInfo, modelToUserInfo(user))
+	}
+
+	return &pbuser.GetPaginationUsersResp{Total: int32(total), Users: usersInfo}, nil
+}
+
+func (l *Logic) UserRegister(ctx context.Context, req *pbuser.UserRegisterReq) (*pbuser.UserRegisterResp, error) {
+	var users []*model.User
+	for _, userInfo := range req.GetUsers() {
+		user := userInfoToModel(userInfo)
+		user.CreatedAt = time.Now()
+		user.UpdatedAt = time.Now()
+		users = append(users, user)
+	}
+
+	err := l.svcCtx.UserModel.Insert(ctx, users)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbuser.UserRegisterResp{}, nil
+}
+
+func (l *Logic) GetAllUserID(ctx context.Context, req *pbuser.GetAllUserIDReq) (*pbuser.GetAllUserIDResp, error) {
+	pagination := req.GetPagination()
+	page := int64(1)
+	size := int64(100)
+	if pagination != nil {
+		page = int64(pagination.GetPageNumber())
+		size = int64(pagination.GetShowNumber())
+	}
+
+	userIDs, total, err := l.svcCtx.UserModel.GetAllUserIDs(ctx, page, size)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbuser.GetAllUserIDResp{Total: int32(total), UserIDs: userIDs}, nil
+}
+
+func (l *Logic) SortQuery(ctx context.Context, req *pbuser.SortQueryReq) (*pbuser.SortQueryResp, error) {
+	return &pbuser.SortQueryResp{}, nil
+}
+
+func (l *Logic) IsIMAdmin(ctx context.Context, req *pbuser.IsIMAdminReq) (*pbuser.IsIMAdminResp, error) {
+	isAdmin, err := l.svcCtx.UserModel.IsIMAdmin(ctx, req.GetUserID())
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbuser.IsIMAdminResp{IsIMAdmin: isAdmin}, nil
+}

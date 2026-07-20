@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 
 	goredis "github.com/redis/go-redis/v9"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 type MultiStore struct {
@@ -18,52 +17,45 @@ type MultiStore struct {
 	pubsubStopCtx context.Context
 	pubsubCancel  context.CancelFunc
 	pubsubMutex   sync.Mutex
+	redisClient   goredis.UniversalClient
 }
 
 var _ TokenStore = (*MultiStore)(nil)
 
-func NewMultiStore(redisClient *redis.Redis, cacheEnabled bool) *MultiStore {
+func NewMultiStore(redisClient goredis.UniversalClient, cacheEnabled bool) *MultiStore {
 	ms := &MultiStore{
 		localStore:   NewLocalStore(),
 		redisStore:   NewRedisStore(redisClient),
 		cacheEnabled: cacheEnabled,
+		redisClient:  redisClient,
 	}
 
-	if cacheEnabled {
-		ms.startPubSub(redisClient)
+	if cacheEnabled && redisClient != nil {
+		ms.startPubSub()
 	}
 
 	return ms
 }
 
-func (ms *MultiStore) startPubSub(redisClient *redis.Redis) {
+func (ms *MultiStore) startPubSub() {
 	if ms.pubsubRunning.CompareAndSwap(false, true) {
 		ms.pubsubStopCtx, ms.pubsubCancel = context.WithCancel(context.Background())
-
-		client := goredis.NewClient(&goredis.Options{
-			Addr:     redisClient.Addr,
-			Username: redisClient.User,
-			Password: redisClient.Pass,
-		})
-
-		ms.pubsub = client.Subscribe(ms.pubsubStopCtx, TokenDeleteChannel)
-
+		ms.pubsub = ms.redisClient.Subscribe(ms.pubsubStopCtx, TokenDeleteChannel)
 		go ms.pubsubLoop()
 	}
 }
 
 func (ms *MultiStore) pubsubLoop() {
+	ch := ms.pubsub.Channel()
 	for {
 		select {
 		case <-ms.pubsubStopCtx.Done():
 			_ = ms.pubsub.Close()
 			return
-		default:
-			msg, err := ms.pubsub.ReceiveMessage(ms.pubsubStopCtx)
-			if err != nil {
+		case msg, ok := <-ch:
+			if !ok || msg == nil {
 				return
 			}
-
 			if msg.Payload != "" && ms.cacheEnabled {
 				_ = ms.localStore.DeleteToken(context.Background(), msg.Payload)
 			}

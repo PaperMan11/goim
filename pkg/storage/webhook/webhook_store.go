@@ -2,24 +2,25 @@ package webhook
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/webhooks"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type WebhookMongoStore struct {
 	mongoClient *mon.Model
-	redisClient *redis.Redis
+	redisClient goredis.UniversalClient
 }
 
 var _ webhooks.DeliveryRepository = (*WebhookMongoStore)(nil)
 
-func NewWebhookMongoStore(mongoClient *mon.Model, redisClient *redis.Redis) *WebhookMongoStore {
+func NewWebhookMongoStore(mongoClient *mon.Model, redisClient goredis.UniversalClient) *WebhookMongoStore {
 	return &WebhookMongoStore{
 		mongoClient: mongoClient,
 		redisClient: redisClient,
@@ -33,9 +34,11 @@ func (w *WebhookMongoStore) Save(record *webhooks.DeliveryRecord) error {
 		return err
 	}
 
-	bytes, err := bson.Marshal(record)
-	if err == nil {
-		w.redisClient.Setex(getWebhookDeliveryKey(record.ID), string(bytes), int(WebhookDeliveryExpire.Seconds()))
+	if w.redisClient != nil {
+		bytes, err := bson.Marshal(record)
+		if err == nil {
+			_ = w.redisClient.Set(context.Background(), getWebhookDeliveryKey(record.ID), string(bytes), WebhookDeliveryExpire).Err()
+		}
 	}
 
 	return nil
@@ -48,7 +51,9 @@ func (w *WebhookMongoStore) Update(record *webhooks.DeliveryRecord) error {
 		return fmt.Errorf("record not found")
 	}
 
-	w.redisClient.Del(getWebhookDeliveryKey(record.ID))
+	if w.redisClient != nil {
+		_ = w.redisClient.Del(context.Background(), getWebhookDeliveryKey(record.ID)).Err()
+	}
 
 	return nil
 }
@@ -56,23 +61,29 @@ func (w *WebhookMongoStore) Update(record *webhooks.DeliveryRecord) error {
 func (w *WebhookMongoStore) Get(id string) (*webhooks.DeliveryRecord, error) {
 	key := getWebhookDeliveryKey(id)
 
-	val, err := w.redisClient.Get(key)
-	if err == nil {
-		var record webhooks.DeliveryRecord
-		if err := bson.Unmarshal([]byte(val), &record); err == nil {
-			return &record, nil
+	if w.redisClient != nil {
+		val, err := w.redisClient.Get(context.Background(), key).Result()
+		if err == nil {
+			var record webhooks.DeliveryRecord
+			if err := bson.Unmarshal([]byte(val), &record); err == nil {
+				return &record, nil
+			}
+		} else if !errors.Is(err, goredis.Nil) {
+			_ = w.redisClient.Del(context.Background(), key).Err()
 		}
 	}
 
 	var mr model.WebhookDelivery
-	err = w.mongoClient.FindOne(context.Background(), &mr, bson.M{"_id": id})
+	err := w.mongoClient.FindOne(context.Background(), &mr, bson.M{"_id": id})
 	if err != nil {
 		return nil, fmt.Errorf("record not found")
 	}
 
-	bytes, marshalErr := bson.Marshal(&mr)
-	if marshalErr == nil {
-		w.redisClient.Setex(key, string(bytes), int(WebhookDeliveryExpire.Seconds()))
+	if w.redisClient != nil {
+		bytes, marshalErr := bson.Marshal(&mr)
+		if marshalErr == nil {
+			_ = w.redisClient.Set(context.Background(), key, string(bytes), WebhookDeliveryExpire).Err()
+		}
 	}
 
 	return toDeliveryRecord(&mr), nil
@@ -121,7 +132,9 @@ func (w *WebhookMongoStore) Delete(id string) error {
 		return err
 	}
 
-	w.redisClient.Del(getWebhookDeliveryKey(id))
+	if w.redisClient != nil {
+		_ = w.redisClient.Del(context.Background(), getWebhookDeliveryKey(id)).Err()
+	}
 
 	return nil
 }
