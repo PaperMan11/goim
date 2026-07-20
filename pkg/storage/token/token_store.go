@@ -3,7 +3,8 @@ package token
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 var (
@@ -25,7 +26,7 @@ type TokenInfo struct {
 }
 
 func (t *TokenInfo) IsExpired() bool {
-	return t.ExpireAt > 0 && t.ExpireAt < time.Now().Unix()
+	return t.ExpireAt > 0 && t.ExpireAt < timex.Unix()
 }
 
 type TokenStore interface {

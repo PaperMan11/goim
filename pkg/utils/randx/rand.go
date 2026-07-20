@@ -16,6 +16,8 @@ import (
 	mrand "math/rand"
 	"sync"
 	"time"
+
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 const (
@@ -33,7 +35,7 @@ var (
 )
 
 func init() {
-	fastRand = mrand.New(mrand.NewSource(time.Now().UnixNano()))
+	fastRand = mrand.New(mrand.NewSource(timex.UnixNano()))
 }
 
 // SecureBytes 返回 n 字节的密码学安全随机字节切片。

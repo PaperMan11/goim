@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -87,7 +88,7 @@ func (rs *RedisStore) GetToken(ctx context.Context, uuid string) (*TokenInfo, er
 		return nil, ErrTokenInvalid
 	}
 
-	if info.ExpireAt > 0 && time.Now().Unix() > info.ExpireAt {
+	if info.ExpireAt > 0 && timex.Unix() > info.ExpireAt {
 		_ = rs.deleteTokenInternal(ctx, &info)
 		return nil, ErrTokenExpired
 	}
@@ -205,7 +206,7 @@ func (rs *RedisStore) DeleteUserTokens(ctx context.Context, userID string, platf
 }
 
 func (rs *RedisStore) CheckTokenExists(ctx context.Context, userID string, platformID int32) (bool, error) {
-	now := time.Now().Unix()
+	now := timex.Unix()
 	count, err := rs.redisClient.ZCount(ctx, GetPlatformTokenKey(userID, platformID),
 		strconv.FormatInt(now, 10), "9223372036854775807").Result()
 	if err != nil {
@@ -216,7 +217,7 @@ func (rs *RedisStore) CheckTokenExists(ctx context.Context, userID string, platf
 
 func (rs *RedisStore) GetUserTokens(ctx context.Context, userID string) ([]*TokenInfo, error) {
 	userTokensKey := GetUserTokensKey(userID)
-	now := time.Now().Unix()
+	now := timex.Unix()
 	zs, err := rs.redisClient.ZRangeByScoreWithScores(ctx, userTokensKey, &goredis.ZRangeBy{
 		Min: strconv.FormatInt(now, 10),
 		Max: "9223372036854775807",
@@ -252,7 +253,7 @@ func (rs *RedisStore) GetUserTokens(ctx context.Context, userID string) ([]*Toke
 
 func (rs *RedisStore) GetUserTokensByPlatform(ctx context.Context, userID string, platformID int32) ([]*TokenInfo, error) {
 	platformTokensKey := GetPlatformTokenKey(userID, platformID)
-	now := time.Now().Unix()
+	now := timex.Unix()
 	zs, err := rs.redisClient.ZRangeByScoreWithScores(ctx, platformTokensKey, &goredis.ZRangeBy{
 		Min: strconv.FormatInt(now, 10),
 		Max: "9223372036854775807",
@@ -299,7 +300,7 @@ func (rs *RedisStore) publishTokenDeleteBatch(ctx context.Context, uuids []strin
 }
 
 func (rs *RedisStore) CleanExpiredTokens(ctx context.Context, userID string) error {
-	now := time.Now().Unix()
+	now := timex.Unix()
 	nowStr := strconv.FormatInt(now-1, 10)
 
 	_, _ = rs.redisClient.ZRemRangeByScore(ctx, GetUserTokensKey(userID), "0", nowStr).Result()

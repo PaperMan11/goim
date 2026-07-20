@@ -12,6 +12,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/logc"
 	"google.golang.org/protobuf/proto"
 )
@@ -50,7 +51,7 @@ func (p *MessagePipeline) Handle(conn Connection, req *Request) error {
 }
 
 func (p *MessagePipeline) HandleRaw(conn Connection, message []byte) error {
-	start := time.Now()
+	start := timex.Now()
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
 		msgHandleDurationHistogram.ObserveFloat(duration)
@@ -106,7 +107,7 @@ func (h *BusinessHandler) Handle(conn Connection, req *Request) error {
 		opName string
 	)
 
-	start := time.Now()
+	start := timex.Now()
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
 		businessOpDurationHistogram.ObserveFloat(duration, opName)

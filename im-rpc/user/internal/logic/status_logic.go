@@ -2,10 +2,10 @@ package logic
 
 import (
 	"context"
-	"time"
 
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 func (l *Logic) SubscribeOrCancelUsersStatus(ctx context.Context, req *pbuser.SubscribeOrCancelUsersStatusReq) (*pbuser.SubscribeOrCancelUsersStatusResp, error) {
@@ -59,9 +59,9 @@ func (l *Logic) SetUserOnlineStatus(ctx context.Context, req *pbuser.SetUserOnli
 				UserID:         status.GetUserID(),
 				Status:         1,
 				PlatformID:     int(platform),
-				LastOnlineTime: time.Now(),
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
+				LastOnlineTime: timex.Now(),
+				CreatedAt:      timex.Now(),
+				UpdatedAt:      timex.Now(),
 			})
 		}
 		for _, platform := range status.GetOffline() {
@@ -69,9 +69,9 @@ func (l *Logic) SetUserOnlineStatus(ctx context.Context, req *pbuser.SetUserOnli
 				UserID:         status.GetUserID(),
 				Status:         0,
 				PlatformID:     int(platform),
-				LastOnlineTime: time.Now(),
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
+				LastOnlineTime: timex.Now(),
+				CreatedAt:      timex.Now(),
+				UpdatedAt:      timex.Now(),
 			})
 		}
 	}

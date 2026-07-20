@@ -6,6 +6,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -87,7 +88,7 @@ func (m *defaultMsgModel) UpdateRevoke(ctx context.Context, conversationID strin
 		"$set": bson.M{
 			"is_revoked":      true,
 			"revoked_content": revokedContent,
-			"updated_at":      time.Now(),
+			"updated_at":      timex.Now(),
 		},
 	}
 	_, err := m.mod.UpdateOne(ctx, bson.M{

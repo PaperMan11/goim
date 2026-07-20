@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/utils/convert"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 const (
@@ -68,7 +69,7 @@ func (s *Signer) Verify(signature string, timestamp int64, payload []byte) bool 
 func (s *Signer) VerifyWithTimestamp(signature string, timestamp int64, payload []byte, maxAge time.Duration) bool {
 	// 检查时间戳是否过期
 	if maxAge > 0 {
-		now := time.Now().UnixMilli()
+		now := timex.UnixMilli()
 		if now-timestamp > maxAge.Milliseconds() {
 			return false
 		}
@@ -88,7 +89,7 @@ func (s *Signer) GenerateHeaders(event *WebhookEvent) map[string]string {
 	headers[EventTypeHeader] = string(event.EventType)
 
 	// 添加时间戳
-	timestamp := time.Now().UnixMilli()
+	timestamp := timex.UnixMilli()
 	headers[TimestampHeader] = convert.ToString(timestamp)
 
 	// 添加重试次数

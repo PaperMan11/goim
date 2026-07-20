@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 type TokenWithExpire struct {
@@ -59,7 +60,7 @@ func (ls *LocalStore) periodicCleanup() {
 }
 
 func (ls *LocalStore) cleanupExpiredTokens() {
-	now := time.Now().Unix()
+	now := timex.Unix()
 
 	ls.tokens.Range(func(key, value interface{}) bool {
 		if tw, ok := value.(*TokenWithExpire); ok {
@@ -102,7 +103,7 @@ func (ls *LocalStore) GetToken(ctx context.Context, uuid string) (*TokenInfo, er
 	if !ok {
 		return nil, ErrTokenInvalid
 	}
-	if tw.ExpireAt > 0 && tw.ExpireAt < time.Now().Unix() {
+	if tw.ExpireAt > 0 && tw.ExpireAt < timex.Unix() {
 		ls.DeleteToken(ctx, uuid)
 		return nil, ErrTokenExpired
 	}
@@ -178,7 +179,7 @@ func (ls *LocalStore) CheckTokenExists(ctx context.Context, userID string, platf
 	platformKey := GetPlatformTokenKey(userID, platformID)
 	if val, found := ls.platformTokens.Load(platformKey); found {
 		if tokenMap, ok := val.(map[string]*TokenWithExpire); ok && len(tokenMap) > 0 {
-			now := time.Now().Unix()
+			now := timex.Unix()
 			for _, tw := range tokenMap {
 				if tw.ExpireAt <= 0 || tw.ExpireAt >= now {
 					return true, nil
@@ -197,7 +198,7 @@ func (ls *LocalStore) GetUserTokens(ctx context.Context, userID string) ([]*Toke
 		if tokenMap, ok := val.(map[string]*TokenWithExpire); ok && len(tokenMap) > 0 {
 			var tokens []*TokenInfo
 			var expired []string
-			now := time.Now().Unix()
+			now := timex.Unix()
 
 			for uuid, tw := range tokenMap {
 				if tw.ExpireAt <= 0 || tw.ExpireAt >= now {
@@ -227,7 +228,7 @@ func (ls *LocalStore) GetUserTokensByPlatform(ctx context.Context, userID string
 		if tokenMap, ok := val.(map[string]*TokenWithExpire); ok && len(tokenMap) > 0 {
 			var tokens []*TokenInfo
 			var expired []string
-			now := time.Now().Unix()
+			now := timex.Unix()
 
 			for uuid, tw := range tokenMap {
 				if tw.ExpireAt <= 0 || tw.ExpireAt >= now {
@@ -294,7 +295,7 @@ func (ls *LocalStore) cleanExpiredPlatformTokens(userID string, platformID int32
 	platformKey := GetPlatformTokenKey(userID, platformID)
 	if val, found := ls.platformTokens.Load(platformKey); found {
 		if tokenMap, ok := val.(map[string]*TokenWithExpire); ok {
-			now := time.Now().Unix()
+			now := timex.Unix()
 			for uuid, tw := range tokenMap {
 				if tw.ExpireAt > 0 && tw.ExpireAt < now {
 					delete(tokenMap, uuid)

@@ -3,11 +3,11 @@ package logic
 import (
 	"context"
 	"fmt"
-	"time"
 
 	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 func (l *Logic) GetDesignateUsers(ctx context.Context, req *pbuser.GetDesignateUsersReq) (*pbuser.GetDesignateUsersResp, error) {
@@ -107,8 +107,8 @@ func (l *Logic) UserRegister(ctx context.Context, req *pbuser.UserRegisterReq) (
 	var users []*model.User
 	for _, userInfo := range req.GetUsers() {
 		user := userInfoToModel(userInfo)
-		user.CreatedAt = time.Now()
-		user.UpdatedAt = time.Now()
+		user.CreatedAt = timex.Now()
+		user.UpdatedAt = timex.Now()
 		users = append(users, user)
 	}
 

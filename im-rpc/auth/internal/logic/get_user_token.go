@@ -3,7 +3,6 @@ package logic
 import (
 	"context"
 	"sort"
-	"time"
 
 	"github.com/PaperMan11/goim/im-rpc/auth/internal/svc"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
@@ -12,6 +11,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/token"
 	"github.com/PaperMan11/goim/pkg/utils/jwtx"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -82,13 +82,13 @@ func (l *GetUserTokenLogic) GetUserToken(req *auth.GetUserTokenReq) (*auth.GetUs
 
 	return &auth.GetUserTokenResp{
 		Token:             newTokenInfo.Token,
-		ExpireTimeSeconds: newTokenInfo.ExpireAt - time.Now().Unix(),
+		ExpireTimeSeconds: newTokenInfo.ExpireAt - timex.Unix(),
 	}, nil
 }
 
 func (l *GetUserTokenLogic) generateToken(_ context.Context, userID string, platformID int32) (*token.TokenInfo, error) {
 	tokenUUID := uuid.New().String()
-	expireAt := time.Now().Unix() + l.svcCtx.Config.Auth.AccessExpire
+	expireAt := timex.Unix() + l.svcCtx.Config.Auth.AccessExpire
 
 	jwtToken, err := jwtx.GenerateAccessToken(
 		tokenUUID,

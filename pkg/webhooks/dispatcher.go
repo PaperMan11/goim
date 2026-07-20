@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -124,7 +125,7 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 	}
 
 	// 创建投递记录
-	nowTime := time.Now()
+	nowTime := timex.Now()
 	record := &DeliveryRecord{
 		ID:           uuid.New().String(),
 		EventID:      event.EventID,
@@ -151,7 +152,7 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 	sender.SetRecord(record)
 
 	// 发送事件
-	startTime := time.Now()
+	startTime := timex.Now()
 	resp, err := sender.Send(ctx, event)
 	duration := time.Since(startTime)
 
@@ -159,7 +160,7 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 	record.StatusCode = resp.StatusCode
 	record.Response = resp.Body
 	record.Duration = duration
-	record.UpdatedAt = time.Now()
+	record.UpdatedAt = timex.Now()
 
 	// 更新指标
 	webhookDeliveryTotal.Inc(config.URL, "total", string(event.EventType))
@@ -178,7 +179,7 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 		// 如果启用了重试，加入重试队列
 		if d.retryManager != nil && config.MaxRetries > 0 {
 			record.Status = DeliveryStatusRetrying
-			record.NextAttempt = time.Now().Add(config.RetryInterval)
+			record.NextAttempt = timex.Now().Add(config.RetryInterval)
 			webhookEventRetrying.Inc()
 
 			d.retryManager.ScheduleRetry(record)
@@ -209,7 +210,7 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 		// 如果启用了重试，加入重试队列
 		if d.retryManager != nil && config.MaxRetries > 0 {
 			record.Status = DeliveryStatusRetrying
-			record.NextAttempt = time.Now().Add(config.RetryInterval)
+			record.NextAttempt = timex.Now().Add(config.RetryInterval)
 			webhookEventRetrying.Inc()
 
 			d.retryManager.ScheduleRetry(record)
@@ -240,7 +241,7 @@ func (d *Dispatcher) Dispatch(event *WebhookEvent) error {
 
 	// 设置时间戳
 	if event.Timestamp == 0 {
-		event.Timestamp = time.Now().UnixMilli()
+		event.Timestamp = timex.UnixMilli()
 	}
 
 	select {
@@ -264,7 +265,7 @@ func (d *Dispatcher) DispatchSync(ctx context.Context, event *WebhookEvent) erro
 
 	// 设置时间戳
 	if event.Timestamp == 0 {
-		event.Timestamp = time.Now().UnixMilli()
+		event.Timestamp = timex.UnixMilli()
 	}
 
 	// 获取订阅该事件的所有 webhook

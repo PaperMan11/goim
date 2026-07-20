@@ -17,6 +17,7 @@ import (
 	"github.com/zeromicro/go-zero/core/threading"
 
 	"github.com/PaperMan11/goim/pkg/queue"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 var (
@@ -232,7 +233,7 @@ func (c *KafkaConsumer) fetchLoop(handle func(msg queue.Message)) {
 			logx.Info("Fetch loop stopped")
 			return
 		default:
-			start := time.Now()
+			start := timex.Now()
 			msg, err := c.consumer.FetchMessage(c.ctx)
 			duration := time.Since(start).Seconds()
 
@@ -319,7 +320,7 @@ func (c *KafkaConsumer) consumerOne(ctx context.Context, message queue.Message) 
 	msgSize := float64(len(message.Value()))
 	kafkaConsumerMessageSizeBytes.ObserveFloat(msgSize, c.cfg.Topic, c.cfg.GroupID)
 
-	start := time.Now()
+	start := timex.Now()
 	err := c.handler(ctx, message)
 	duration := time.Since(start).Seconds()
 

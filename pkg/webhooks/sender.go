@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -62,7 +63,7 @@ func (s *Sender) SendWithRetry(ctx context.Context, event *WebhookEvent, maxRetr
 		// 更新投递记录中的尝试次数
 		if s.record != nil {
 			s.record.AttemptCount = attempt
-			s.record.LastAttempt = time.Now()
+			s.record.LastAttempt = timex.Now()
 			if s.deliveryRepo != nil {
 				s.deliveryRepo.Update(s.record)
 			}
@@ -98,7 +99,7 @@ func (s *Sender) SendWithRetry(ctx context.Context, event *WebhookEvent, maxRetr
 
 // sendOnce 发送一次 webhook 请求
 func (s *Sender) sendOnce(ctx context.Context, event *WebhookEvent) (*WebhookResponse, error) {
-	startTime := time.Now()
+	startTime := timex.Now()
 
 	// 序列化事件数据
 	payload, err := json.Marshal(event)
@@ -176,7 +177,7 @@ func (s *Sender) calculateBackoff(attempt int) time.Duration {
 	delay := baseDelay * time.Duration(math.Pow(2, float64(attempt)))
 
 	// 添加随机抖动（±25%）
-	jitter := time.Duration(float64(delay) * 0.25 * (float64(2*time.Now().UnixNano()%1000)/1000.0 - 0.5))
+	jitter := time.Duration(float64(delay) * 0.25 * (float64(2*timex.UnixNano()%1000)/1000.0 - 0.5))
 
 	return delay + jitter
 }
@@ -237,7 +238,7 @@ func (rm *RetryManager) worker() {
 // processRetry 处理重试
 func (rm *RetryManager) processRetry(record *DeliveryRecord) {
 	// 检查是否到达下次尝试时间
-	if time.Now().Before(record.NextAttempt) {
+	if timex.Now().Before(record.NextAttempt) {
 		// 重新放入队列
 		time.Sleep(time.Until(record.NextAttempt))
 		rm.retryQueue <- record
@@ -256,7 +257,7 @@ func (rm *RetryManager) processRetry(record *DeliveryRecord) {
 
 	// 更新记录状态
 	record.Status = DeliveryStatusSending
-	record.LastAttempt = time.Now()
+	record.LastAttempt = timex.Now()
 	rm.deliveryRepo.Update(record)
 
 	// 检查是否超过最大重试次数
@@ -304,7 +305,7 @@ func (rm *RetryManager) processRetry(record *DeliveryRecord) {
 		record.Status = DeliveryStatusRetrying
 		record.ErrorMessage = err.Error()
 		record.Response = ""
-		record.NextAttempt = time.Now().Add(sender.calculateBackoff(record.AttemptCount))
+		record.NextAttempt = timex.Now().Add(sender.calculateBackoff(record.AttemptCount))
 		record.AttemptCount++
 		rm.deliveryRepo.Update(record)
 
@@ -337,7 +338,7 @@ func (rm *RetryManager) processRetry(record *DeliveryRecord) {
 		// 检查是否可以重试
 		if record.AttemptCount < config.MaxRetries {
 			record.Status = DeliveryStatusRetrying
-			record.NextAttempt = time.Now().Add(sender.calculateBackoff(record.AttemptCount))
+			record.NextAttempt = timex.Now().Add(sender.calculateBackoff(record.AttemptCount))
 			record.AttemptCount++
 			rm.retryQueue <- record
 

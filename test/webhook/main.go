@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 )
 
@@ -30,7 +31,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// 验证时间戳（防止重放攻击）
 	ts, err := strconv.ParseInt(timestamp, 10, 64)
-	if err != nil || time.Now().UnixMilli()-ts > 5*60*1000 {
+	if err != nil || timex.UnixMilli()-ts > 5*60*1000 {
 		fmt.Printf("Invalid timestamp: %s\n", timestamp)
 		http.Error(w, "Invalid timestamp", http.StatusBadRequest)
 		return

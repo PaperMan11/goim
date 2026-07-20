@@ -2,7 +2,6 @@ package logic
 
 import (
 	"context"
-	"time"
 
 	"github.com/PaperMan11/goim/im-rpc/auth/internal/svc"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
@@ -10,6 +9,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/token"
 	"github.com/PaperMan11/goim/pkg/utils/jwtx"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -65,13 +65,13 @@ func (l *GetAdminTokenLogic) GetAdminToken(req *auth.GetAdminTokenReq) (*auth.Ge
 
 	return &auth.GetAdminTokenResp{
 		Token:             adminTokenInfo.Token,
-		ExpireTimeSeconds: adminTokenInfo.ExpireAt - time.Now().Unix(),
+		ExpireTimeSeconds: adminTokenInfo.ExpireAt - timex.Unix(),
 	}, nil
 }
 
 func (l *GetAdminTokenLogic) generateAdminToken(_ context.Context, userID string) (*token.TokenInfo, error) {
 	tokenUUID := uuid.New().String()
-	expireAt := time.Now().Unix() + l.svcCtx.Config.Auth.AccessExpire
+	expireAt := timex.Unix() + l.svcCtx.Config.Auth.AccessExpire
 
 	jwtToken, err := jwtx.GenerateAdminToken(
 		tokenUUID,

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/utils/convert"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -132,7 +133,7 @@ func (a *RedisSeqAllocator) AllocateBatch(ctx context.Context, conversationID st
 	}
 
 	key := GetMessageSeqKey(conversationID)
-	mallocTime := convert.ToString(time.Now().UnixMilli())
+	mallocTime := convert.ToString(timex.UnixMilli())
 
 	retryCount := 0
 	backoffInterval := a.retryInterval
@@ -191,7 +192,7 @@ func (a *RedisSeqAllocator) GetCurrent(ctx context.Context, conversationID strin
 
 func (a *RedisSeqAllocator) GetSeqRange(ctx context.Context, conversationID string) (curr, last int64, err error) {
 	key := GetMessageSeqKey(conversationID)
-	mallocTime := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	mallocTime := strconv.FormatInt(timex.UnixMilli(), 10)
 
 	retryCount := 0
 	backoffInterval := a.retryInterval
@@ -242,7 +243,7 @@ func (a *RedisSeqAllocator) GetSeqRange(ctx context.Context, conversationID stri
 
 func (a *RedisSeqAllocator) Set(ctx context.Context, conversationID string, value int64) error {
 	key := GetMessageSeqKey(conversationID)
-	mallocTime := convert.ToString(time.Now().UnixMilli())
+	mallocTime := convert.ToString(timex.UnixMilli())
 
 	_, err := a.commitScript.Run(ctx, a.redisClient, []string{key},
 		"", a.dataSecond, value, value+int64(a.poolSize), mallocTime).Result()
@@ -256,7 +257,7 @@ func (a *RedisSeqAllocator) Reset(ctx context.Context, conversationID string) er
 
 func (a *RedisSeqAllocator) SyncFromDB(ctx context.Context, conversationID string, getMaxSeqFn func(ctx context.Context, conversationID string) (int64, error)) error {
 	key := GetMessageSeqKey(conversationID)
-	mallocTime := convert.ToString(time.Now().UnixMilli())
+	mallocTime := convert.ToString(timex.UnixMilli())
 
 	retryCount := 0
 	backoffInterval := a.retryInterval

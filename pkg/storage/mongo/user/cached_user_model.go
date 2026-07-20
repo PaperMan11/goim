@@ -12,23 +12,9 @@ import (
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	"github.com/PaperMan11/goim/pkg/utils/randx"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/syncx"
-)
-
-const (
-	userDefaultExpireSeconds = 5 * 60
-	userNilExpireSeconds     = 60
-
-	ttlJitterRatioPct = 10
-)
-
-var (
-	sfKeyPrefixUserInfo  = "uf:ui:"
-	sfKeyPrefixRecvOpt   = "uf:ro:"
-	sfKeyPrefixIMAdmin   = "uf:ad:"
-	sfKeyPrefixBatchUser = "uf:bu:"
-	sfKeyPrefixExists    = "uf:ex:"
 )
 
 type cachedUserModel struct {
@@ -63,10 +49,8 @@ func (m *cachedUserModel) Insert(ctx context.Context, users []*model.User) error
 	if err != nil {
 		return err
 	}
-	if m.redis != nil {
-		for _, user := range users {
-			_ = sredis.CacheDel(ctx, m.redis, m.userCacheKeys(user.UserID)...)
-		}
+	for _, user := range users {
+		sredis.CacheDelDouble(ctx, m.redis, m.userCacheKeys(user.UserID)...)
 	}
 	return nil
 }
@@ -170,11 +154,15 @@ func (m *cachedUserModel) FindByID(ctx context.Context, userID string) (*model.U
 		dbUser, err2 := m.UserModel.FindByID(ctx, userID)
 		if err2 != nil {
 			if errors.Is(err2, ErrUserNotFound) {
-				_ = sredis.CacheSet(ctx, m.redis, key, nil, m.jitterTTL(userNilExpireSeconds))
+				_, _ = sredis.CacheSetCAS(ctx, m.redis, key, nil, 0, m.jitterTTL(userNilExpireSeconds))
 			}
 			return nil, err2
 		}
-		_ = sredis.CacheSet(ctx, m.redis, key, dbUser, m.jitterTTL(userDefaultExpireSeconds))
+		version := dbUser.UpdatedAt.UnixMilli()
+		if version <= 0 {
+			version = timex.UnixMilli()
+		}
+		_, _ = sredis.CacheSetCAS(ctx, m.redis, key, dbUser, version, m.jitterTTL(userDefaultExpireSeconds))
 		return dbUser, nil
 	})
 	if err != nil {
@@ -194,7 +182,7 @@ func (m *cachedUserModel) Update(ctx context.Context, user *model.User) error {
 	if err != nil {
 		return err
 	}
-	_ = sredis.CacheDel(ctx, m.redis, m.userCacheKeys(user.UserID)...)
+	sredis.CacheDelDouble(ctx, m.redis, m.userCacheKeys(user.UserID)...)
 	return nil
 }
 
@@ -203,7 +191,7 @@ func (m *cachedUserModel) UpdateEx(ctx context.Context, userID string, updates m
 	if err != nil {
 		return err
 	}
-	_ = sredis.CacheDel(ctx, m.redis, m.userCacheKeys(userID)...)
+	sredis.CacheDelDouble(ctx, m.redis, m.userCacheKeys(userID)...)
 	return nil
 }
 
@@ -212,7 +200,7 @@ func (m *cachedUserModel) Delete(ctx context.Context, userID string) error {
 	if err != nil {
 		return err
 	}
-	_ = sredis.CacheDel(ctx, m.redis, m.userCacheKeys(userID)...)
+	sredis.CacheDelDouble(ctx, m.redis, m.userCacheKeys(userID)...)
 	return nil
 }
 
@@ -249,19 +237,20 @@ func (m *cachedUserModel) CheckExists(ctx context.Context, userIDs []string) (ma
 		if errDB != nil {
 			return nil, errDB
 		}
+		nowMs := timex.UnixMilli()
 		for userID, exists := range dbResult {
 			val := "0"
 			if exists {
 				val = "1"
 			}
-			_ = sredis.CacheSetString(ctx, m.redis, GetUserExistsKey(userID), val, m.jitterTTL(userDefaultExpireSeconds))
+			_, _ = sredis.CacheSetCASString(ctx, m.redis, GetUserExistsKey(userID), val, nowMs, m.jitterTTL(userDefaultExpireSeconds))
 			if _, ok := result[userID]; !ok {
 				result[userID] = exists
 			}
 		}
 		for _, userID := range missIDs {
 			if _, ok := result[userID]; !ok {
-				_ = sredis.CacheSetString(ctx, m.redis, GetUserExistsKey(userID), "0", m.jitterTTL(userNilExpireSeconds))
+				_, _ = sredis.CacheSetCASString(ctx, m.redis, GetUserExistsKey(userID), "0", 0, m.jitterTTL(userNilExpireSeconds))
 				result[userID] = false
 			}
 		}
@@ -294,9 +283,13 @@ func (m *cachedUserModel) SetGlobalRecvMsgOpt(ctx context.Context, userID string
 	if err != nil {
 		return err
 	}
-	if m.redis != nil && userID != "" {
-		_ = sredis.CacheDel(ctx, m.redis, GetUserGlobalRecvOptKey(userID), GetUserInfoKey(userID))
+	if userID == "" {
+		return nil
 	}
+	sredis.CacheDelDouble(ctx, m.redis,
+		GetUserGlobalRecvOptKey(userID),
+		GetUserInfoKey(userID),
+	)
 	return nil
 }
 
@@ -335,12 +328,12 @@ func (m *cachedUserModel) GetGlobalRecvMsgOpt(ctx context.Context, userID string
 		opt, err2 := m.UserModel.GetGlobalRecvMsgOpt(ctx, userID)
 		if err2 != nil {
 			if errors.Is(err2, ErrUserNotFound) {
-				_ = sredis.CacheSetString(ctx, m.redis, key, "0", m.jitterTTL(userNilExpireSeconds))
+				_, _ = sredis.CacheSetCASString(ctx, m.redis, key, "0", 0, m.jitterTTL(userNilExpireSeconds))
 				return 0, nil
 			}
 			return nil, err2
 		}
-		_ = sredis.CacheSetString(ctx, m.redis, key, strconv.Itoa(opt), m.jitterTTL(userDefaultExpireSeconds))
+		_, _ = sredis.CacheSetCASString(ctx, m.redis, key, strconv.Itoa(opt), timex.UnixMilli(), m.jitterTTL(userDefaultExpireSeconds))
 		return opt, nil
 	})
 	if err != nil {
@@ -376,7 +369,7 @@ func (m *cachedUserModel) IsIMAdmin(ctx context.Context, userID string) (bool, e
 		isAdmin, err2 := m.UserModel.IsIMAdmin(ctx, userID)
 		if err2 != nil {
 			if errors.Is(err2, ErrUserNotFound) {
-				_ = sredis.CacheSetString(ctx, m.redis, key, "0", m.jitterTTL(userNilExpireSeconds))
+				_, _ = sredis.CacheSetCASString(ctx, m.redis, key, "0", 0, m.jitterTTL(userNilExpireSeconds))
 				return false, nil
 			}
 			return nil, err2
@@ -385,7 +378,7 @@ func (m *cachedUserModel) IsIMAdmin(ctx context.Context, userID string) (bool, e
 		if isAdmin {
 			val = "1"
 		}
-		_ = sredis.CacheSetString(ctx, m.redis, key, val, m.jitterTTL(userDefaultExpireSeconds))
+		_, _ = sredis.CacheSetCASString(ctx, m.redis, key, val, timex.UnixMilli(), m.jitterTTL(userDefaultExpireSeconds))
 		return isAdmin, nil
 	})
 	if err != nil {

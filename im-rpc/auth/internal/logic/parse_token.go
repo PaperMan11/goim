@@ -3,12 +3,12 @@ package logic
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/PaperMan11/goim/im-rpc/auth/internal/svc"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/protocol/auth"
 	"github.com/PaperMan11/goim/pkg/utils/jwtx"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -43,7 +43,7 @@ func (l *ParseTokenLogic) ParseToken(req *auth.ParseTokenReq) (*auth.ParseTokenR
 		return &auth.ParseTokenResp{
 			UserID:            token.UserID,
 			PlatformID:        token.PlatformID,
-			ExpireTimeSeconds: token.ExpiresAt.Unix() - time.Now().Unix(),
+			ExpireTimeSeconds: token.ExpiresAt.Unix() - timex.Unix(),
 		}, nil
 	}
 }

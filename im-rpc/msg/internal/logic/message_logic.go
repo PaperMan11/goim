@@ -2,13 +2,13 @@ package logic
 
 import (
 	"context"
-	"time"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	pbmsg "github.com/PaperMan11/goim/pkg/protocol/msg"
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 func (l *Logic) sendMsg(ctx context.Context, msgData *sdkws.MsgData) error {
@@ -49,7 +49,7 @@ func (l *Logic) SendSimpleMsg(ctx context.Context, req *pbmsg.SendSimpleMsgReq) 
 		msgData.ServerMsgID = generateServerMsgID()
 	}
 	if msgData.SendTime == 0 {
-		msgData.SendTime = time.Now().UnixMilli()
+		msgData.SendTime = timex.UnixMilli()
 	}
 	if msgData.CreateTime == 0 {
 		msgData.CreateTime = msgData.SendTime
@@ -189,7 +189,7 @@ func (l *Logic) GetLastMessage(ctx context.Context, req *pbmsg.GetLastMessageReq
 func (l *Logic) RevokeMsg(ctx context.Context, req *pbmsg.RevokeMsgReq) (*pbmsg.RevokeMsgResp, error) {
 	revokedContent := &model.MessageRevokedContent{
 		RevokerID:  req.UserID,
-		RevokeTime: time.Now(),
+		RevokeTime: timex.Now(),
 		Seq:        req.Seq,
 	}
 
@@ -327,7 +327,7 @@ func (l *Logic) GetActiveGroup(ctx context.Context, req *pbmsg.GetActiveGroupReq
 
 func (l *Logic) GetServerTime(ctx context.Context, req *pbmsg.GetServerTimeReq) (*pbmsg.GetServerTimeResp, error) {
 	return &pbmsg.GetServerTimeResp{
-		ServerTime: time.Now().UnixMilli(),
+		ServerTime: timex.UnixMilli(),
 	}, nil
 }
 
@@ -358,14 +358,14 @@ func (l *Logic) GetSendMsgStatus(ctx context.Context, req *pbmsg.GetSendMsgStatu
 }
 
 func generateServerMsgID() string {
-	return time.Now().Format("20060102150405") + "_" + randomString(8)
+	return timex.Now().Format("20060102150405") + "_" + randomString(8)
 }
 
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letters[int(time.Now().UnixNano())%len(letters)]
+		b[i] = letters[int(timex.UnixNano())%len(letters)]
 	}
 	return string(b)
 }

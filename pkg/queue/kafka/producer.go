@@ -14,6 +14,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/PaperMan11/goim/pkg/queue"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 type KafkaProducer struct {
@@ -98,7 +99,7 @@ func NewProducer(cfg KafkaConfig, opts ...ProducerOption) (*KafkaProducer, error
 }
 
 func (p *KafkaProducer) Push(ctx context.Context, value string) error {
-	return p.PushWithKey(ctx, strconv.FormatInt(time.Now().UnixNano(), 10), value)
+	return p.PushWithKey(ctx, strconv.FormatInt(timex.UnixNano(), 10), value)
 }
 
 func (p *KafkaProducer) PushWithKey(ctx context.Context, key, value string) error {
@@ -110,7 +111,7 @@ func (p *KafkaProducer) PushWithKey(ctx context.Context, key, value string) erro
 }
 
 func (p *KafkaProducer) pushMessage(ctx context.Context, msg kafka.Message) error {
-	start := time.Now()
+	start := timex.Now()
 	msgSize := float64(len(msg.Value))
 
 	err := p.producer.WriteMessages(ctx, msg)

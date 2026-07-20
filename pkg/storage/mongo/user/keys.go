@@ -24,3 +24,18 @@ func GetUserExistsKey(userID string) string {
 func GetIMAdminKey(userID string) string {
 	return fmt.Sprintf(KeyIMAdmin, userID)
 }
+
+const (
+	userDefaultExpireSeconds = 5 * 60
+	userNilExpireSeconds     = 60
+
+	ttlJitterRatioPct = 10
+)
+
+var (
+	sfKeyPrefixUserInfo  = "uf:ui:"
+	sfKeyPrefixRecvOpt   = "uf:ro:"
+	sfKeyPrefixIMAdmin   = "uf:ad:"
+	sfKeyPrefixBatchUser = "uf:bu:"
+	sfKeyPrefixExists    = "uf:ex:"
+)

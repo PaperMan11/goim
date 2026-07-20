@@ -2,10 +2,10 @@ package logic
 
 import (
 	"context"
-	"time"
 
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
 func (l *Logic) ProcessUserCommandAdd(ctx context.Context, req *pbuser.ProcessUserCommandAddReq) (*pbuser.ProcessUserCommandAddResp, error) {
@@ -14,8 +14,8 @@ func (l *Logic) ProcessUserCommandAdd(ctx context.Context, req *pbuser.ProcessUs
 		Type:       int(req.GetType()),
 		UUID:       req.GetUuid(),
 		Value:      req.GetValue().GetValue(),
-		CreateTime: time.Now(),
-		UpdatedAt:  time.Now(),
+		CreateTime: timex.Now(),
+		UpdatedAt:  timex.Now(),
 	}
 
 	err := l.svcCtx.UserModel.InsertUserCommand(ctx, cmd)

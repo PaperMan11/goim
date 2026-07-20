@@ -2,9 +2,9 @@ package seqconversation
 
 import (
 	"context"
-	"time"
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -31,7 +31,7 @@ func (s *defaultSeqConversationModel) UpsertConversationMaxSeq(ctx context.Conte
 	update := bson.M{
 		"$set": bson.M{
 			"max_seq":    maxSeq,
-			"updated_at": time.Now(),
+			"updated_at": timex.Now(),
 		},
 		"$setOnInsert": bson.M{
 			"conversation_id": conversationID,
@@ -46,7 +46,7 @@ func (s *defaultSeqConversationModel) UpsertConversationMinSeq(ctx context.Conte
 	_, err := s.mod.UpdateOne(ctx, bson.M{"conversation_id": conversationID}, bson.M{
 		"$set": bson.M{
 			"min_seq":    minSeq,
-			"updated_at": time.Now(),
+			"updated_at": timex.Now(),
 		},
 	})
 	return err

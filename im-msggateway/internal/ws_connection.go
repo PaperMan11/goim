@@ -10,6 +10,7 @@ import (
 	"github.com/PaperMan11/goim/im-msggateway/internal/compressor"
 	"github.com/PaperMan11/goim/im-msggateway/internal/encoder"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/gorilla/websocket"
 	"github.com/zeromicro/go-zero/core/logc"
 )
@@ -53,7 +54,7 @@ type WsConnection struct {
 func NewWsConnection(ctx ConnContext, conn *websocket.Conn, server WsServer) *WsConnection {
 	return &WsConnection{
 		ctx:    ctx,
-		id:     fmt.Sprintf("%s-%d", ctx.RemoteAddr(), time.Now().UnixMilli()),
+		id:     fmt.Sprintf("%s-%d", ctx.RemoteAddr(), timex.UnixMilli()),
 		conn:   conn,
 		server: server,
 		sendCh: make(chan []byte, 256),
@@ -75,15 +76,15 @@ func (c *WsConnection) readPump() {
 	}()
 
 	c.conn.SetReadLimit(c.server.Config().MaxMsgSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetReadDeadline(timex.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		logc.Debugf(c.ctx, "conn %s pong message", c.ID())
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		c.conn.SetReadDeadline(timex.Now().Add(pongWait))
 		return nil
 	})
 	c.conn.SetPingHandler(func(appData string) error {
 		logc.Debugf(c.ctx, "conn %s received ping message, sending pong", c.ID())
-		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		c.conn.SetWriteDeadline(timex.Now().Add(writeWait))
 		return c.conn.WriteMessage(websocket.PongMessage, []byte(appData))
 	})
 
@@ -152,7 +153,7 @@ func (c *WsConnection) writePump() {
 		case <-c.doneCh:
 			return
 		case message, ok := <-c.sendCh:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			c.conn.SetWriteDeadline(timex.Now().Add(writeWait))
 			if !ok {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
@@ -166,7 +167,7 @@ func (c *WsConnection) writePump() {
 			}
 			msgSentCounter.Inc("binary")
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			c.conn.SetWriteDeadline(timex.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				c.closeWithError(err)
 				logc.Errorf(c.ctx, "conn %s write ping message error: %v", c.ID(), err)
@@ -180,7 +181,7 @@ func (c *WsConnection) writePump() {
 func (c *WsConnection) flushSendQueue() {
 	logc.Debugf(c.ctx, "flushing send queue for conn %s", c.ID())
 	for message := range c.sendCh {
-		c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		c.conn.SetWriteDeadline(timex.Now().Add(writeWait))
 		if err := c.conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
 			c.closeWithError(err)
 			logc.Errorf(c.ctx, "conn %s flush send queue error: %v", c.ID(), err)

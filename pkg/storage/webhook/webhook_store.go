@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
@@ -106,7 +106,7 @@ func (w *WebhookMongoStore) GetByEventID(eventID string) ([]*webhooks.DeliveryRe
 
 func (w *WebhookMongoStore) GetPending(limit int) ([]*webhooks.DeliveryRecord, error) {
 	var mrs []*model.WebhookDelivery
-	now := time.Now()
+	now := timex.Now()
 	err := w.mongoClient.Find(context.Background(), &mrs, bson.M{
 		"status":      webhooks.DeliveryStatusRetrying,
 		"nextAttempt": bson.M{"$lte": now},

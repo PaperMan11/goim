@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/utils/convert"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/golang-jwt/jwt/v4"
 )
 
@@ -85,7 +86,7 @@ func (c *TokenClaims) SetIssuer(issuer string) *TokenClaims {
 }
 
 func (c *TokenClaims) SetExpire(expireSeconds int64) *TokenClaims {
-	now := time.Now()
+	now := timex.Now()
 	c.RegisteredClaims.IssuedAt = jwt.NewNumericDate(now)
 	c.RegisteredClaims.ExpiresAt = jwt.NewNumericDate(now.Add(time.Duration(expireSeconds) * time.Second))
 	return c
@@ -252,7 +253,7 @@ func (c *TokenClaims) IsExpired() bool {
 	if c.ExpiresAt == nil {
 		return false
 	}
-	return c.ExpiresAt.Time.Before(time.Now())
+	return c.ExpiresAt.Time.Before(timex.Now())
 }
 
 func (c *TokenClaims) GetRemainingTime() time.Duration {

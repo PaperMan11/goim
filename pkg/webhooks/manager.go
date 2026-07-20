@@ -3,8 +3,8 @@ package webhooks
 import (
 	"context"
 	"net/http"
-	"time"
 
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -94,7 +94,7 @@ func (m *Manager) DisableWebhook(url string) error {
 func NewMessageEvent(messageData *MessageEventData) *WebhookEvent {
 	return &WebhookEvent{
 		EventType: EventMessageSent,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: timex.UnixMilli(),
 		Data: map[string]interface{}{
 			"messageId":      messageData.MessageID,
 			"serverMsgId":    messageData.ServerMsgID,
@@ -120,7 +120,7 @@ func NewMessageEvent(messageData *MessageEventData) *WebhookEvent {
 func NewUserOnlineEvent(userData *UserEventData) *WebhookEvent {
 	return &WebhookEvent{
 		EventType: EventUserOnline,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: timex.UnixMilli(),
 		Data: map[string]interface{}{
 			"userId":       userData.UserID,
 			"nickname":     userData.Nickname,
@@ -137,7 +137,7 @@ func NewUserOnlineEvent(userData *UserEventData) *WebhookEvent {
 func NewUserOfflineEvent(userData *UserEventData) *WebhookEvent {
 	return &WebhookEvent{
 		EventType: EventUserOffline,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: timex.UnixMilli(),
 		Data: map[string]interface{}{
 			"userId":       userData.UserID,
 			"nickname":     userData.Nickname,
@@ -154,7 +154,7 @@ func NewUserOfflineEvent(userData *UserEventData) *WebhookEvent {
 func NewFriendAddedEvent(friendData *FriendEventData) *WebhookEvent {
 	return &WebhookEvent{
 		EventType: EventFriendAdded,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: timex.UnixMilli(),
 		Data: map[string]interface{}{
 			"ownerUserId":    friendData.OwnerUserID,
 			"friendUserId":   friendData.FriendUserID,
@@ -174,7 +174,7 @@ func NewFriendAddedEvent(friendData *FriendEventData) *WebhookEvent {
 func NewGroupCreatedEvent(groupData *GroupEventData) *WebhookEvent {
 	return &WebhookEvent{
 		EventType: EventGroupCreated,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: timex.UnixMilli(),
 		Data: map[string]interface{}{
 			"groupId":         groupData.GroupID,
 			"groupName":       groupData.GroupName,
@@ -198,7 +198,7 @@ func NewGroupCreatedEvent(groupData *GroupEventData) *WebhookEvent {
 func NewConversationUpdatedEvent(conversationData *ConversationEventData) *WebhookEvent {
 	return &WebhookEvent{
 		EventType: EventConversationUpdated,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: timex.UnixMilli(),
 		Data: map[string]interface{}{
 			"conversationId":   conversationData.ConversationID,
 			"conversationType": conversationData.ConversationType,
