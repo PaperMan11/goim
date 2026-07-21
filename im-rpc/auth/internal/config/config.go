@@ -4,6 +4,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/localcache"
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
 	"github.com/PaperMan11/goim/pkg/rpcclient"
+	storagemongo "github.com/PaperMan11/goim/pkg/storage/mongo"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
@@ -11,7 +12,7 @@ import (
 type Config struct {
 	zrpc.RpcServerConf
 	Redis redis.RedisConf
-	Mongo MongoConf
+	Mongo storagemongo.MongoConf
 
 	LoginStrategy loginstrategy.LoginStrategyConf
 
@@ -26,9 +27,4 @@ type Config struct {
 		AccessExpire int64  `json:",default=86400"`
 		Issuer       string `json:",default=goim"`
 	}
-}
-
-type MongoConf struct {
-	Uri      string
-	Database string
 }

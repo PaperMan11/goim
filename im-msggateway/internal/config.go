@@ -4,6 +4,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/localcache"
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
 	"github.com/PaperMan11/goim/pkg/rpcclient"
+	storagemongo "github.com/PaperMan11/goim/pkg/storage/mongo"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -19,10 +20,7 @@ type MsgGatewayConfig struct {
 type HubServerConf struct {
 	zrpc.RpcServerConf
 	LocalCacheConf localcache.CacheConfig
-	Mongo          struct {
-		Uri      string
-		Database string
-	}
+	Mongo          storagemongo.MongoConf
 }
 
 type WsServerConf struct {

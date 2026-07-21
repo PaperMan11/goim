@@ -4,6 +4,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/localcache"
 	queuex "github.com/PaperMan11/goim/pkg/queue/kafka"
 	"github.com/PaperMan11/goim/pkg/rpcclient"
+	storagemongo "github.com/PaperMan11/goim/pkg/storage/mongo"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
@@ -11,7 +12,7 @@ import (
 type Config struct {
 	zrpc.RpcServerConf
 	Redis redis.RedisConf
-	Mongo MongoConf
+	Mongo storagemongo.MongoConf
 
 	MsgTransferProducer queuex.KafkaConfig
 
@@ -25,9 +26,4 @@ type Config struct {
 		AccessExpire int64  `json:",default=86400"`
 		Issuer       string `json:",default=goim"`
 	}
-}
-
-type MongoConf struct {
-	Uri      string
-	Database string
 }
