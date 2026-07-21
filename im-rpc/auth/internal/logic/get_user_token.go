@@ -31,22 +31,18 @@ func NewGetUserTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetU
 }
 
 func (l *GetUserTokenLogic) GetUserToken(req *auth.GetUserTokenReq) (*auth.GetUserTokenResp, error) {
-	// check admin
-	isAdmin, err := l.svcCtx.AuthVerify.IsIMAdmin(l.ctx, req.UserID)
-	if err != nil {
-		l.Errorf("failed to check admin, userID: %s, err: %v", req.UserID, err)
+	if err := requireUserIsAdmin(l.ctx, l.svcCtx, l, req.UserID); err != nil {
 		return nil, err
-	}
-	if !isAdmin {
-		l.Errorf("user %s is not admin", req.UserID)
-		return nil, nil
 	}
 
 	if req.PlatformID == constant.AdminPlatformID {
 		return nil, errx.NoPermissionError.Wrap("admin platform id is not allowed")
 	}
 
-	var needInvalidateTokens []*token.TokenInfo
+	var (
+		needInvalidateTokens []*token.TokenInfo
+		err                  error
+	)
 	switch l.svcCtx.Config.LoginStrategy.LoginStrategy {
 	case loginstrategy.LoginStrategySingle:
 		needInvalidateTokens, err = l.handleSingleLogin(l.ctx, req.UserID)

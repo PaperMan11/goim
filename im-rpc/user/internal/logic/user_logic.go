@@ -2,8 +2,8 @@ package logic
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
@@ -25,9 +25,13 @@ func (l *Logic) GetDesignateUsers(ctx context.Context, req *pbuser.GetDesignateU
 }
 
 func (l *Logic) UpdateUserInfo(ctx context.Context, req *pbuser.UpdateUserInfoReq) (*pbuser.UpdateUserInfoResp, error) {
+	if err := l.requireSelfOrAdmin(req.GetUserInfo().UserID); err != nil {
+		return nil, err
+	}
+
 	userInfo := req.GetUserInfo()
 	if userInfo == nil {
-		return nil, fmt.Errorf("user info is nil")
+		return nil, errx.ArgsError.Wrap("user info is nil")
 	}
 
 	user := userInfoToModel(userInfo)
@@ -40,9 +44,13 @@ func (l *Logic) UpdateUserInfo(ctx context.Context, req *pbuser.UpdateUserInfoRe
 }
 
 func (l *Logic) UpdateUserInfoEx(ctx context.Context, req *pbuser.UpdateUserInfoExReq) (*pbuser.UpdateUserInfoExResp, error) {
+	if err := l.requireSelfOrAdmin(req.GetUserInfo().UserID); err != nil {
+		return nil, err
+	}
+
 	userInfo := req.GetUserInfo()
 	if userInfo == nil {
-		return nil, fmt.Errorf("user info is nil")
+		return nil, errx.ArgsError.Wrap("user info is nil")
 	}
 
 	updates := make(map[string]any)
@@ -58,6 +66,7 @@ func (l *Logic) UpdateUserInfoEx(ctx context.Context, req *pbuser.UpdateUserInfo
 
 	err := l.svcCtx.UserModel.UpdateEx(ctx, userInfo.GetUserID(), updates)
 	if err != nil {
+		l.Errorf("update user info ex failed, userID: %s, err: %v", userInfo.GetUserID(), err)
 		return nil, err
 	}
 
@@ -65,8 +74,13 @@ func (l *Logic) UpdateUserInfoEx(ctx context.Context, req *pbuser.UpdateUserInfo
 }
 
 func (l *Logic) AccountCheck(ctx context.Context, req *pbuser.AccountCheckReq) (*pbuser.AccountCheckResp, error) {
+	if err := l.requireAdmin(); err != nil {
+		return nil, err
+	}
+
 	results, err := l.svcCtx.UserModel.CheckExists(ctx, req.GetCheckUserIDs())
 	if err != nil {
+		l.Errorf("check user account failed, err: %v", err)
 		return nil, err
 	}
 
@@ -92,6 +106,7 @@ func (l *Logic) GetPaginationUsers(ctx context.Context, req *pbuser.GetPaginatio
 
 	users, total, err := l.svcCtx.UserModel.Page(ctx, page, size, req.GetUserID(), req.GetNickName())
 	if err != nil {
+		l.Errorf("get pagination users failed, err: %v", err)
 		return nil, err
 	}
 
@@ -104,16 +119,49 @@ func (l *Logic) GetPaginationUsers(ctx context.Context, req *pbuser.GetPaginatio
 }
 
 func (l *Logic) UserRegister(ctx context.Context, req *pbuser.UserRegisterReq) (*pbuser.UserRegisterResp, error) {
+	if err := l.requireAdmin(); err != nil {
+		return nil, err
+	}
+
+	// 判断传入的userID是否重复
+	userIDSet := make(map[string]struct{})
+	newUserIDs := make([]string, 0)
+	for _, userInfo := range req.GetUsers() {
+		userID := userInfo.GetUserID()
+		if userID == "" {
+			return nil, errx.ArgsError.Wrap("user id is empty")
+		}
+		newUserIDs = append(newUserIDs, userID)
+		if _, ok := userIDSet[userID]; ok {
+			return nil, errx.ArgsError.Wrap("user id is duplicate")
+		}
+		userIDSet[userID] = struct{}{}
+	}
+
+	// 判断用户ID是否存在
+	exists, err := l.svcCtx.UserModel.CheckExists(ctx, newUserIDs)
+	if err != nil {
+		l.Errorf("check user account failed, err: %v", err)
+		return nil, err
+	}
+	for _, exists := range exists {
+		if exists {
+			return nil, errx.UserRegisteredAlreadyError
+		}
+	}
+
 	var users []*model.User
+	timeNow := timex.Now()
 	for _, userInfo := range req.GetUsers() {
 		user := userInfoToModel(userInfo)
-		user.CreatedAt = timex.Now()
-		user.UpdatedAt = timex.Now()
+		user.CreatedAt = timeNow
+		user.UpdatedAt = timeNow
 		users = append(users, user)
 	}
 
-	err := l.svcCtx.UserModel.Insert(ctx, users)
+	err = l.svcCtx.UserModel.Insert(ctx, users)
 	if err != nil {
+		l.Errorf("user register failed, err: %v", err)
 		return nil, err
 	}
 
@@ -131,6 +179,7 @@ func (l *Logic) GetAllUserID(ctx context.Context, req *pbuser.GetAllUserIDReq) (
 
 	userIDs, total, err := l.svcCtx.UserModel.GetAllUserIDs(ctx, page, size)
 	if err != nil {
+		l.Errorf("get all user ids failed, err: %v", err)
 		return nil, err
 	}
 
@@ -138,7 +187,17 @@ func (l *Logic) GetAllUserID(ctx context.Context, req *pbuser.GetAllUserIDReq) (
 }
 
 func (l *Logic) SortQuery(ctx context.Context, req *pbuser.SortQueryReq) (*pbuser.SortQueryResp, error) {
-	return &pbuser.SortQueryResp{}, nil
+	users, err := l.svcCtx.UserModel.SortQuery(ctx, req.GetUserIDName(), req.GetAsc())
+	if err != nil {
+		return nil, err
+	}
+
+	var usersInfo []*sdkws.UserInfo
+	for _, user := range users {
+		usersInfo = append(usersInfo, modelToUserInfo(user))
+	}
+
+	return &pbuser.SortQueryResp{Users: usersInfo}, nil
 }
 
 func (l *Logic) IsIMAdmin(ctx context.Context, req *pbuser.IsIMAdminReq) (*pbuser.IsIMAdminResp, error) {

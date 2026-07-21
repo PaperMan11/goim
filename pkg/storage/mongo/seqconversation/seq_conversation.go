@@ -2,15 +2,22 @@ package seqconversation
 
 import (
 	"context"
+	"errors"
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+)
+
+var (
+	ErrSeqConversationNotFound = errors.New("seq conversation not found")
 )
 
 type SeqConversationModel interface {
 	BatchGetConversationMaxSeqs(ctx context.Context, conversationIDs []string) (map[string]int64, error)
+	FindSeqConversation(ctx context.Context, conversationID string) (*model.SeqConversation, error)
 	GetConversationMaxSeq(ctx context.Context, conversationID string) (int64, error)
 	GetConversationMinSeq(ctx context.Context, conversationID string) (int64, error)
 	UpsertConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error
@@ -81,4 +88,16 @@ func (s *defaultSeqConversationModel) BatchGetConversationMaxSeqs(ctx context.Co
 		result[seq.ConversationID] = seq.MaxSeq
 	}
 	return result, nil
+}
+
+func (s *defaultSeqConversationModel) FindSeqConversation(ctx context.Context, conversationID string) (*model.SeqConversation, error) {
+	var seq model.SeqConversation
+	err := s.mod.FindOne(ctx, &seq, bson.M{"conversation_id": conversationID})
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrSeqConversationNotFound
+		}
+		return nil, err
+	}
+	return &seq, nil
 }

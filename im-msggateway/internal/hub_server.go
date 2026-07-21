@@ -62,6 +62,36 @@ func (h *HubServer) Stop() error {
 	return nil
 }
 
+// requireAdmin 校验：上下文中的操作人必须是 IM 管理员。
+// 校验失败时自动打 error log 并返回统一错误。
+func (h *HubServer) requireAdmin(ctx context.Context) error {
+	opUserID := mcontext.GetOpUserIDFromContext(ctx)
+	isAdmin, err := h.authVerifier.IsIMAdmin(ctx, opUserID)
+	if err != nil {
+		logc.Errorf(ctx, "failed to check if user is IM admin, opUserID=%s err=%v", opUserID, err)
+		return errx.InternalError.WrapWithError(err)
+	}
+	if !isAdmin {
+		return errx.NoPermissionError.Wrap("user is not IM admin")
+	}
+	return nil
+}
+
+// requireSelfOrAdmin 校验：操作人必须是 targetUserID 本人，或是 IM 管理员。
+func (h *HubServer) requireSelfOrAdmin(ctx context.Context, targetUserID string) error {
+	opUserID := mcontext.GetOpUserIDFromContext(ctx)
+	ok, err := h.authVerifier.CheckAccess(ctx, targetUserID)
+	if err != nil {
+		logc.Errorf(ctx, "check access failed, opUserID=%s targetUserID=%s err=%v", opUserID, targetUserID, err)
+		return errx.InternalError.WrapWithError(err)
+	}
+	if !ok {
+		logc.Errorf(ctx, "access denied, opUserID=%s targetUserID=%s", opUserID, targetUserID)
+		return errx.NoPermissionError
+	}
+	return nil
+}
+
 func (h *HubServer) processPushTask(task *pushTask) {
 	userConns := h.wsServer.GetUserConnections(task.userID)
 	if len(userConns) == 0 {
@@ -93,15 +123,8 @@ func (h *HubServer) OnlinePushMsg(context.Context, *pbmsggateway.OnlinePushMsgRe
 }
 
 func (h *HubServer) GetUsersOnlineStatus(ctx context.Context, req *pbmsggateway.GetUsersOnlineStatusReq) (*pbmsggateway.GetUsersOnlineStatusResp, error) {
-	opUserID := mcontext.GetOpUserIDFromContext(ctx)
-	// 校验用户是否是IM管理员
-	isIMAdmin, err := h.authVerifier.IsIMAdmin(ctx, opUserID)
-	if err != nil {
-		logc.Errorf(ctx, "failed to check if user is IM admin: %v", err)
-		return nil, errx.InternalError.WrapWithError(err)
-	}
-	if !isIMAdmin {
-		return nil, errx.NoPermissionError.Wrap("user is not IM admin")
+	if err := h.requireAdmin(ctx); err != nil {
+		return nil, err
 	}
 
 	resp := &pbmsggateway.GetUsersOnlineStatusResp{

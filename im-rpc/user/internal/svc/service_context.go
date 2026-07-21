@@ -34,9 +34,11 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
-	// mongo
+	// mongo：按集合粒度分别创建独立的 *mon.Model 句柄，和 NewGroupModel / NewFriendModel 保持一致
 	userMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUser)
-	userModel := userModel.NewUserModel(userMongo)
+	statusMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserStatus)
+	cmdMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserCommand)
+	userModel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo)
 
 	// local cache
 	redisCli := sredis.MustNewRedis(c.Redis)

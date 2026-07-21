@@ -2,11 +2,17 @@ package sequser
 
 import (
 	"context"
+	"errors"
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+)
+
+var (
+	ErrSeqUserNotFound = errors.New("seq user not found")
 )
 
 type SeqUserModel interface {
@@ -81,6 +87,9 @@ func (s *defaultSeqUserModel) GetUserSeq(ctx context.Context, userID, conversati
 	var seq model.SeqUser
 	err := s.mod.FindOne(ctx, &seq, bson.M{"user_id": userID, "conversation_id": conversationID})
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrSeqUserNotFound
+		}
 		return nil, err
 	}
 	return &seq, nil

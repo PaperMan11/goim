@@ -203,10 +203,11 @@ func (s *wsServer) onConnAdd(conn Connection) {
 		s.userService.SetUserOnlineStatus(ctx, &pbuser.SetUserOnlineStatusReq{
 			Status: []*pbuser.UserOnlineStatus{
 				{
-					UserID:  handshakeInfo.GetUserID(),
-					ConnID:  conn.ID(),
-					Online:  []int32{handshakeInfo.GetPlatformID()},
-					Offline: nil,
+					UserID:   handshakeInfo.GetUserID(),
+					ConnID:   conn.ID(),
+					DeviceID: handshakeInfo.GetDeviceID(), // P1新增：把设备ID透传到user-rpc
+					Online:   []int32{handshakeInfo.GetPlatformID()},
+					Offline:  nil,
 				},
 			},
 		})
@@ -249,10 +250,11 @@ func (s *wsServer) onConnRemove(conn Connection) {
 		s.userService.SetUserOnlineStatus(ctx, &pbuser.SetUserOnlineStatusReq{
 			Status: []*pbuser.UserOnlineStatus{
 				{
-					UserID:  handshakeInfo.GetUserID(),
-					ConnID:  conn.ID(),
-					Online:  nil,
-					Offline: []int32{handshakeInfo.GetPlatformID()},
+					UserID:   handshakeInfo.GetUserID(),
+					ConnID:   conn.ID(),
+					DeviceID: handshakeInfo.GetDeviceID(), // P1新增：把设备ID透传到user-rpc
+					Online:   nil,
+					Offline:  []int32{handshakeInfo.GetPlatformID()},
 				},
 			},
 		})

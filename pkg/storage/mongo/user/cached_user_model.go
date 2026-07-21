@@ -6,11 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
+	"github.com/PaperMan11/goim/pkg/utils/convert"
 	"github.com/PaperMan11/goim/pkg/utils/randx"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	goredis "github.com/redis/go-redis/v9"
@@ -304,7 +304,7 @@ func (m *cachedUserModel) GetGlobalRecvMsgOpt(ctx context.Context, userID string
 		return 0, err
 	}
 	if found {
-		val, errConv := strconv.Atoi(data)
+		val, errConv := convert.ToIntE(data)
 		if errConv == nil {
 			return val, nil
 		}
@@ -318,7 +318,7 @@ func (m *cachedUserModel) GetGlobalRecvMsgOpt(ctx context.Context, userID string
 			return nil, err2
 		}
 		if found2 {
-			val, errConv := strconv.Atoi(data2)
+			val, errConv := convert.ToIntE(data2)
 			if errConv == nil {
 				return val, nil
 			}
@@ -333,7 +333,7 @@ func (m *cachedUserModel) GetGlobalRecvMsgOpt(ctx context.Context, userID string
 			}
 			return nil, err2
 		}
-		_, _ = sredis.CacheSetCASString(ctx, m.redis, key, strconv.Itoa(opt), timex.UnixMilli(), m.jitterTTL(userDefaultExpireSeconds))
+		_, _ = sredis.CacheSetCASString(ctx, m.redis, key, convert.ToString(opt), timex.UnixMilli(), m.jitterTTL(userDefaultExpireSeconds))
 		return opt, nil
 	})
 	if err != nil {

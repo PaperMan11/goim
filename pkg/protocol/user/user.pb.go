@@ -10,14 +10,15 @@
 package user
 
 import (
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
+
 	conversation "github.com/PaperMan11/goim/pkg/protocol/conversation"
 	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	wrapperspb "github.com/PaperMan11/goim/pkg/protocol/wrapperspb"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
 )
 
 const (
@@ -1805,6 +1806,7 @@ type OnlineStatus struct {
 	UserID        string                 `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`                   // 用户ID
 	Status        int32                  `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`                  // 在线状态(1-在线, 0-离线)
 	PlatformIDs   []int32                `protobuf:"varint,3,rep,packed,name=platformIDs,proto3" json:"platformIDs,omitempty"` // 在线平台ID列表
+	DeviceID      string                 `json:"deviceID,omitempty"`                                                           // 设备ID（P1新增，protobuf序列化需后续protoc重生成）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1858,6 +1860,14 @@ func (x *OnlineStatus) GetPlatformIDs() []int32 {
 		return x.PlatformIDs
 	}
 	return nil
+}
+
+// GetDeviceID 获取设备ID（P1新增，protobuf序列化需后续protoc重生成）
+func (x *OnlineStatus) GetDeviceID() string {
+	if x != nil {
+		return x.DeviceID
+	}
+	return ""
 }
 
 // 获取用户状态请求
@@ -1966,6 +1976,7 @@ type SetUserStatusReq struct {
 	PlatformID    int32                  `protobuf:"varint,3,opt,name=platformID,proto3" json:"platformID,omitempty"`     // 平台ID
 	ConnID        string                 `protobuf:"bytes,4,opt,name=connID,proto3" json:"connID,omitempty"`              // 连接ID
 	IsBackground  bool                   `protobuf:"varint,5,opt,name=isBackground,proto3" json:"isBackground,omitempty"` // 是否后台运行
+	DeviceID      string                 `json:"deviceID,omitempty"`                                                      // 设备ID（P1新增，protobuf序列化需后续protoc重生成）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2035,6 +2046,14 @@ func (x *SetUserStatusReq) GetIsBackground() bool {
 	return false
 }
 
+// GetDeviceID 获取设备ID（P1新增，protobuf序列化需后续protoc重生成）
+func (x *SetUserStatusReq) GetDeviceID() string {
+	if x != nil {
+		return x.DeviceID
+	}
+	return ""
+}
+
 // 设置用户状态响应
 type SetUserStatusResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2079,6 +2098,7 @@ type UserOnlineStatus struct {
 	ConnID        string                 `protobuf:"bytes,2,opt,name=connID,proto3" json:"connID,omitempty"`           // 连接ID
 	Online        []int32                `protobuf:"varint,3,rep,packed,name=online,proto3" json:"online,omitempty"`   // 上线平台列表
 	Offline       []int32                `protobuf:"varint,4,rep,packed,name=offline,proto3" json:"offline,omitempty"` // 下线平台列表
+	DeviceID      string                 `json:"deviceID,omitempty"`                                                   // 设备ID（P1新增，protobuf序列化需后续protoc重生成）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2139,6 +2159,14 @@ func (x *UserOnlineStatus) GetOffline() []int32 {
 		return x.Offline
 	}
 	return nil
+}
+
+// GetDeviceID 获取设备ID（P1新增，protobuf序列化需后续protoc重生成）
+func (x *UserOnlineStatus) GetDeviceID() string {
+	if x != nil {
+		return x.DeviceID
+	}
+	return ""
 }
 
 // 批量设置用户在线状态请求

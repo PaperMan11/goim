@@ -29,26 +29,12 @@ func NewGetAdminTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Get
 }
 
 func (l *GetAdminTokenLogic) GetAdminToken(req *auth.GetAdminTokenReq) (*auth.GetAdminTokenResp, error) {
-	// todo check admin
-	isAdmin, err := l.svcCtx.AuthVerify.IsIMAdmin(l.ctx, req.UserID)
-	if err != nil {
-		l.Errorf("failed to check admin, userID: %s, err: %v", req.UserID, err)
+	if err := requireUserIsAdmin(l.ctx, l.svcCtx, l, req.UserID); err != nil {
 		return nil, err
-	}
-	if !isAdmin {
-		l.Errorf("user %s is not admin", req.UserID)
-		return nil, nil
 	}
 
-	// check user
-	isValid, err := l.svcCtx.AuthVerify.IsValidUser(l.ctx, req.UserID)
-	if err != nil {
-		l.Errorf("failed to check user, userID: %s, err: %v", req.UserID, err)
+	if err := requireUserIsValid(l.ctx, l.svcCtx, l, req.UserID); err != nil {
 		return nil, err
-	}
-	if !isValid {
-		l.Errorf("user %s is not valid", req.UserID)
-		return nil, nil
 	}
 
 	// generate admin token

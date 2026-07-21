@@ -2,6 +2,7 @@ package msg
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
@@ -9,7 +10,12 @@ import (
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+)
+
+var (
+	ErrMsgNotFound = errors.New("message not found")
 )
 
 type MsgModel interface {
@@ -68,6 +74,9 @@ func (m *defaultMsgModel) FindBySeq(ctx context.Context, conversationID string, 
 		"seq":             seq,
 	})
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrMsgNotFound
+		}
 		return nil, err
 	}
 	return &msg, nil
@@ -78,6 +87,9 @@ func (m *defaultMsgModel) FindLatestMsg(ctx context.Context, conversationID stri
 	opts := options.FindOne().SetSort(bson.M{"seq": -1})
 	err := m.mod.FindOne(ctx, &msg, bson.M{"conversation_id": conversationID}, opts)
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrMsgNotFound
+		}
 		return nil, err
 	}
 	return &msg, nil

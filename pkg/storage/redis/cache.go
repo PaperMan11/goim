@@ -13,34 +13,81 @@ import (
 )
 
 const (
-	NilMarker    = "null"
-	verKeySuffix = ":ver"
+	NilMarker = "null"
 
-	// DefaultDoubleDeleteMinMs 延时双删的默认最小延迟（毫秒）。
 	DefaultDoubleDeleteMinMs = 200
-	// DefaultDoubleDeleteMaxMs 延时双删的默认最大延迟（毫秒）。
 	DefaultDoubleDeleteMaxMs = 500
 )
 
+type cachedEnvelope struct {
+	V int64           `json:"v"`
+	D json.RawMessage `json:"d"`
+}
+
 var (
 	casSetScript = goredis.NewScript(`
--- KEYS[1] = dataKey, KEYS[2] = versionKey
--- ARGV[1] = jsonData (or NilMarker for nil), ARGV[2] = ttlSeconds, ARGV[3] = newVersion
--- Returns 1 if wrote, 0 if skipped (existing version >= newVersion or newer)
-local existVer = redis.call('GET', KEYS[2])
-if existVer then
-    if tonumber(existVer) >= tonumber(ARGV[3]) then
+-- KEYS[1] = cacheKey (单 key，合并存储 {v, d} JSON，完全兼容 Redis Cluster，无跨 slot)
+-- ARGV[1] = 最终写入 JSON 字符串（已在 client 端把 version + data 合并好）
+-- ARGV[2] = ttlSeconds
+-- ARGV[3] = newVersion (字符串)
+-- 返回 1 = 已写入，0 = 已存在更新版本，跳过
+local raw = redis.call('GET', KEYS[1])
+if raw then
+    local ok, cur = pcall(cjson.decode, raw)
+    if ok and cur and type(cur.v) == 'number' and cur.v >= tonumber(ARGV[3]) then
         return 0
     end
 end
 redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
-redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[2])
 return 1
 `)
 )
 
-func cacheVerKey(dataKey string) string {
-	return dataKey + verKeySuffix
+func newNilRawEnvelope() json.RawMessage { return json.RawMessage(NilMarker) }
+
+func marshalEnvelopeRaw(version int64, inner json.RawMessage) ([]byte, error) {
+	if len(inner) == 0 {
+		inner = newNilRawEnvelope()
+	}
+	env := cachedEnvelope{V: version, D: inner}
+	return json.Marshal(&env)
+}
+
+func marshalEnvelopeAny(version int64, value any) ([]byte, error) {
+	var inner json.RawMessage
+	if value == nil {
+		inner = newNilRawEnvelope()
+	} else {
+		data, err := json.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		inner = json.RawMessage(data)
+	}
+	return marshalEnvelopeRaw(version, inner)
+}
+
+func marshalEnvelopeString(version int64, value string) ([]byte, error) {
+	inner, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return marshalEnvelopeRaw(version, json.RawMessage(inner))
+}
+
+func unmarshalEnvelope(data []byte) (*cachedEnvelope, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	var env cachedEnvelope
+	if err := json.Unmarshal(data, &env); err != nil {
+		return nil, err
+	}
+	return &env, nil
+}
+
+func (e *cachedEnvelope) isNil() bool {
+	return e == nil || len(e.D) == 0 || string(e.D) == NilMarker
 }
 
 func CacheGet(ctx context.Context, rdb goredis.UniversalClient, key string, result any) (found bool, err error) {
@@ -57,10 +104,15 @@ func CacheGet(ctx context.Context, rdb goredis.UniversalClient, key string, resu
 	if len(data) == 0 {
 		return false, nil
 	}
-	if string(data) == NilMarker {
+	env, err := unmarshalEnvelope(data)
+	if err != nil || env == nil {
+		_ = rdb.Del(ctx, key).Err()
+		return false, nil
+	}
+	if env.isNil() {
 		return true, nil
 	}
-	if err := json.Unmarshal(data, result); err != nil {
+	if err := json.Unmarshal(env.D, result); err != nil {
 		_ = rdb.Del(ctx, key).Err()
 		return false, nil
 	}
@@ -71,26 +123,26 @@ func CacheSet(ctx context.Context, rdb goredis.UniversalClient, key string, valu
 	if rdb == nil {
 		return nil
 	}
-	ttl := time.Duration(ttlSeconds) * time.Second
-	if value == nil {
-		return rdb.Set(ctx, key, NilMarker, ttl).Err()
-	}
-	data, err := json.Marshal(value)
+	payload, err := marshalEnvelopeAny(0, value)
 	if err != nil {
 		return err
 	}
-	return rdb.Set(ctx, key, data, ttl).Err()
+	return rdb.Set(ctx, key, payload, time.Duration(ttlSeconds)*time.Second).Err()
 }
 
 func CacheDel(ctx context.Context, rdb goredis.UniversalClient, keys ...string) error {
 	if rdb == nil || len(keys) == 0 {
 		return nil
 	}
-	delKeys := make([]string, 0, len(keys)*2)
+	pipe := rdb.Pipeline()
 	for _, k := range keys {
-		delKeys = append(delKeys, k, cacheVerKey(k))
+		if k == "" {
+			continue
+		}
+		pipe.Del(ctx, k)
 	}
-	return rdb.Del(ctx, delKeys...).Err()
+	_, err := pipe.Exec(ctx)
+	return err
 }
 
 func CacheGetString(ctx context.Context, rdb goredis.UniversalClient, key string) (val string, found bool, err error) {
@@ -107,14 +159,31 @@ func CacheGetString(ctx context.Context, rdb goredis.UniversalClient, key string
 	if data == "" {
 		return "", false, nil
 	}
-	return data, true, nil
+	env, err := unmarshalEnvelope([]byte(data))
+	if err != nil || env == nil {
+		_ = rdb.Del(ctx, key).Err()
+		return "", false, nil
+	}
+	if env.isNil() {
+		return NilMarker, true, nil
+	}
+	var s string
+	if err := json.Unmarshal(env.D, &s); err != nil {
+		_ = rdb.Del(ctx, key).Err()
+		return "", false, nil
+	}
+	return s, true, nil
 }
 
 func CacheSetString(ctx context.Context, rdb goredis.UniversalClient, key string, value string, ttlSeconds int) error {
 	if rdb == nil {
 		return nil
 	}
-	return rdb.Set(ctx, key, value, time.Duration(ttlSeconds)*time.Second).Err()
+	payload, err := marshalEnvelopeString(0, value)
+	if err != nil {
+		return err
+	}
+	return rdb.Set(ctx, key, payload, time.Duration(ttlSeconds)*time.Second).Err()
 }
 
 func CacheIsNil(result any) bool {
@@ -122,48 +191,22 @@ func CacheIsNil(result any) bool {
 	case nil:
 		return true
 	case string:
-		return v == ""
+		return v == "" || v == NilMarker
 	}
 	return false
 }
 
-// CacheSetCAS 以「版本号原子比对」的方式写入 JSON 缓存。
-//
-// 通过 Lua 脚本在 Redis 侧保证：仅当 Redis 上已存在的 versionKey 值 < newVersion（或 versionKey 尚不存在）时，
-// 才同时写入 dataKey 与 versionKey（两者 TTL 相同）。
-//
-// 典型用法：
-//
-//	dbUser, err := mongo.FindOne(...)
-//	if err != nil {
-//	    // 空值缓存 version 恒为 0，真实数据写入后会自动将其覆盖
-//	    sredis.CacheSetCAS(ctx, rdb, key, nil, 0, ttl)
-//	} else {
-//	    sredis.CacheSetCAS(ctx, rdb, key, dbUser, dbUser.UpdatedAt.UnixMilli(), ttl)
-//	}
-//
-// newVersion 必须单调递增（如 UpdatedAt.UnixMilli()）；写 nil 会序列化为 NilMarker。
-// 返回 wrote=true 表示实际写入，false 表示因「Redis 上已有更新版本」而跳过。
 func CacheSetCAS(ctx context.Context, rdb goredis.UniversalClient, key string, value any, newVersion int64, ttlSeconds int) (wrote bool, err error) {
 	if rdb == nil {
 		return false, nil
 	}
-
-	var payload string
-	if value == nil {
-		payload = NilMarker
-	} else {
-		data, jerr := json.Marshal(value)
-		if jerr != nil {
-			return false, jerr
-		}
-		payload = string(data)
+	payload, err := marshalEnvelopeAny(newVersion, value)
+	if err != nil {
+		return false, err
 	}
-
-	vk := cacheVerKey(key)
 	res, err := casSetScript.Run(ctx, rdb,
-		[]string{key, vk},
-		payload, strconv.Itoa(ttlSeconds), convert.ToString(newVersion),
+		[]string{key},
+		string(payload), strconv.Itoa(ttlSeconds), convert.ToString(newVersion),
 	).Int()
 	if err != nil {
 		return false, err
@@ -171,16 +214,17 @@ func CacheSetCAS(ctx context.Context, rdb goredis.UniversalClient, key string, v
 	return res == 1, nil
 }
 
-// CacheSetCASString 是 CacheSetCAS 的字符串版本，用法完全一致，仅 value 类型为 string。
-// 典型用于存在性标记、0/1 布尔、枚举数字等简单字段。
 func CacheSetCASString(ctx context.Context, rdb goredis.UniversalClient, key string, value string, newVersion int64, ttlSeconds int) (wrote bool, err error) {
 	if rdb == nil {
 		return false, nil
 	}
-	vk := cacheVerKey(key)
+	payload, err := marshalEnvelopeString(newVersion, value)
+	if err != nil {
+		return false, err
+	}
 	res, err := casSetScript.Run(ctx, rdb,
-		[]string{key, vk},
-		value, strconv.Itoa(ttlSeconds), strconv.FormatInt(newVersion, 10),
+		[]string{key},
+		string(payload), strconv.Itoa(ttlSeconds), strconv.FormatInt(newVersion, 10),
 	).Int()
 	if err != nil {
 		return false, err

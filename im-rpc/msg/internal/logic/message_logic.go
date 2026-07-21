@@ -3,7 +3,6 @@ package logic
 import (
 	"context"
 
-	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	pbmsg "github.com/PaperMan11/goim/pkg/protocol/msg"
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
@@ -26,13 +25,8 @@ func (l *Logic) validateMsg(ctx context.Context, msgData *sdkws.MsgData) error {
 
 func (l *Logic) SendMsg(ctx context.Context, req *pbmsg.SendMsgReq) (*pbmsg.SendMsgResp, error) {
 	msgData := req.MsgData
-	ok, err := l.svcCtx.AuthVerifier.CheckAccess(ctx, msgData.SendID)
-	if err != nil {
-		l.Errorf("check access error: %v", err)
-		return nil, errx.InternalError.WrapWithError(err)
-	}
-	if !ok {
-		return nil, errx.NoPermissionError
+	if err := l.requireSelfOrAdmin(msgData.SendID); err != nil {
+		return nil, err
 	}
 
 	return &pbmsg.SendMsgResp{
