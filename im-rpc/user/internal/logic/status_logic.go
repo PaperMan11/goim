@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
@@ -23,29 +24,66 @@ func (l *Logic) GetUserStatus(ctx context.Context, req *pbuser.GetUserStatusReq)
 		return nil, err
 	}
 
-	statusMap := make(map[string]*pbuser.OnlineStatus)
-	for _, status := range statuses {
-		if _, ok := statusMap[status.UserID]; !ok {
-			statusMap[status.UserID] = &pbuser.OnlineStatus{
-				UserID:      status.UserID,
-				Status:      int32(status.Status),
-				PlatformIDs: []int32{},
-			}
+	type onlineAgg struct {
+		*pbuser.OnlineStatus
+		platformSet map[int32]struct{}
+	}
+	aggMap := make(map[string]*onlineAgg)
+
+	for _, uid := range req.GetUserIDs() {
+		if uid == "" {
+			continue
 		}
-		statusMap[status.UserID].PlatformIDs = append(statusMap[status.UserID].PlatformIDs, int32(status.PlatformID))
+		if _, dup := aggMap[uid]; dup {
+			continue
+		}
+		aggMap[uid] = &onlineAgg{
+			OnlineStatus: &pbuser.OnlineStatus{
+				UserID:      uid,
+				Status:      constant.Offline,
+				PlatformIDs: make([]int32, 0, 4),
+			},
+			platformSet: make(map[int32]struct{}),
+		}
 	}
 
-	var statusList []*pbuser.OnlineStatus
-	for _, status := range statusMap {
-		statusList = append(statusList, status)
+	for _, status := range statuses {
+		if status == nil {
+			continue
+		}
+		agg, ok := aggMap[status.UserID]
+		if !ok {
+			agg = &onlineAgg{
+				OnlineStatus: &pbuser.OnlineStatus{
+					UserID:      status.UserID,
+					Status:      constant.Offline,
+					PlatformIDs: make([]int32, 0, 4),
+				},
+				platformSet: make(map[int32]struct{}),
+			}
+			aggMap[status.UserID] = agg
+		}
+
+		if status.Status == 1 {
+			agg.Status = constant.Online
+		}
+
+		p := int32(status.PlatformID)
+		if _, dup := agg.platformSet[p]; !dup {
+			agg.platformSet[p] = struct{}{}
+			agg.PlatformIDs = append(agg.PlatformIDs, p)
+		}
+	}
+
+	statusList := make([]*pbuser.OnlineStatus, 0, len(aggMap))
+	for _, agg := range aggMap {
+		statusList = append(statusList, agg.OnlineStatus)
 	}
 
 	return &pbuser.GetUserStatusResp{StatusList: statusList}, nil
 }
 
 func (l *Logic) SetUserStatus(ctx context.Context, req *pbuser.SetUserStatusReq) (*pbuser.SetUserStatusResp, error) {
-	// P1-3: 把 request 里的 DeviceID 透传给 UserModel.UpdateUserStatus，
-	// 实现 user+platform+device 粒度的在线状态 upsert。
 	err := l.svcCtx.UserModel.UpdateUserStatus(ctx,
 		req.GetUserID(),
 		int(req.GetPlatformID()),

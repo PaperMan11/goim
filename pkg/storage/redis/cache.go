@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/utils/convert"
@@ -206,7 +205,7 @@ func CacheSetCAS(ctx context.Context, rdb goredis.UniversalClient, key string, v
 	}
 	res, err := casSetScript.Run(ctx, rdb,
 		[]string{key},
-		string(payload), strconv.Itoa(ttlSeconds), convert.ToString(newVersion),
+		string(payload), convert.ToString(ttlSeconds), convert.ToString(newVersion),
 	).Int()
 	if err != nil {
 		return false, err
@@ -224,7 +223,7 @@ func CacheSetCASString(ctx context.Context, rdb goredis.UniversalClient, key str
 	}
 	res, err := casSetScript.Run(ctx, rdb,
 		[]string{key},
-		string(payload), strconv.Itoa(ttlSeconds), strconv.FormatInt(newVersion, 10),
+		string(payload), convert.ToString(ttlSeconds), convert.ToString(newVersion),
 	).Int()
 	if err != nil {
 		return false, err

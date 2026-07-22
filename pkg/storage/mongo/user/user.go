@@ -488,7 +488,6 @@ func (m *defaultUserModel) GetUserStatus(ctx context.Context, userIDs []string) 
 }
 
 // SetUserOnlineStatus 批量写入用户在线状态快照。
-
 func (m *defaultUserModel) SetUserOnlineStatus(ctx context.Context, statuses []*model.UserStatus) error {
 	if len(statuses) == 0 {
 		return nil
@@ -496,8 +495,6 @@ func (m *defaultUserModel) SetUserOnlineStatus(ctx context.Context, statuses []*
 
 	models := make([]mongo.WriteModel, 0, len(statuses))
 	for _, s := range statuses {
-		// ========== 唯一键 filter ==========
-		// P1 三列唯一键（device_id 空则退化到 P0 两列，保证旧调用方行为不变）
 		filter := bson.M{
 			"user_id":     s.UserID,
 			"platform_id": s.PlatformID,
@@ -506,7 +503,6 @@ func (m *defaultUserModel) SetUserOnlineStatus(ctx context.Context, statuses []*
 			filter["device_id"] = s.DeviceID
 		}
 
-		// ========== $set：每次写入都刷新 ==========
 		setDoc := bson.M{
 			"status":           s.Status,
 			"last_online_time": s.LastOnlineTime,
@@ -518,7 +514,6 @@ func (m *defaultUserModel) SetUserOnlineStatus(ctx context.Context, statuses []*
 			setDoc["conn_id"] = s.ConnID
 		}
 
-		// ========== $setOnInsert：只有首次插入才写 ==========
 		setOnInsert := bson.M{
 			"created_at":  s.CreatedAt,
 			"user_id":     s.UserID,

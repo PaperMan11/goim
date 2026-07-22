@@ -12,10 +12,12 @@ import (
 	"github.com/PaperMan11/goim/pkg/rpcclient/relationservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	userModel "github.com/PaperMan11/goim/pkg/storage/mongo/user"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -23,6 +25,7 @@ type ServiceContext struct {
 	Config       config.Config
 	AuthVerifier authverify.AuthVerifyService
 	LocalCache   localcache.LocalCache
+	RedisCli     redis.UniversalClient
 
 	// mongo models
 	UserModel userModel.UserModel
@@ -34,21 +37,22 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
-	// mongo：按集合粒度分别创建独立的 *mon.Model 句柄，和 NewGroupModel / NewFriendModel 保持一致
-	userMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUser)
-	statusMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserStatus)
-	cmdMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserCommand)
-	userModel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo)
-
 	// local cache
 	redisCli := sredis.MustNewRedis(c.Redis)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()
 
+	userMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUser)
+	statusMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserStatus)
+	cmdMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserCommand)
+	userInnerModel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo)
+	userCacheModel := userModel.NewCachedUserModel(userInnerModel, redisCli, syncx.NewSingleFlight())
+
 	sc := &ServiceContext{
 		Config:     c,
-		UserModel:  userModel,
+		UserModel:  userCacheModel,
 		LocalCache: localCache,
+		RedisCli:   redisCli,
 	}
 	sc.initRpcClient()
 	return sc
@@ -86,6 +90,9 @@ func (sc *ServiceContext) initRpcClient() {
 func (sc *ServiceContext) Close() error {
 	if sc.LocalCache != nil {
 		sc.LocalCache.Close()
+	}
+	if sc.RedisCli != nil {
+		sc.RedisCli.Close()
 	}
 	return nil
 }

@@ -10,15 +10,14 @@
 package user
 
 import (
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
-
 	conversation "github.com/PaperMan11/goim/pkg/protocol/conversation"
 	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	wrapperspb "github.com/PaperMan11/goim/pkg/protocol/wrapperspb"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
@@ -1806,7 +1805,6 @@ type OnlineStatus struct {
 	UserID        string                 `protobuf:"bytes,1,opt,name=userID,proto3" json:"userID,omitempty"`                   // 用户ID
 	Status        int32                  `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`                  // 在线状态(1-在线, 0-离线)
 	PlatformIDs   []int32                `protobuf:"varint,3,rep,packed,name=platformIDs,proto3" json:"platformIDs,omitempty"` // 在线平台ID列表
-	DeviceID      string                 `json:"deviceID,omitempty"`                                                           // 设备ID（P1新增，protobuf序列化需后续protoc重生成）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1860,14 +1858,6 @@ func (x *OnlineStatus) GetPlatformIDs() []int32 {
 		return x.PlatformIDs
 	}
 	return nil
-}
-
-// GetDeviceID 获取设备ID（P1新增，protobuf序列化需后续protoc重生成）
-func (x *OnlineStatus) GetDeviceID() string {
-	if x != nil {
-		return x.DeviceID
-	}
-	return ""
 }
 
 // 获取用户状态请求
@@ -1976,7 +1966,7 @@ type SetUserStatusReq struct {
 	PlatformID    int32                  `protobuf:"varint,3,opt,name=platformID,proto3" json:"platformID,omitempty"`     // 平台ID
 	ConnID        string                 `protobuf:"bytes,4,opt,name=connID,proto3" json:"connID,omitempty"`              // 连接ID
 	IsBackground  bool                   `protobuf:"varint,5,opt,name=isBackground,proto3" json:"isBackground,omitempty"` // 是否后台运行
-	DeviceID      string                 `json:"deviceID,omitempty"`                                                      // 设备ID（P1新增，protobuf序列化需后续protoc重生成）
+	DeviceID      string                 `protobuf:"bytes,6,opt,name=deviceID,proto3" json:"deviceID,omitempty"`          // 设备ID（P1新增，升级到 user+platform+device 粒度）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2046,7 +2036,6 @@ func (x *SetUserStatusReq) GetIsBackground() bool {
 	return false
 }
 
-// GetDeviceID 获取设备ID（P1新增，protobuf序列化需后续protoc重生成）
 func (x *SetUserStatusReq) GetDeviceID() string {
 	if x != nil {
 		return x.DeviceID
@@ -2098,7 +2087,7 @@ type UserOnlineStatus struct {
 	ConnID        string                 `protobuf:"bytes,2,opt,name=connID,proto3" json:"connID,omitempty"`           // 连接ID
 	Online        []int32                `protobuf:"varint,3,rep,packed,name=online,proto3" json:"online,omitempty"`   // 上线平台列表
 	Offline       []int32                `protobuf:"varint,4,rep,packed,name=offline,proto3" json:"offline,omitempty"` // 下线平台列表
-	DeviceID      string                 `json:"deviceID,omitempty"`                                                   // 设备ID（P1新增，protobuf序列化需后续protoc重生成）
+	DeviceID      string                 `protobuf:"bytes,5,opt,name=deviceID,proto3" json:"deviceID,omitempty"`       // 设备ID（P1新增，user+platform+device 粒度 upsert）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2161,7 +2150,6 @@ func (x *UserOnlineStatus) GetOffline() []int32 {
 	return nil
 }
 
-// GetDeviceID 获取设备ID（P1新增，protobuf序列化需后续protoc重生成）
 func (x *UserOnlineStatus) GetDeviceID() string {
 	if x != nil {
 		return x.DeviceID
@@ -4335,7 +4323,7 @@ const file_user_user_proto_rawDesc = "" +
 	"\x11getUserStatusResp\x129\n" +
 	"\n" +
 	"statusList\x18\x01 \x03(\v2\x19.openim.user.onlineStatusR\n" +
-	"statusList\"\x9e\x01\n" +
+	"statusList\"\xba\x01\n" +
 	"\x10setUserStatusReq\x12\x16\n" +
 	"\x06userID\x18\x01 \x01(\tR\x06userID\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\x05R\x06status\x12\x1e\n" +
@@ -4343,13 +4331,15 @@ const file_user_user_proto_rawDesc = "" +
 	"platformID\x18\x03 \x01(\x05R\n" +
 	"platformID\x12\x16\n" +
 	"\x06connID\x18\x04 \x01(\tR\x06connID\x12\"\n" +
-	"\fisBackground\x18\x05 \x01(\bR\fisBackground\"\x13\n" +
-	"\x11setUserStatusResp\"t\n" +
+	"\fisBackground\x18\x05 \x01(\bR\fisBackground\x12\x1a\n" +
+	"\bdeviceID\x18\x06 \x01(\tR\bdeviceID\"\x13\n" +
+	"\x11setUserStatusResp\"\x90\x01\n" +
 	"\x10userOnlineStatus\x12\x16\n" +
 	"\x06userID\x18\x01 \x01(\tR\x06userID\x12\x16\n" +
 	"\x06connID\x18\x02 \x01(\tR\x06connID\x12\x16\n" +
 	"\x06online\x18\x03 \x03(\x05R\x06online\x12\x18\n" +
-	"\aoffline\x18\x04 \x03(\x05R\aoffline\"O\n" +
+	"\aoffline\x18\x04 \x03(\x05R\aoffline\x12\x1a\n" +
+	"\bdeviceID\x18\x05 \x01(\tR\bdeviceID\"O\n" +
 	"\x16setUserOnlineStatusReq\x125\n" +
 	"\x06status\x18\x01 \x03(\v2\x1d.openim.user.userOnlineStatusR\x06status\"\x19\n" +
 	"\x17setUserOnlineStatusResp\"\xc0\x01\n" +

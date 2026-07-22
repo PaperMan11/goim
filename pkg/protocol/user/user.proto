@@ -215,7 +215,6 @@ message onlineStatus {
   string userID = 1;           // 用户ID
   int32 status = 2;            // 在线状态(1-在线, 0-离线)
   repeated int32 platformIDs = 3; // 在线平台ID列表
-  string deviceID = 4;         // 设备ID（P1新增，同平台多设备时用于区分单设备在线/离线）
 }
 
 // 获取用户状态请求
