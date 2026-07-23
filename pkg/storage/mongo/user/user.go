@@ -74,10 +74,6 @@ func NewUserModel(userMod, statusMod, cmdMod *mon.Model, barrier syncx.SingleFli
 // 索引：幂等创建必需的唯一索引 / 查询索引
 // =====================================================
 
-// ensureUserStatusIndexes 为 im_user_status 集合创建必需的唯一索引与查询索引。
-//
-// 启动时幂等：先 drop 旧 P0 索引（不存在就跳过），再创建 P1 新索引；
-// 结构冲突（如旧数据里唯一键字段不同导致创建失败）会返回错误，上层吞掉日志告警。
 func (m *defaultUserModel) ensureUserStatusIndexes(ctx context.Context) error {
 	uniq := mongo.IndexModel{
 		Keys: bson.D{
