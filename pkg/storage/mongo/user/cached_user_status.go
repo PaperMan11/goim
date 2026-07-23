@@ -98,7 +98,7 @@ func (c *userStatusCache) zRowsForUser(ctx context.Context, userID string) (rows
 				_ = rdb.Del(ctx, zKey).Err()
 			}
 		} else {
-			_ = sredis.CacheDelOnEmptyZ(ctx, rdb, zKey, nilKey, c.jitterTTL(userStatusZNilExpireSeconds))
+			_, _ = sredis.CacheDelOnEmptyZ(ctx, rdb, zKey, nilKey, c.jitterTTL(userStatusZNilExpireSeconds))
 		}
 	}
 
@@ -144,6 +144,7 @@ func (c *userStatusCache) SetOnline(ctx context.Context, userID string, platform
 	}
 	_, _ = sredis.CacheZAddGT(ctx, c.redis, zKey, float64(scoreMs), member, expire)
 	_ = c.redis.Del(ctx, nilKey).Err()
+	c.AddToOnlineSet(ctx, userID)
 }
 
 func (c *userStatusCache) SetOffline(ctx context.Context, userID string, platformID int) {
@@ -154,7 +155,10 @@ func (c *userStatusCache) SetOffline(ctx context.Context, userID string, platfor
 	nilKey := GetUserStatusZNilKey(userID)
 	member := PlatformZMember(platformID)
 	_, _ = sredis.CacheZRem(ctx, c.redis, zKey, member)
-	_ = sredis.CacheDelOnEmptyZ(ctx, c.redis, zKey, nilKey, c.jitterTTL(userStatusZNilExpireSeconds))
+	deleted, _ := sredis.CacheDelOnEmptyZ(ctx, c.redis, zKey, nilKey, c.jitterTTL(userStatusZNilExpireSeconds))
+	if deleted {
+		c.RemoveFromOnlineSet(ctx, userID)
+	}
 }
 
 func (c *userStatusCache) SetNilMarker(ctx context.Context, userID string) {
@@ -165,6 +169,28 @@ func (c *userStatusCache) SetNilMarker(ctx context.Context, userID string) {
 	nilKey := GetUserStatusZNilKey(userID)
 	_ = c.redis.Del(ctx, zKey).Err()
 	_, _ = sredis.CacheSetCAS(ctx, c.redis, nilKey, nil, 0, c.jitterTTL(userStatusZNilExpireSeconds))
+	c.RemoveFromOnlineSet(ctx, userID)
+}
+
+func (c *userStatusCache) AddToOnlineSet(ctx context.Context, userID string) {
+	if userID == "" || c.redis == nil {
+		return
+	}
+	_ = c.redis.SAdd(ctx, GetUserOnlineSetKey(), userID).Err()
+}
+
+func (c *userStatusCache) RemoveFromOnlineSet(ctx context.Context, userID string) {
+	if userID == "" || c.redis == nil {
+		return
+	}
+	_ = c.redis.SRem(ctx, GetUserOnlineSetKey(), userID).Err()
+}
+
+func (c *userStatusCache) GetAllOnlineUsers(ctx context.Context) ([]string, error) {
+	if c.redis == nil {
+		return nil, nil
+	}
+	return c.redis.SMembers(ctx, GetUserOnlineSetKey()).Result()
 }
 
 func (c *userStatusCache) SetOnlineBatch(ctx context.Context, statuses []*model.UserStatus) {
@@ -221,8 +247,12 @@ func (c *userStatusCache) SetOnlineBatch(ctx context.Context, statuses []*model.
 
 		if len(pu.online) > 0 {
 			_ = c.redis.Del(ctx, nilKey).Err()
+			c.AddToOnlineSet(ctx, userID)
 		} else {
-			_ = sredis.CacheDelOnEmptyZ(ctx, c.redis, zKey, nilKey, c.jitterTTL(userStatusZNilExpireSeconds))
+			deleted, _ := sredis.CacheDelOnEmptyZ(ctx, c.redis, zKey, nilKey, c.jitterTTL(userStatusZNilExpireSeconds))
+			if deleted {
+				c.RemoveFromOnlineSet(ctx, userID)
+			}
 		}
 	}
 }

@@ -22,6 +22,9 @@ const (
 	// 对"查过 DB 确认该 user 无任何在线平台"的用户，打一个短 TTL 的 STRING 标记，
 	// 防止 ZRANGE 返回空（语义上既可能是没上线过，也可能是刚从全离线变过来）导致每次都打 DB。
 	KeyUserStatusZNil = "mongo:user:status:zn:%s"
+	// 全局在线用户集合，用于快速统计在线人数和获取在线用户列表。
+	// 用户任一平台上线时添加到该集合，全部平台离线时移除。
+	KeyUserOnlineSet = "mongo:user:online:set"
 )
 
 // -------------------------- 用户信息 Key 生成函数 --------------------------
@@ -55,6 +58,11 @@ func GetUserStatusZKey(userID string) string {
 // 查过 DB 确认"当前所有平台全离线"时写入，短 TTL，下一次查到直接跳过，防击穿。
 func GetUserStatusZNilKey(userID string) string {
 	return fmt.Sprintf(KeyUserStatusZNil, userID)
+}
+
+// GetUserOnlineSetKey 返回全局在线用户集合的缓存 key。
+func GetUserOnlineSetKey() string {
+	return KeyUserOnlineSet
 }
 
 // PlatformZMember 将平台 ID 转换为 ZSET member 名称。

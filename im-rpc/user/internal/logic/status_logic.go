@@ -98,10 +98,6 @@ func (l *Logic) SetUserStatus(ctx context.Context, req *pbuser.SetUserStatusReq)
 
 func (l *Logic) SetUserOnlineStatus(ctx context.Context, req *pbuser.SetUserOnlineStatusReq) (*pbuser.SetUserOnlineStatusResp, error) {
 	var statuses []*model.UserStatus
-
-	// P1-2: 把网关传过来的 DeviceID / ConnID 填到 model.UserStatus 里，
-	//        让 mongo 层的 BulkUpsert 就能按 user+platform+device 三列唯一键精确去重。
-	//        P2 预留的 ExpireAt 默认给一个 24h 的过期窗口，配合 TTL 索引自动清僵尸。
 	now := timex.Now()
 	expireAt := now.Add(24 * time.Hour)
 

@@ -528,3 +528,45 @@ func (m *cachedUserModel) SetUserOnlineStatus(ctx context.Context, statuses []*m
 
 	return nil
 }
+
+func (m *cachedUserModel) GetAllOnlineUsers(ctx context.Context) ([]string, error) {
+	if m.userStatus == nil {
+		return m.UserModel.GetAllOnlineUsers(ctx)
+	}
+
+	userIDs, err := m.userStatus.GetAllOnlineUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(userIDs) > 0 {
+		return userIDs, nil
+	}
+
+	sfKey := "user:all_online"
+	v, err := m.barrier.Do(sfKey, func() (any, error) {
+		userIDs2, err2 := m.userStatus.GetAllOnlineUsers(ctx)
+		if err2 != nil {
+			return nil, err2
+		}
+		if len(userIDs2) > 0 {
+			return userIDs2, nil
+		}
+
+		dbUserIDs, errDB := m.UserModel.GetAllOnlineUsers(ctx)
+		if errDB != nil {
+			return nil, errDB
+		}
+
+		if len(dbUserIDs) > 0 {
+			for _, uid := range dbUserIDs {
+				m.userStatus.AddToOnlineSet(ctx, uid)
+			}
+		}
+
+		return dbUserIDs, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]string), nil
+}

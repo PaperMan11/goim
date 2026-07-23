@@ -131,21 +131,23 @@ func CacheExpireNX(ctx context.Context, rdb goredis.UniversalClient, key string,
 // 则 DEL 整个 key，避免 Redis 留下空 key 以及对应 Nil Marker 不生效的问题。
 // 若同时传入对应的 nilMarkerKey（可为空），则在 DEL 空 key 后顺手把 Nil Marker 写好（TTL = nilTTL 秒）。
 // 写入 Nil Marker 走的是 STRING CacheSetCAS with nil value + version 0（与 marker 模式一致）。
-func CacheDelOnEmptyZ(ctx context.Context, rdb goredis.UniversalClient, key, nilMarkerKey string, nilTTL int) error {
+// 返回值：deleted 表示 ZSET 是否被清空并删除（即用户是否全平台离线），err 表示错误。
+func CacheDelOnEmptyZ(ctx context.Context, rdb goredis.UniversalClient, key, nilMarkerKey string, nilTTL int) (deleted bool, err error) {
 	if rdb == nil || key == "" {
-		return nil
+		return false, nil
 	}
 	card, err := rdb.ZCard(ctx, key).Result()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if card > 0 {
-		return nil
+		return false, nil
 	}
 	// ZSET 为空：删掉空 key，顺手写 Nil Marker
+	deleted = true
 	_ = rdb.Del(ctx, key).Err()
 	if nilMarkerKey != "" && nilTTL > 0 {
 		_, _ = CacheSetCAS(ctx, rdb, nilMarkerKey, nil, 0, nilTTL)
 	}
-	return nil
+	return deleted, nil
 }
