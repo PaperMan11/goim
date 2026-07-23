@@ -464,13 +464,22 @@ func (m *cachedUserModel) zRowsForUser(ctx context.Context, userID string) (rows
 	}
 
 	// 3) 懒清理：检测到僵尸时，顺手 ZREMRANGEBYSCORE 清掉 score < cutoff 的所有 member
-	//    并在清空后补 Nil Marker + 删空 key
+	//    - 若仍有存活 member（!needDB）：清理后空 zset 可安全补 Nil Marker
+	//    - 若全部是僵尸（needDB=true）：**不要**在此写 Nil Marker，必须等 DB 回源确认全离线后再写
 	if hasZombie {
 		zKey := GetUserStatusZKey(userID)
 		nilKey := GetUserStatusZNilKey(userID)
 		maxScore := fmt.Sprintf("(%d", cutoff)
 		_, _ = sredis.CacheZRemRangeByScore(ctx, rdb, zKey, "-inf", maxScore)
-		_ = sredis.CacheDelOnEmptyZ(ctx, rdb, zKey, nilKey, m.jitterTTL(userStatusZNilExpireSeconds))
+		if !hasAlive {
+			// 全僵尸场景：只清 + 可能删空 key，不写 Nil Marker（等 DB 确认）
+			card, _ := rdb.ZCard(ctx, zKey).Result()
+			if card == 0 {
+				_ = rdb.Del(ctx, zKey).Err()
+			}
+		} else {
+			_ = sredis.CacheDelOnEmptyZ(ctx, rdb, zKey, nilKey, m.jitterTTL(userStatusZNilExpireSeconds))
+		}
 	}
 
 	// 4) 若 ZSET 有内容但全部是僵尸 → 缓存可信度低，需要回源 DB 再确认一次
@@ -508,7 +517,8 @@ func (m *cachedUserModel) GetUserStatus(ctx context.Context, userIDs []string) (
 	sum := sha1.Sum([]byte(strings.Join(missIDs, ",")))
 	sfKey := sfKeyPrefixBatchStatus + hex.EncodeToString(sum[:])
 
-	_, err := m.barrier.Do(sfKey, func() (any, error) {
+	sfRowsAny, err := m.barrier.Do(sfKey, func() (any, error) {
+		sfRows := make(map[string][]*model.UserStatus, len(missIDs))
 		realMiss := make([]string, 0, len(missIDs))
 		for _, uid := range missIDs {
 			rows, needDB, err2 := m.zRowsForUser(ctx, uid)
@@ -516,13 +526,13 @@ func (m *cachedUserModel) GetUserStatus(ctx context.Context, userIDs []string) (
 				return nil, err2
 			}
 			if !needDB {
-				result = append(result, rows...)
+				sfRows[uid] = rows
 				continue
 			}
 			realMiss = append(realMiss, uid)
 		}
 		if len(realMiss) == 0 {
-			return struct{}{}, nil
+			return sfRows, nil
 		}
 
 		dbRows, errDB := m.UserModel.GetUserStatus(ctx, realMiss)
@@ -563,20 +573,22 @@ func (m *cachedUserModel) GetUserStatus(ctx context.Context, userIDs []string) (
 				}
 			}
 
-			// 先把结果回填给调用方（按 platform 展开 Status=1 的 rows，与 ZSET 形态对齐）
-			// 另外 Status=0 的 DB rows 不写入 ZSET 也不返回，逻辑层会按 user 维度自行预填兜底。
+			// 按 platform 展开 Status=1 的 rows 写入当前 sf 返回结果（与 ZSET 形态对齐）
+			// Status=0 的 DB 行不写入 ZSET 也不返回，逻辑层自行按 user 预填兜底。
+			built := make([]*model.UserStatus, 0, len(onlineMax))
 			for member, ms := range onlineMax {
 				plat := ParsePlatformZMember(member)
 				if plat <= 0 {
 					continue
 				}
-				result = append(result, &model.UserStatus{
+				built = append(built, &model.UserStatus{
 					UserID:     uid,
 					PlatformID: plat,
 					Status:     1,
 					UpdatedAt:  time.UnixMilli(ms),
 				})
 			}
+			sfRows[uid] = built
 
 			if len(onlineMax) > 0 {
 				_, _ = sredis.CacheZAddGTBatch(ctx, m.redis, zKey, onlineMax, expire)
@@ -587,23 +599,14 @@ func (m *cachedUserModel) GetUserStatus(ctx context.Context, userIDs []string) (
 				_, _ = sredis.CacheSetCAS(ctx, m.redis, nilKey, nil, 0, nilTTL)
 			}
 		}
-		return struct{}{}, nil
+		return sfRows, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
+	sfRows, _ := sfRowsAny.(map[string][]*model.UserStatus)
 	for _, uid := range missIDs {
-		rows, needDB, err2 := m.zRowsForUser(ctx, uid)
-		if err2 != nil {
-			return nil, err2
-		}
-		if needDB {
-			continue
-		}
-		if len(rows) > 0 {
-			result = append(result, rows...)
-		}
+		result = append(result, sfRows[uid]...)
 	}
 
 	return result, nil
