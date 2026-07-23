@@ -45,7 +45,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	userMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUser)
 	statusMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserStatus)
 	cmdMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserCommand)
-	userInnerModel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo)
+	userInnerModel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo, syncx.NewSingleFlight())
 	userCacheModel := userModel.NewCachedUserModel(userInnerModel, redisCli, syncx.NewSingleFlight())
 
 	sc := &ServiceContext{

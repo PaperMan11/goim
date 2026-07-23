@@ -7,6 +7,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -55,16 +56,16 @@ type defaultUserModel struct {
 	userMod   *mon.Model
 	statusMod *mon.Model
 	cmdMod    *mon.Model
+	barrier   syncx.SingleFlight
 }
 
-func NewUserModel(userMod, statusMod, cmdMod *mon.Model) UserModel {
+func NewUserModel(userMod, statusMod, cmdMod *mon.Model, barrier syncx.SingleFlight) UserModel {
 	m := &defaultUserModel{
 		userMod:   userMod,
 		statusMod: statusMod,
 		cmdMod:    cmdMod,
+		barrier:   barrier,
 	}
-	// 启动时幂等创建索引：索引已存在时 mongo 直接跳过；
-	// 真正的结构冲突（如唯一字段变了）会返回错误，这里默认吞掉由上层兜底。
 	_ = m.ensureUserStatusIndexes(context.Background())
 	return m
 }
@@ -75,20 +76,9 @@ func NewUserModel(userMod, statusMod, cmdMod *mon.Model) UserModel {
 
 // ensureUserStatusIndexes 为 im_user_status 集合创建必需的唯一索引与查询索引。
 //
-// P1 升级：唯一键从 {user_id, platform_id}（平台级粒度，一个平台一行）
-// 升级到 {user_id, platform_id, device_id}（设备级粒度，支持同平台多设备）。
-//
 // 启动时幂等：先 drop 旧 P0 索引（不存在就跳过），再创建 P1 新索引；
 // 结构冲突（如旧数据里唯一键字段不同导致创建失败）会返回错误，上层吞掉日志告警。
 func (m *defaultUserModel) ensureUserStatusIndexes(ctx context.Context) error {
-	// 1) 清理 P0 阶段遗留的旧唯一索引（如果存在）。
-	//    mongo driver v2 DropOne 只返回一个 error 值，索引不存在会报错，忽略即可。
-	_ = m.statusMod.Collection.Indexes().DropOne(ctx, "uniq_user_platform")
-
-	// 2) P1 新唯一键：{user_id, platform_id, device_id}
-	//    device_id 为空串时 mongo 仍然把空串当作合法键值参与去重，
-	//    所以旧调用方（不传 deviceID）在同平台多设备场景下只会保留一行，
-	//    这是设计上的向后兼容行为（旧网关升级前仍能工作，只是无法区分多设备）。
 	uniq := mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "user_id", Value: 1},
@@ -101,9 +91,6 @@ func (m *defaultUserModel) ensureUserStatusIndexes(ctx context.Context) error {
 		return err
 	}
 
-	// 3) 常用过滤字段补普通索引：
-	//    GetAllOnlineUsers / GetUserStatus 的两个常用过滤字段补普通索引，
-	//    保证在线人数多、userIDs $in 列表长时性能不会退化到 COLLSCAN。
 	ordinary := []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "status", Value: 1}},
@@ -122,9 +109,6 @@ func (m *defaultUserModel) ensureUserStatusIndexes(ctx context.Context) error {
 		return err
 	}
 
-	// 4) P2 预留：TTL 索引在 expire_at 字段，自动清理超过过期时间的「僵尸」在线记录。
-	//    进程异常崩溃导致连接没走正常 onConnRemove 下线流程时，靠这个索引自动回收。
-	//    ExpireAfterSeconds=0 表示「文档里的 expire_at 时间点一过就删」。
 	ttl := mongo.IndexModel{
 		Keys:    bson.D{{Key: "expire_at", Value: 1}},
 		Options: options.Index().SetName("idx_expire_at_ttl").SetExpireAfterSeconds(0),
@@ -160,18 +144,28 @@ func (m *defaultUserModel) FindByIDs(ctx context.Context, userIDs []string) ([]*
 }
 
 func (m *defaultUserModel) FindByID(ctx context.Context, userID string) (*model.User, error) {
-	var user model.User
-	result, err := m.userMod.Collection.FindOne(ctx, bson.M{"user_id": userID})
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, ErrUserNotFound
+	if userID == "" {
+		return nil, ErrUserNotFound
+	}
+	sfKey := "user:find:id:" + userID
+	v, err := m.barrier.Do(sfKey, func() (any, error) {
+		var user model.User
+		result, err := m.userMod.Collection.FindOne(ctx, bson.M{"user_id": userID})
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, ErrUserNotFound
+			}
+			return nil, err
 		}
+		if err := result.Decode(&user); err != nil {
+			return nil, err
+		}
+		return &user, nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	if err := result.Decode(&user); err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return v.(*model.User), nil
 }
 
 func (m *defaultUserModel) Update(ctx context.Context, user *model.User) error {
@@ -403,18 +397,28 @@ func (m *defaultUserModel) SetGlobalRecvMsgOpt(ctx context.Context, userID strin
 }
 
 func (m *defaultUserModel) GetGlobalRecvMsgOpt(ctx context.Context, userID string) (int, error) {
-	var user model.User
-	result, err := m.userMod.Collection.FindOne(ctx, bson.M{"user_id": userID})
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return 0, ErrUserNotFound
+	if userID == "" {
+		return 0, ErrUserNotFound
+	}
+	sfKey := "user:recvopt:" + userID
+	v, err := m.barrier.Do(sfKey, func() (any, error) {
+		var user model.User
+		result, err := m.userMod.Collection.FindOne(ctx, bson.M{"user_id": userID})
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return 0, ErrUserNotFound
+			}
+			return 0, err
 		}
+		if err := result.Decode(&user); err != nil {
+			return 0, err
+		}
+		return user.GlobalRecvMsgOpt, nil
+	})
+	if err != nil {
 		return 0, err
 	}
-	if err := result.Decode(&user); err != nil {
-		return 0, err
-	}
-	return user.GlobalRecvMsgOpt, nil
+	return v.(int), nil
 }
 
 func (m *defaultUserModel) RegisterCount(ctx context.Context, start, end int64) (int64, int64, map[string]int64, error) {
@@ -559,7 +563,7 @@ func (m *defaultUserModel) SetUserOnlineStatus(ctx context.Context, statuses []*
 // GetAllOnlineUsers 返回当前所有「在线」用户 ID（去重后）。
 //
 // 注意：这里只看 status==1 的快照行。如果服务进程异常崩溃导致状态行未及时清理，
-// P2 会引入 TTL/心跳机制自动清理僵尸「假在线」记录。
+// 引入定时任务 TTL/心跳机制自动清理僵尸「假在线」记录。
 func (m *defaultUserModel) GetAllOnlineUsers(ctx context.Context) ([]string, error) {
 	var statuses []*model.UserStatus
 	cursor, err := m.statusMod.Collection.Find(ctx, bson.M{"status": 1})
@@ -639,16 +643,26 @@ func (m *defaultUserModel) GetAllUserCommands(ctx context.Context, userID string
 // =====================================================
 
 func (m *defaultUserModel) IsIMAdmin(ctx context.Context, userID string) (bool, error) {
-	var user model.User
-	result, err := m.userMod.Collection.FindOne(ctx, bson.M{"user_id": userID})
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return false, ErrUserNotFound
+	if userID == "" {
+		return false, ErrUserNotFound
+	}
+	sfKey := "user:imadmin:" + userID
+	v, err := m.barrier.Do(sfKey, func() (any, error) {
+		var user model.User
+		result, err := m.userMod.Collection.FindOne(ctx, bson.M{"user_id": userID})
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return false, ErrUserNotFound
+			}
+			return false, err
 		}
+		if err := result.Decode(&user); err != nil {
+			return false, err
+		}
+		return user.AppManagerLevel > 0, nil
+	})
+	if err != nil {
 		return false, err
 	}
-	if err := result.Decode(&user); err != nil {
-		return false, err
-	}
-	return user.AppManagerLevel > 0, nil
+	return v.(bool), nil
 }
