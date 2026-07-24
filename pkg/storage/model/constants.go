@@ -1,9 +1,10 @@
 package model
 
 const (
-	CollectionUser        = "im_users"
-	CollectionUserStatus  = "im_user_status"
-	CollectionUserCommand = "im_user_commands"
+	CollectionUser             = "im_users"
+	CollectionUserStatus       = "im_user_status"
+	CollectionUserCommand      = "im_user_commands"
+	CollectionUserClientConfig = "im_user_client_configs"
 
 	CollectionGroup        = "im_groups"
 	CollectionGroupMember  = "im_group_members"

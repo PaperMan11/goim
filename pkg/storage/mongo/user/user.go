@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"github.com/zeromicro/go-zero/core/syncx"
@@ -28,7 +29,8 @@ type UserModel interface {
 	UpdateEx(ctx context.Context, userID string, updates map[string]any) error
 	Delete(ctx context.Context, userID string) error
 	Count(ctx context.Context) (int64, error)
-	Page(ctx context.Context, page, size int64, userID, nickname string) ([]*model.User, int64, error)
+	Page(ctx context.Context, page, size int64, userID, nickname string, appManagerLevel ...int) ([]*model.User, int64, error)
+	PageByAppManagerLevel(ctx context.Context, page, size int64, appManagerLevel int) ([]*model.User, int64, error)
 	SortQuery(ctx context.Context, userIDName map[string]string, asc bool) ([]*model.User, error)
 	CheckExists(ctx context.Context, userIDs []string) (map[string]bool, error)
 	GetAllUserIDs(ctx context.Context, page, size int64) ([]string, int64, error)
@@ -44,29 +46,38 @@ type UserModel interface {
 	GetAllOnlineUsers(ctx context.Context) ([]string, error)
 
 	InsertUserCommand(ctx context.Context, cmd *model.UserCommand) error
-	UpdateUserCommand(ctx context.Context, userID, uuid string, value string) error
+	UpdateUserCommand(ctx context.Context, userID, uuid string, value, extra string) error
 	DeleteUserCommand(ctx context.Context, userID, uuid string) error
 	GetUserCommand(ctx context.Context, userID, uuid string) (*model.UserCommand, error)
 	GetAllUserCommands(ctx context.Context, userID string) ([]*model.UserCommand, error)
+	GetUserCommands(ctx context.Context, userID string, typ int32) ([]*model.UserCommand, error)
 
 	IsIMAdmin(ctx context.Context, userID string) (bool, error)
+
+	GetUserClientConfig(ctx context.Context, userID string) (map[string]string, error)
+	SetUserClientConfig(ctx context.Context, userID string, configs map[string]string) error
+	DelUserClientConfig(ctx context.Context, userID string, keys []string) error
+	PageUserClientConfig(ctx context.Context, userID, key string, page, size int64) ([]*model.UserClientConfig, int64, error)
 }
 
 type defaultUserModel struct {
-	userMod   *mon.Model
-	statusMod *mon.Model
-	cmdMod    *mon.Model
-	barrier   syncx.SingleFlight
+	userMod         *mon.Model
+	statusMod       *mon.Model
+	cmdMod          *mon.Model
+	clientConfigMod *mon.Model
+	barrier         syncx.SingleFlight
 }
 
-func NewUserModel(userMod, statusMod, cmdMod *mon.Model, barrier syncx.SingleFlight) UserModel {
+func NewUserModel(userMod, statusMod, cmdMod, clientConfigMod *mon.Model, barrier syncx.SingleFlight) UserModel {
 	m := &defaultUserModel{
-		userMod:   userMod,
-		statusMod: statusMod,
-		cmdMod:    cmdMod,
-		barrier:   barrier,
+		userMod:         userMod,
+		statusMod:       statusMod,
+		cmdMod:          cmdMod,
+		clientConfigMod: clientConfigMod,
+		barrier:         barrier,
 	}
 	_ = m.ensureUserStatusIndexes(context.Background())
+	_ = m.ensureClientConfigIndexes(context.Background())
 	return m
 }
 
@@ -110,6 +121,20 @@ func (m *defaultUserModel) ensureUserStatusIndexes(ctx context.Context) error {
 		Options: options.Index().SetName("idx_expire_at_ttl").SetExpireAfterSeconds(0),
 	}
 	_, _ = m.statusMod.Collection.Indexes().CreateOne(ctx, ttl)
+	return nil
+}
+
+func (m *defaultUserModel) ensureClientConfigIndexes(ctx context.Context) error {
+	uniq := mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "user_id", Value: 1},
+			{Key: "key", Value: 1},
+		},
+		Options: options.Index().SetUnique(true).SetName("uniq_user_client_config"),
+	}
+	if _, err := m.clientConfigMod.Collection.Indexes().CreateOne(ctx, uniq); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -183,7 +208,7 @@ func (m *defaultUserModel) Count(ctx context.Context) (int64, error) {
 	return m.userMod.Collection.CountDocuments(ctx, bson.M{})
 }
 
-func (m *defaultUserModel) Page(ctx context.Context, page, size int64, userID, nickname string) ([]*model.User, int64, error) {
+func (m *defaultUserModel) Page(ctx context.Context, page, size int64, userID, nickname string, appManagerLevel ...int) ([]*model.User, int64, error) {
 	// $options:
 	//   i = case Insensitive（忽略大小写）：nickname: "Alice" 搜索 "ali" 也能命中
 	//   其它常用 flag：m=multiline、x=extended、s=dotall
@@ -194,6 +219,30 @@ func (m *defaultUserModel) Page(ctx context.Context, page, size int64, userID, n
 	if nickname != "" {
 		filter["nickname"] = bson.M{"$regex": nickname, "$options": "i"}
 	}
+	if len(appManagerLevel) > 0 && appManagerLevel[0] != 0 {
+		filter["app_manager_level"] = bson.M{"$gte": appManagerLevel[0]}
+	}
+
+	total, err := m.userMod.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var users []*model.User
+	opts := options.Find().SetSkip((page - 1) * size).SetLimit(size).SetSort(bson.M{"created_at": -1})
+	cursor, err := m.userMod.Collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
+func (m *defaultUserModel) PageByAppManagerLevel(ctx context.Context, page, size int64, appManagerLevel int) ([]*model.User, int64, error) {
+	filter := bson.M{"app_manager_level": appManagerLevel}
 
 	total, err := m.userMod.Collection.CountDocuments(ctx, filter)
 	if err != nil {
@@ -592,10 +641,10 @@ func (m *defaultUserModel) InsertUserCommand(ctx context.Context, cmd *model.Use
 	return err
 }
 
-func (m *defaultUserModel) UpdateUserCommand(ctx context.Context, userID, uuid string, value string) error {
+func (m *defaultUserModel) UpdateUserCommand(ctx context.Context, userID, uuid string, value, extra string) error {
 	_, err := m.cmdMod.Collection.UpdateOne(ctx,
 		bson.M{"user_id": userID, "uuid": uuid},
-		bson.M{"$set": bson.M{"value": value, "updated_at": time.Now()}},
+		bson.M{"$set": bson.M{"value": value, "extra": extra, "updated_at": time.Now()}},
 		options.UpdateOne().SetUpsert(true),
 	)
 	return err
@@ -634,6 +683,19 @@ func (m *defaultUserModel) GetAllUserCommands(ctx context.Context, userID string
 	return cmds, nil
 }
 
+func (m *defaultUserModel) GetUserCommands(ctx context.Context, userID string, typ int32) ([]*model.UserCommand, error) {
+	var cmds []*model.UserCommand
+	cursor, err := m.cmdMod.Collection.Find(ctx, bson.M{"user_id": userID, "type": typ})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	if err := cursor.All(ctx, &cmds); err != nil {
+		return nil, err
+	}
+	return cmds, nil
+}
+
 // =====================================================
 // 管理员权限（基于 im_users.app_manager_level）
 // =====================================================
@@ -655,10 +717,97 @@ func (m *defaultUserModel) IsIMAdmin(ctx context.Context, userID string) (bool, 
 		if err := result.Decode(&user); err != nil {
 			return false, err
 		}
-		return user.AppManagerLevel > 0, nil
+		return user.AppManagerLevel >= constant.AppSuperAdmin, nil
 	})
 	if err != nil {
 		return false, err
 	}
 	return v.(bool), nil
+}
+
+// =====================================================
+// 用户客户端配置（im_user_client_configs）
+// =====================================================
+
+func (m *defaultUserModel) GetUserClientConfig(ctx context.Context, userID string) (map[string]string, error) {
+	var configs []*model.UserClientConfig
+	cursor, err := m.clientConfigMod.Collection.Find(ctx, bson.M{"user_id": userID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	if err := cursor.All(ctx, &configs); err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]string, len(configs))
+	for _, c := range configs {
+		result[c.Key] = c.Value
+	}
+	return result, nil
+}
+
+func (m *defaultUserModel) SetUserClientConfig(ctx context.Context, userID string, configs map[string]string) error {
+	if len(configs) == 0 {
+		return nil
+	}
+
+	models := make([]mongo.WriteModel, 0, len(configs))
+	for key, value := range configs {
+		filter := bson.M{
+			"user_id": userID,
+			"key":     key,
+		}
+		update := bson.M{
+			"$set": bson.M{
+				"user_id": userID,
+				"key":     key,
+				"value":   value,
+			},
+		}
+		models = append(models, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
+	}
+
+	_, err := m.clientConfigMod.Collection.BulkWrite(ctx, models, options.BulkWrite().SetOrdered(false))
+	return err
+}
+
+func (m *defaultUserModel) DelUserClientConfig(ctx context.Context, userID string, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	filter := bson.M{
+		"user_id": userID,
+		"key":     bson.M{"$in": keys},
+	}
+	_, err := m.clientConfigMod.Collection.DeleteMany(ctx, filter)
+	return err
+}
+
+func (m *defaultUserModel) PageUserClientConfig(ctx context.Context, userID, key string, page, size int64) ([]*model.UserClientConfig, int64, error) {
+	filter := bson.M{}
+	if userID != "" {
+		filter["user_id"] = userID
+	}
+	if key != "" {
+		filter["key"] = bson.M{"$regex": key, "$options": "i"}
+	}
+
+	total, err := m.clientConfigMod.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var configs []*model.UserClientConfig
+	opts := options.Find().SetSkip((page - 1) * size).SetLimit(size).SetSort(bson.M{"key": 1})
+	cursor, err := m.clientConfigMod.Collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+	if err := cursor.All(ctx, &configs); err != nil {
+		return nil, 0, err
+	}
+	return configs, total, nil
 }

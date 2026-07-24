@@ -53,9 +53,20 @@ type UserCommand struct {
 	CreateTime time.Time `bson:"create_time"` // 创建时间
 	UUID       string    `bson:"uuid"`        // 命令唯一标识
 	Value      string    `bson:"value"`       // 命令值
+	Extra      string    `bson:"extra"`       // 扩展字段（JSON格式）
 	UpdatedAt  time.Time `bson:"updated_at"`  // 更新时间
 }
 
 func (u *UserCommand) CollectionName() string {
 	return CollectionUserCommand
+}
+
+// UserClientConfig 用户客户端配置，用于存储用户自定义的客户端配置数据
+// - 客户端自定义配置（如主题、语言）
+// - 跨设备同步用户配置
+// - 扩展业务功能（如设备绑定、快捷操作）
+type UserClientConfig struct {
+	UserID string `bson:"user_id"` // 用户唯一标识
+	Key    string `bson:"key"`     // 配置键
+	Value  string `bson:"value"`   // 配置值
 }

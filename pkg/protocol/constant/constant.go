@@ -298,11 +298,12 @@ const (
 // 用户角色和权限常量
 const (
 	// 用户类型
-	IMOrdinaryUser       = 0 // IM 普通用户
-	AppOrdinaryUsers     = 1 // 应用普通用户
-	AppAdmin             = 2 // 应用管理员
-	AppNotificationAdmin = 3 // 应用通知管理员
-	AppRobotAdmin        = 4 // 应用机器人管理员
+	AppSuperAdmin        = 9999 // 应用超级管理员
+	IMOrdinaryUser       = 0    // IM 普通用户
+	AppOrdinaryUsers     = 1    // 应用普通用户
+	AppAdmin             = 2    // 应用管理员
+	AppNotificationAdmin = 3    // 应用通知管理员
+	AppRobotAdmin        = 4    // 应用机器人管理员
 
 	// 群角色
 	GroupOwner         = 100 // 群主

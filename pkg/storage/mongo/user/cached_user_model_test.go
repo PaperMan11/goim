@@ -148,7 +148,7 @@ func (s *stubUserModel) UpdateEx(context.Context, string, map[string]any) error 
 }
 func (s *stubUserModel) Delete(context.Context, string) error { panic("not implemented") }
 func (s *stubUserModel) Count(context.Context) (int64, error) { return 0, nil }
-func (s *stubUserModel) Page(context.Context, int64, int64, string, string) ([]*model.User, int64, error) {
+func (s *stubUserModel) Page(context.Context, int64, int64, string, string, ...int) ([]*model.User, int64, error) {
 	return nil, 0, nil
 }
 func (s *stubUserModel) SortQuery(context.Context, map[string]string, bool) ([]*model.User, error) {
@@ -168,7 +168,7 @@ func (s *stubUserModel) RegisterCount(context.Context, int64, int64) (int64, int
 func (s *stubUserModel) InsertUserCommand(context.Context, *model.UserCommand) error {
 	panic("not implemented")
 }
-func (s *stubUserModel) UpdateUserCommand(context.Context, string, string, string) error {
+func (s *stubUserModel) UpdateUserCommand(context.Context, string, string, string, string) error {
 	panic("not implemented")
 }
 func (s *stubUserModel) DeleteUserCommand(context.Context, string, string) error {
@@ -180,7 +180,25 @@ func (s *stubUserModel) GetUserCommand(context.Context, string, string) (*model.
 func (s *stubUserModel) GetAllUserCommands(context.Context, string) ([]*model.UserCommand, error) {
 	panic("not implemented")
 }
+func (s *stubUserModel) GetUserCommands(context.Context, string, int32) ([]*model.UserCommand, error) {
+	panic("not implemented")
+}
 func (s *stubUserModel) IsIMAdmin(context.Context, string) (bool, error) { return false, nil }
+func (s *stubUserModel) PageByAppManagerLevel(context.Context, int64, int64, int) ([]*model.User, int64, error) {
+	return nil, 0, nil
+}
+func (s *stubUserModel) GetUserClientConfig(context.Context, string) (map[string]string, error) {
+	panic("not implemented")
+}
+func (s *stubUserModel) SetUserClientConfig(context.Context, string, map[string]string) error {
+	panic("not implemented")
+}
+func (s *stubUserModel) DelUserClientConfig(context.Context, string, []string) error {
+	panic("not implemented")
+}
+func (s *stubUserModel) PageUserClientConfig(context.Context, string, string, int64, int64) ([]*model.UserClientConfig, int64, error) {
+	panic("not implemented")
+}
 
 func cloneUserStatus(s *model.UserStatus) *model.UserStatus {
 	if s == nil {
