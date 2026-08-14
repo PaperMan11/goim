@@ -223,6 +223,10 @@ func (m *cachedRequestModel) FindGroupRequest(ctx context.Context, userID, group
 	return v.(*model.GroupRequest), nil
 }
 
+func (m *cachedRequestModel) CountGroupRequests(ctx context.Context, groupIDs []string, handleResults []int) (int64, error) {
+	return m.RequestModel.CountGroupRequests(ctx, groupIDs, handleResults)
+}
+
 func (m *cachedRequestModel) DeleteGroupRequest(ctx context.Context, userID, groupID string) error {
 	err := m.RequestModel.DeleteGroupRequest(ctx, userID, groupID)
 	if err != nil {

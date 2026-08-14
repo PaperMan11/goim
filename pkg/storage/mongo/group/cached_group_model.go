@@ -45,10 +45,6 @@ func (m *cachedGroupModel) memberCacheKeys(gid, uid string) []string {
 	}
 }
 
-func (m *cachedGroupModel) versionCacheKey(gid string) string {
-	return GetGroupVersionKey(gid)
-}
-
 func (m *cachedGroupModel) jitterTTL(baseSeconds int) int {
 	return randx.JitterInt(baseSeconds, ttlJitterRatioPct)
 }
@@ -356,6 +352,30 @@ func (m *cachedGroupModel) DeleteMembers(ctx context.Context, groupID string, us
 	return nil
 }
 
+func (m *cachedGroupModel) ClearMembers(ctx context.Context, groupID string) error {
+	if m.redis == nil {
+		return m.GroupModel.ClearMembers(ctx, groupID)
+	}
+
+	// 所有成员缓存
+	memberIDs, err := m.GroupModel.FindMemberIDsByGroup(ctx, groupID)
+	if err != nil {
+		return err
+	}
+
+	delKeys := make([]string, 0, len(memberIDs))
+	for _, uid := range memberIDs {
+		delKeys = append(delKeys, m.memberCacheKeys(groupID, uid)...)
+	}
+	err = m.GroupModel.ClearMembers(ctx, groupID)
+	if err != nil {
+		return err
+	}
+	sredis.CacheDelDouble(ctx, m.redis, delKeys...)
+	sredis.CacheDelDouble(ctx, m.redis, GetGroupMemberCountKey(groupID))
+	return nil
+}
+
 func (m *cachedGroupModel) FindMember(ctx context.Context, groupID, userID string) (*model.GroupMember, error) {
 	if m.redis == nil {
 		return m.GroupModel.FindMember(ctx, groupID, userID)
@@ -485,80 +505,4 @@ func (m *cachedGroupModel) IncrMemberCount(ctx context.Context, groupID string, 
 	}
 	sredis.CacheDelDouble(ctx, m.redis, GetGroupMemberCountKey(groupID))
 	return nil
-}
-
-func (m *cachedGroupModel) UpsertGroupVersion(ctx context.Context, ver *model.GroupVersion) error {
-	err := m.GroupModel.UpsertGroupVersion(ctx, ver)
-	if err != nil {
-		return err
-	}
-	sredis.CacheDelDouble(ctx, m.redis, m.versionCacheKey(ver.GroupID))
-	return nil
-}
-
-func (m *cachedGroupModel) GetGroupVersion(ctx context.Context, groupID string) (*model.GroupVersion, error) {
-	if m.redis == nil {
-		return m.GroupModel.GetGroupVersion(ctx, groupID)
-	}
-
-	var ver model.GroupVersion
-	key := m.versionCacheKey(groupID)
-	found, err := sredis.CacheGet(ctx, m.redis, key, &ver)
-	if err != nil {
-		return nil, err
-	}
-	if found {
-		if ver.GroupID == "" {
-			return nil, ErrGroupVersionNotFound
-		}
-		return &ver, nil
-	}
-
-	sfKey := sfKeyPrefixVersion + groupID
-	v, err := m.barrier.Do(sfKey, func() (any, error) {
-		var innerVer model.GroupVersion
-		found2, err2 := sredis.CacheGet(ctx, m.redis, key, &innerVer)
-		if err2 != nil {
-			return nil, err2
-		}
-		if found2 {
-			if innerVer.GroupID == "" {
-				return nil, ErrGroupVersionNotFound
-			}
-			return &innerVer, nil
-		}
-
-		dbVer, err2 := m.GroupModel.GetGroupVersion(ctx, groupID)
-		if err2 != nil {
-			if errors.Is(err2, ErrGroupVersionNotFound) {
-				_, _ = sredis.CacheSetCAS(ctx, m.redis, key, nil, 0, m.jitterTTL(groupNilExpireSeconds))
-			}
-			return nil, err2
-		}
-		version := dbVer.UpdatedAt.UnixMilli()
-		if version <= 0 {
-			version = timex.UnixMilli()
-		}
-		_, _ = sredis.CacheSetCAS(ctx, m.redis, key, dbVer, version, m.jitterTTL(groupDefaultExpireSeconds))
-		return dbVer, nil
-	})
-	if err != nil {
-		if errors.Is(err, ErrGroupVersionNotFound) {
-			return nil, ErrGroupVersionNotFound
-		}
-		return nil, err
-	}
-	if v == nil {
-		return nil, ErrGroupVersionNotFound
-	}
-	return v.(*model.GroupVersion), nil
-}
-
-func (m *cachedGroupModel) IncrGroupMemberVersion(ctx context.Context, groupID string) (*model.GroupVersion, error) {
-	ver, err := m.GroupModel.IncrGroupMemberVersion(ctx, groupID)
-	if err != nil {
-		return nil, err
-	}
-	sredis.CacheDelDouble(ctx, m.redis, m.versionCacheKey(groupID))
-	return ver, nil
 }

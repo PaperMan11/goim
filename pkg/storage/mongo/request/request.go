@@ -32,6 +32,7 @@ type RequestModel interface {
 	FindGroupRequest(ctx context.Context, userID, groupID string) (*model.GroupRequest, error)
 	FindGroupRequestsByUser(ctx context.Context, userID string, page, size int64) ([]*model.GroupRequest, int64, error)
 	FindGroupRequestsByGroup(ctx context.Context, groupID string, page, size int64) ([]*model.GroupRequest, int64, error)
+	CountGroupRequests(ctx context.Context, groupIDs []string, handleResults []int) (int64, error)
 	DeleteGroupRequest(ctx context.Context, userID, groupID string) error
 }
 
@@ -215,6 +216,17 @@ func (m *defaultRequestModel) FindGroupRequestsByGroup(ctx context.Context, grou
 		return nil, 0, err
 	}
 	return requests, total, nil
+}
+
+func (m *defaultRequestModel) CountGroupRequests(ctx context.Context, groupIDs []string, handleResults []int) (int64, error) {
+	filter := bson.M{}
+	if len(groupIDs) > 0 {
+		filter["group_id"] = bson.M{"$in": groupIDs}
+	}
+	if len(handleResults) > 0 {
+		filter["handle_result"] = bson.M{"$in": handleResults}
+	}
+	return m.groupReqMod.Collection.CountDocuments(ctx, filter)
 }
 
 func (m *defaultRequestModel) DeleteGroupRequest(ctx context.Context, userID, groupID string) error {

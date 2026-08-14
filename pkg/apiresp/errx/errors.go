@@ -54,6 +54,7 @@ var (
 	DismissedAlreadyError = NewErrInfo(ErrCodeDismissedAlreadyError, "group has already been dismissed")
 	GroupTypeNotSupport   = NewErrInfo(ErrCodeGroupTypeNotSupport, "group type not supported")
 	GroupRequestHandled   = NewErrInfo(ErrCodeGroupRequestHandled, "group request has already been handled")
+	GroupNotFoundError    = NewErrInfo(ErrCodeGroupNotFoundError, "group does not exist")
 
 	// Relationship error codes.
 	CanNotAddYourselfError   = NewErrInfo(ErrCodeCanNotAddYourselfError, "cannot add yourself as a friend")

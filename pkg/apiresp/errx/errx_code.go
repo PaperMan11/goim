@@ -54,6 +54,7 @@ const (
 	ErrCodeDismissedAlreadyError = 1204 // Group has already been dismissed
 	ErrCodeGroupTypeNotSupport   = 1205
 	ErrCodeGroupRequestHandled   = 1206
+	ErrCodeGroupNotFoundError    = 1207 // Group does not exist
 
 	// Relationship error codes.
 	ErrCodeCanNotAddYourselfError   = 1301 // Cannot add yourself as a friend

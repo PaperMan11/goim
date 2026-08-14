@@ -5,7 +5,6 @@ import "fmt"
 const (
 	KeyGroupInfo        = "mongo:group:info:%s"
 	KeyGroupMember      = "mongo:group:member:%s:%s"
-	KeyGroupVersion     = "mongo:group:version:%s"
 	KeyGroupExists      = "mongo:group:exists:%s"
 	KeyGroupMemberCount = "mongo:group:member_count:%s"
 )
@@ -16,10 +15,6 @@ func GetGroupInfoKey(groupID string) string {
 
 func GetGroupMemberKey(groupID, userID string) string {
 	return fmt.Sprintf(KeyGroupMember, groupID, userID)
-}
-
-func GetGroupVersionKey(groupID string) string {
-	return fmt.Sprintf(KeyGroupVersion, groupID)
 }
 
 func GetGroupExistsKey(groupID string) string {
@@ -39,9 +34,8 @@ const (
 
 var (
 	sfKeyPrefixGroupInfo   = "ug:gi:"
-	sfKeyPrefixMember    = "ug:gm:"
-	sfKeyPrefixVersion   = "ug:gv:"
+	sfKeyPrefixMember      = "ug:gm:"
 	sfKeyPrefixMemberCount = "ug:mc:"
 	sfKeyPrefixMemberBatch = "ug:mb:"
-	sfKeyPrefixExists    = "ug:ex:"
+	sfKeyPrefixExists      = "ug:ex:"
 )

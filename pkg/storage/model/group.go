@@ -13,7 +13,7 @@ type Group struct {
 	CreateTime             time.Time `bson:"create_time"`              // 创建时间
 	MemberCount            int       `bson:"member_count"`             // 成员数量
 	Extra                  string    `bson:"extra"`                    // 扩展字段（JSON格式）
-	Status                 int       `bson:"status"`                   // 群组状态（0-正常，1-解散）
+	Status                 int       `bson:"status"`                   // 群组状态（0-正常，1-禁止发言，2-已解散，3-已禁言）
 	CreatorUserID          string    `bson:"creator_user_id"`          // 创建者ID
 	GroupType              int       `bson:"group_type"`               // 群组类型（1-普通群，2-部门群等）
 	NeedVerification       int       `bson:"need_verification"`        // 是否需要验证（0-不需要，1-需要）
@@ -47,17 +47,4 @@ type GroupMember struct {
 
 func (g *GroupMember) CollectionName() string {
 	return CollectionGroupMember
-}
-
-// GroupVersion 群组版本信息，用于同步群成员和排序的版本控制
-type GroupVersion struct {
-	GroupID         string    `bson:"group_id"`          // 群组唯一标识
-	MemberVersion   int64     `bson:"member_version"`    // 群成员版本号
-	MemberVersionID string    `bson:"member_version_id"` // 群成员版本ID
-	SortVersion     int64     `bson:"sort_version"`      // 群排序版本号
-	UpdatedAt       time.Time `bson:"updated_at"`        // 更新时间
-}
-
-func (g *GroupVersion) CollectionName() string {
-	return CollectionGroupVersion
 }
