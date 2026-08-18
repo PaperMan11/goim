@@ -17,9 +17,8 @@ const (
 	CollectionConversation          = "im_conversations"
 	CollectionConversationLatestMsg = "im_conversation_latest_msgs"
 
-	CollectionFriend        = "im_friends"
-	CollectionFriendVersion = "im_friend_versions"
-	CollectionBlack         = "im_blacks"
+	CollectionFriend = "im_friends"
+	CollectionBlack  = "im_blacks"
 
 	CollectionFriendRequest = "im_friend_requests"
 	CollectionGroupRequest  = "im_group_requests"

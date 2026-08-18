@@ -19,19 +19,6 @@ func (f *Friend) CollectionName() string {
 	return CollectionFriend
 }
 
-// FriendVersion 好友版本信息，用于好友列表同步的版本控制
-type FriendVersion struct {
-	OwnerUserID     string    `bson:"owner_user_id"`     // 所有者ID
-	FriendVersion   int64     `bson:"friend_version"`    // 好友版本号
-	FriendVersionID string    `bson:"friend_version_id"` // 好友版本ID
-	SortVersion     int64     `bson:"sort_version"`      // 好友排序版本号
-	UpdatedAt       time.Time `bson:"updated_at"`        // 更新时间
-}
-
-func (f *FriendVersion) CollectionName() string {
-	return CollectionFriendVersion
-}
-
 // Black 黑名单，存储用户拉黑的其他用户
 type Black struct {
 	OwnerUserID    string    `bson:"owner_user_id"`    // 所有者ID

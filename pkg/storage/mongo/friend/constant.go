@@ -3,18 +3,13 @@ package friend
 import "fmt"
 
 const (
-	KeyFriendInfo    = "mongo:friend:info:%s:%s"
-	KeyFriendVersion = "mongo:friend:version:%s"
-	KeyBlackInfo     = "mongo:friend:black:%s:%s"
-	KeyFriendExists  = "mongo:friend:exists:%s:%s"
+	KeyFriendInfo   = "mongo:friend:info:%s:%s"
+	KeyBlackInfo    = "mongo:friend:black:%s:%s"
+	KeyFriendExists = "mongo:friend:exists:%s:%s"
 )
 
 func GetFriendInfoKey(ownerUserID, friendUserID string) string {
 	return fmt.Sprintf(KeyFriendInfo, ownerUserID, friendUserID)
-}
-
-func GetFriendVersionKey(ownerUserID string) string {
-	return fmt.Sprintf(KeyFriendVersion, ownerUserID)
 }
 
 func GetBlackInfoKey(ownerUserID, blackUserID string) string {
@@ -33,10 +28,9 @@ const (
 )
 
 var (
-	sfKeyPrefixFriend        = "uf:fr:"
-	sfKeyPrefixBlack         = "uf:bk:"
-	sfKeyPrefixFriendVersion = "uf:fv:"
-	sfKeyPrefixFriendBatch   = "uf:fb:"
-	sfKeyPrefixBlackBatch    = "uf:bb:"
-	sfKeyPrefixFriendExists  = "uf:fe:"
+	sfKeyPrefixFriend       = "uf:fr:"
+	sfKeyPrefixBlack        = "uf:bk:"
+	sfKeyPrefixFriendBatch  = "uf:fb:"
+	sfKeyPrefixBlackBatch   = "uf:bb:"
+	sfKeyPrefixFriendExists = "uf:fe:"
 )

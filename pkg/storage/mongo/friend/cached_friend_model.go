@@ -43,12 +43,6 @@ func (m *cachedFriendModel) blackCacheKeys(owner, blackID string) []string {
 	}
 }
 
-func (m *cachedFriendModel) versionCacheKey(owner string) []string {
-	return []string{
-		GetFriendVersionKey(owner),
-	}
-}
-
 func (m *cachedFriendModel) jitterTTL(baseSeconds int) int {
 	return randx.JitterInt(baseSeconds, ttlJitterRatioPct)
 }
@@ -285,82 +279,6 @@ func (m *cachedFriendModel) IsFriend(ctx context.Context, userA, userB string) (
 
 func (m *cachedFriendModel) CountFriends(ctx context.Context, owner string) (int64, error) {
 	return m.FriendModel.CountFriends(ctx, owner)
-}
-
-func (m *cachedFriendModel) UpsertFriendVersion(ctx context.Context, ver *model.FriendVersion) error {
-	err := m.FriendModel.UpsertFriendVersion(ctx, ver)
-	if err != nil {
-		return err
-	}
-	sredis.CacheDelDouble(ctx, m.redis, m.versionCacheKey(ver.OwnerUserID)...)
-	return nil
-}
-
-func (m *cachedFriendModel) GetFriendVersion(ctx context.Context, owner string) (*model.FriendVersion, error) {
-	if m.redis == nil {
-		return m.FriendModel.GetFriendVersion(ctx, owner)
-	}
-
-	var ver model.FriendVersion
-	key := GetFriendVersionKey(owner)
-	found, err := sredis.CacheGet(ctx, m.redis, key, &ver)
-	if err != nil {
-		return nil, err
-	}
-	if found {
-		if ver.OwnerUserID == "" {
-			return nil, ErrFriendVersionNotFound
-		}
-		return &ver, nil
-	}
-
-	sfKey := sfKeyPrefixFriendVersion + owner
-	v, err := m.barrier.Do(sfKey, func() (any, error) {
-		var innerVer model.FriendVersion
-		found2, err2 := sredis.CacheGet(ctx, m.redis, key, &innerVer)
-		if err2 != nil {
-			return nil, err2
-		}
-		if found2 {
-			if innerVer.OwnerUserID == "" {
-				return nil, ErrFriendVersionNotFound
-			}
-			return &innerVer, nil
-		}
-
-		dbVer, err2 := m.FriendModel.GetFriendVersion(ctx, owner)
-		if err2 != nil {
-			if errors.Is(err2, ErrFriendVersionNotFound) {
-				_, _ = sredis.CacheSetCAS(ctx, m.redis, key, nil, 0, m.jitterTTL(friendNilExpireSeconds))
-			}
-			return nil, err2
-		}
-		version := dbVer.UpdatedAt.UnixMilli()
-		if version <= 0 {
-			version = timex.UnixMilli()
-		}
-		_, _ = sredis.CacheSetCAS(ctx, m.redis, key, dbVer, version, m.jitterTTL(friendDefaultExpireSeconds))
-		return dbVer, nil
-	})
-	if err != nil {
-		if errors.Is(err, ErrFriendVersionNotFound) {
-			return nil, ErrFriendVersionNotFound
-		}
-		return nil, err
-	}
-	if v == nil {
-		return nil, ErrFriendVersionNotFound
-	}
-	return v.(*model.FriendVersion), nil
-}
-
-func (m *cachedFriendModel) IncrFriendVersion(ctx context.Context, owner string) (*model.FriendVersion, error) {
-	ver, err := m.FriendModel.IncrFriendVersion(ctx, owner)
-	if err != nil {
-		return nil, err
-	}
-	sredis.CacheDelDouble(ctx, m.redis, m.versionCacheKey(owner)...)
-	return ver, nil
 }
 
 func (m *cachedFriendModel) InsertBlack(ctx context.Context, black *model.Black) error {

@@ -1411,57 +1411,20 @@ func (l *Logic) GetIncrementalGroupMember(ctx context.Context, req *pbgroup.GetI
 	}
 
 	// 增量同步：分类处理变更日志（FindChangeLog 已在 DB 端过滤 version > clientVersion）
-	var (
-		groupChanged bool
-		sortChanged  bool
-		sortVersion  uint64
-		insertIDs    []string
-		updateIDs    []string
-		deleteIDs    []string
-		seenInsert   = make(map[string]struct{})
-		seenUpdate   = make(map[string]struct{})
-		seenDelete   = make(map[string]struct{})
-	)
-	for _, log := range verLog.Logs {
-		switch {
-		case log.EID == model.VersionGroupChangeID:
-			groupChanged = true
-		case log.EID == model.VersionSortChangeID:
-			// 排序变更：记录最新版本号，客户端据此重新排序成员列表
-			sortChanged = true
-			if uint64(log.Version) > sortVersion {
-				sortVersion = uint64(log.Version)
-			}
-		case log.State == model.VersionStateInsert:
-			if _, ok := seenInsert[log.EID]; !ok {
-				seenInsert[log.EID] = struct{}{}
-				insertIDs = append(insertIDs, log.EID)
-			}
-		case log.State == model.VersionStateDelete:
-			if _, ok := seenDelete[log.EID]; !ok {
-				seenDelete[log.EID] = struct{}{}
-				deleteIDs = append(deleteIDs, log.EID)
-			}
-		case log.State == model.VersionStateUpdate:
-			if _, ok := seenUpdate[log.EID]; !ok {
-				seenUpdate[log.EID] = struct{}{}
-				updateIDs = append(updateIDs, log.EID)
-			}
-		}
-	}
+	c := model.ClassifyIncrementalLogs(verLog.Logs)
 
 	resp := &pbgroup.GetIncrementalGroupMemberResp{
 		Version:   uint64(verLog.Version),
 		VersionID: groupID,
 		Full:      false,
-		Delete:    deleteIDs,
+		Delete:    c.DeleteIDs,
 	}
-	if sortChanged {
-		resp.SortVersion = sortVersion
+	if c.SortChanged {
+		resp.SortVersion = c.SortVersion
 	}
 
 	// 拉取新增/更新成员的详情
-	fetchIDs := append(append([]string{}, insertIDs...), updateIDs...)
+	fetchIDs := append(append([]string{}, c.InsertIDs...), c.UpdateIDs...)
 	if len(fetchIDs) > 0 {
 		members, err2 := l.svcCtx.GroupModel.FindMembersByIDs(ctx, groupID, fetchIDs)
 		if err2 != nil {
@@ -1472,12 +1435,12 @@ func (l *Logic) GetIncrementalGroupMember(ctx context.Context, req *pbgroup.GetI
 		for _, m := range members {
 			memberMap[m.UserID] = m
 		}
-		for _, id := range insertIDs {
+		for _, id := range c.InsertIDs {
 			if m, ok := memberMap[id]; ok {
 				resp.Insert = append(resp.Insert, modelToGroupMemberInfo(m))
 			}
 		}
-		for _, id := range updateIDs {
+		for _, id := range c.UpdateIDs {
 			if m, ok := memberMap[id]; ok {
 				resp.Update = append(resp.Update, modelToGroupMemberInfo(m))
 			}
@@ -1485,7 +1448,7 @@ func (l *Logic) GetIncrementalGroupMember(ctx context.Context, req *pbgroup.GetI
 	}
 
 	// 群信息变更：附带最新群信息
-	if groupChanged {
+	if c.GroupChanged {
 		resp.Group = modelToGroupInfo(group)
 		// group, err2 := l.svcCtx.GroupModel.FindGroup(ctx, groupID)
 		// if err2 != nil {
@@ -1565,43 +1528,17 @@ func (l *Logic) GetIncrementalJoinGroup(ctx context.Context, req *pbgroup.GetInc
 	}
 
 	// 增量同步：分类处理变更日志
-	var (
-		insertIDs = make([]string, 0)
-		updateIDs = make([]string, 0)
-		deleteIDs = make([]string, 0)
-		seenIns   = make(map[string]struct{})
-		seenUpd   = make(map[string]struct{})
-		seenDel   = make(map[string]struct{})
-	)
-	for _, log := range verLog.Logs {
-		switch log.State {
-		case model.VersionStateInsert:
-			if _, ok := seenIns[log.EID]; !ok {
-				seenIns[log.EID] = struct{}{}
-				insertIDs = append(insertIDs, log.EID)
-			}
-		case model.VersionStateDelete:
-			if _, ok := seenDel[log.EID]; !ok {
-				seenDel[log.EID] = struct{}{}
-				deleteIDs = append(deleteIDs, log.EID)
-			}
-		case model.VersionStateUpdate:
-			if _, ok := seenUpd[log.EID]; !ok {
-				seenUpd[log.EID] = struct{}{}
-				updateIDs = append(updateIDs, log.EID)
-			}
-		}
-	}
+	c := model.ClassifyIncrementalLogs(verLog.Logs)
 
 	resp := &pbgroup.GetIncrementalJoinGroupResp{
 		Version:   uint64(verLog.Version),
 		VersionID: userID,
 		Full:      false,
-		Delete:    deleteIDs,
+		Delete:    c.DeleteIDs,
 	}
 
 	// 拉取新增/更新群组详情
-	fetchIDs := append(append([]string{}, insertIDs...), updateIDs...)
+	fetchIDs := append(append([]string{}, c.InsertIDs...), c.UpdateIDs...)
 	if len(fetchIDs) > 0 {
 		groups, err2 := l.svcCtx.GroupModel.FindGroupsByIDs(ctx, fetchIDs)
 		if err2 != nil {
@@ -1612,12 +1549,12 @@ func (l *Logic) GetIncrementalJoinGroup(ctx context.Context, req *pbgroup.GetInc
 		for _, g := range groups {
 			groupMap[g.GroupID] = g
 		}
-		for _, id := range insertIDs {
+		for _, id := range c.InsertIDs {
 			if g, ok := groupMap[id]; ok {
 				resp.Insert = append(resp.Insert, modelToGroupInfo(g))
 			}
 		}
-		for _, id := range updateIDs {
+		for _, id := range c.UpdateIDs {
 			if g, ok := groupMap[id]; ok {
 				resp.Update = append(resp.Update, modelToGroupInfo(g))
 			}

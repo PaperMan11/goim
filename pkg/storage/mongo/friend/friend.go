@@ -9,13 +9,11 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 var (
-	ErrFriendNotFound        = errors.New("friend not found")
-	ErrFriendVersionNotFound = errors.New("friend version not found")
-	ErrBlackNotFound         = errors.New("black not found")
+	ErrFriendNotFound = errors.New("friend not found")
+	ErrBlackNotFound  = errors.New("black not found")
 )
 
 type FriendModel interface {
@@ -30,10 +28,6 @@ type FriendModel interface {
 	IsFriend(ctx context.Context, userA, userB string) (bool, error)
 	CountFriends(ctx context.Context, owner string) (int64, error)
 
-	UpsertFriendVersion(ctx context.Context, ver *model.FriendVersion) error
-	GetFriendVersion(ctx context.Context, owner string) (*model.FriendVersion, error)
-	IncrFriendVersion(ctx context.Context, owner string) (*model.FriendVersion, error)
-
 	InsertBlack(ctx context.Context, black *model.Black) error
 	DeleteBlack(ctx context.Context, owner, blackUserID string) error
 	FindBlack(ctx context.Context, owner, blackUserID string) (*model.Black, error)
@@ -42,16 +36,14 @@ type FriendModel interface {
 }
 
 type defaultFriendModel struct {
-	friendMod  *mon.Model
-	versionMod *mon.Model
-	blackMod   *mon.Model
+	friendMod *mon.Model
+	blackMod  *mon.Model
 }
 
-func NewFriendModel(friendMod, versionMod, blackMod *mon.Model) FriendModel {
+func NewFriendModel(friendMod, blackMod *mon.Model) FriendModel {
 	return &defaultFriendModel{
-		friendMod:  friendMod,
-		versionMod: versionMod,
-		blackMod:   blackMod,
+		friendMod: friendMod,
+		blackMod:  blackMod,
 	}
 }
 
@@ -156,52 +148,6 @@ func (m *defaultFriendModel) IsFriend(ctx context.Context, userA, userB string) 
 
 func (m *defaultFriendModel) CountFriends(ctx context.Context, owner string) (int64, error) {
 	return m.friendMod.Collection.CountDocuments(ctx, bson.M{"owner_user_id": owner})
-}
-
-func (m *defaultFriendModel) UpsertFriendVersion(ctx context.Context, ver *model.FriendVersion) error {
-	ver.UpdatedAt = timex.Now()
-	opts := options.UpdateOne().SetUpsert(true)
-	_, err := m.versionMod.Collection.UpdateOne(ctx,
-		bson.M{"owner_user_id": ver.OwnerUserID},
-		bson.M{"$set": ver},
-		opts)
-	return err
-}
-
-func (m *defaultFriendModel) GetFriendVersion(ctx context.Context, owner string) (*model.FriendVersion, error) {
-	var ver model.FriendVersion
-	result, err := m.versionMod.Collection.FindOne(ctx, bson.M{"owner_user_id": owner})
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return nil, ErrFriendVersionNotFound
-		}
-		return nil, err
-	}
-	if err := result.Decode(&ver); err != nil {
-		return nil, err
-	}
-	return &ver, nil
-}
-
-func (m *defaultFriendModel) IncrFriendVersion(ctx context.Context, owner string) (*model.FriendVersion, error) {
-	now := timex.Now()
-	update := bson.M{
-		"$inc": bson.M{"friend_version": 1},
-		"$set": bson.M{"updated_at": now},
-	}
-	opts := options.FindOneAndUpdate().SetReturnDocument(options.After).SetUpsert(true)
-	result, err := m.versionMod.Collection.FindOneAndUpdate(ctx,
-		bson.M{"owner_user_id": owner},
-		update,
-		opts)
-	if err != nil {
-		return nil, err
-	}
-	var ver model.FriendVersion
-	if err := result.Decode(&ver); err != nil {
-		return nil, err
-	}
-	return &ver, nil
 }
 
 func (m *defaultFriendModel) InsertBlack(ctx context.Context, black *model.Black) error {
