@@ -3,16 +3,16 @@ package conversation
 import "fmt"
 
 const (
-	KeyConversationInfo   = "mongo:conversation:info:%s:%s"
-	KeyConversationLatest = "mongo:conversation:latest:%s:%s"
+	KeyConversationInfo   = "mongo:conversation:info:%s"
+	KeyConversationLatest = "mongo:conversation:latest:%s"
 )
 
-func GetConversationInfoKey(owner, convID string) string {
-	return fmt.Sprintf(KeyConversationInfo, owner, convID)
+func GetConversationInfoKey(convID string) string {
+	return fmt.Sprintf(KeyConversationInfo, convID)
 }
 
-func GetConversationLatestKey(owner, convID string) string {
-	return fmt.Sprintf(KeyConversationLatest, owner, convID)
+func GetConversationLatestKey(convID string) string {
+	return fmt.Sprintf(KeyConversationLatest, convID)
 }
 
 const (
@@ -23,7 +23,7 @@ const (
 )
 
 var (
-	sfKeyPrefixConvInfo  = "uf:cv:"
+	sfKeyPrefixConvInfo   = "uf:cv:"
 	sfKeyPrefixConvLatest = "uf:cl:"
-	sfKeyPrefixBatchConv = "uf:bc:"
+	sfKeyPrefixBatchConv  = "uf:bc:"
 )

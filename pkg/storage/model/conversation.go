@@ -2,26 +2,28 @@ package model
 
 import "time"
 
-// Conversation 会话信息，存储用户与其他用户/群组的会话配置
+// Conversation 会话信息，存储用户与其他用户/群组的会话配置。
+//
+// 设计说明：seq 相关字段（min_seq/max_seq/read_seq）不在此表冗余存储，
+// 而是由 SeqConversation（会话级全局 seq）和 SeqUser（用户级 seq，含 read_seq）
+// 两张表分别承担全局计数器分配和历史/已读边界管理职责，避免双写不一致。
+// 客户端拉会话列表时，conversation 配置走本表，seq 状态批量走 SeqUser。
 type Conversation struct {
 	OwnerUserID           string    `bson:"owner_user_id"`            // 会话所有者ID
 	ConversationID        string    `bson:"conversation_id"`          // 会话ID
-	RecvMsgOpt            int       `bson:"recv_msg_opt"`             // 消息接收选项（0-接收，1-不接收，2-接收但不通知）
-	ConversationType      int       `bson:"conversation_type"`        // 会话类型（1-单聊，2-群聊）
+	RecvMsgOpt            int32     `bson:"recv_msg_opt"`             // 消息接收选项（0-接收，1-不接收，2-接收但不通知）
+	ConversationType      int32     `bson:"conversation_type"`        // 会话类型（1-单聊，2-群聊）
 	UserID                string    `bson:"user_id"`                  // 对方用户ID（单聊）
 	GroupID               string    `bson:"group_id"`                 // 群组ID（群聊）
 	IsPinned              bool      `bson:"is_pinned"`                // 是否置顶
 	AttachedInfo          string    `bson:"attached_info"`            // 附加信息
 	IsPrivateChat         bool      `bson:"is_private_chat"`          // 是否私聊
-	GroupAtType           int       `bson:"group_at_type"`            // 群@类型（0-普通，1-@我，2-@所有人，3-@我和@所有人）
+	GroupAtType           int32     `bson:"group_at_type"`            // 群@类型（0-普通，1-@我，2-@所有人，3-@我和@所有人）
 	Extra                 string    `bson:"extra"`                    // 扩展字段（JSON格式）
-	BurnDuration          int       `bson:"burn_duration"`            // 阅后即焚时长（秒）
-	MinSeq                int64     `bson:"min_seq"`                  // 最小消息序列号
-	MaxSeq                int64     `bson:"max_seq"`                  // 最大消息序列号
+	BurnDuration          int32     `bson:"burn_duration"`            // 阅后即焚时长（秒）
 	MsgDestructTime       time.Time `bson:"msg_destruct_time"`        // 消息销毁时间
 	LatestMsgDestructTime time.Time `bson:"latest_msg_destruct_time"` // 最新消息销毁时间
 	IsMsgDestruct         bool      `bson:"is_msg_destruct"`          // 是否开启消息销毁
-	UnreadCount           int64     `bson:"unread_count"`             // 未读消息数量
 	UpdatedAt             time.Time `bson:"updated_at"`               // 更新时间
 }
 
@@ -55,4 +57,30 @@ type ConversationLatestMsg struct {
 
 func (c *ConversationLatestMsg) CollectionName() string {
 	return CollectionConversationLatestMsg
+}
+
+// SeqConversation 会话级序列号管理，记录整个会话的消息序列号范围
+type SeqConversation struct {
+	ConversationID string    `bson:"conversation_id"` // 会话ID
+	MaxSeq         int64     `bson:"max_seq"`         // 最大序列号
+	MinSeq         int64     `bson:"min_seq"`         // 最小序列号
+	UpdatedAt      time.Time `bson:"updated_at"`      // 更新时间
+}
+
+func (s *SeqConversation) CollectionName() string {
+	return CollectionSeqConversation
+}
+
+// SeqUser 用户级序列号管理，记录每个用户在特定会话中的序列号状态
+type SeqUser struct {
+	UserID         string    `bson:"user_id"`         // 用户ID
+	ConversationID string    `bson:"conversation_id"` // 会话ID
+	MinSeq         int64     `bson:"min_seq"`         // 最小序列号
+	MaxSeq         int64     `bson:"max_seq"`         // 最大序列号
+	ReadSeq        int64     `bson:"read_seq"`        // 已读序列号
+	UpdatedAt      time.Time `bson:"updated_at"`      // 更新时间
+}
+
+func (s *SeqUser) CollectionName() string {
+	return CollectionSeqUser
 }

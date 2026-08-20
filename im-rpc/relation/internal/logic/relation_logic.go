@@ -2,7 +2,6 @@ package logic
 
 import (
 	"context"
-	"sort"
 	"strings"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
@@ -12,6 +11,7 @@ import (
 	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 
+	"github.com/PaperMan11/goim/pkg/utils/hash"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
@@ -130,11 +130,11 @@ func (l *Logic) RespondFriendApply(ctx context.Context, req *pbrelation.RespondF
 			return nil, err
 		}
 
-		// 分别对两个用户写版本日志
-		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, fromUserID, toUserID, model.VersionStateInsert); err != nil {
+		// 分别对两个用户写版本日志（好友命名空间）
+		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(fromUserID), toUserID, model.VersionStateInsert); err != nil {
 			l.Errorf("incr version log for friend insert failed, owner: %s, friend: %s, err: %v", fromUserID, toUserID, err)
 		}
-		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, toUserID, fromUserID, model.VersionStateInsert); err != nil {
+		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(toUserID), fromUserID, model.VersionStateInsert); err != nil {
 			l.Errorf("incr version log for friend insert failed, owner: %s, friend: %s, err: %v", toUserID, fromUserID, err)
 		}
 	}
@@ -173,7 +173,7 @@ func (l *Logic) ImportFriends(ctx context.Context, req *pbrelation.ImportFriendR
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, ownerUserID, friendUserIDs, model.VersionStateInsert); err != nil {
+	if _, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, model.FriendDID(ownerUserID), friendUserIDs, model.VersionStateInsert); err != nil {
 		l.Errorf("incr version log batch for friend insert failed, owner: %s, err: %v", ownerUserID, err)
 	}
 
@@ -197,7 +197,7 @@ func (l *Logic) DeleteFriend(ctx context.Context, req *pbrelation.DeleteFriendRe
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, ownerUserID, friendUserID, model.VersionStateDelete); err != nil {
+	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateDelete); err != nil {
 		l.Errorf("incr version log for friend delete failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 	}
 
@@ -240,11 +240,11 @@ func (l *Logic) UpdateFriends(ctx context.Context, req *pbrelation.UpdateFriends
 		}
 		// isPinned 变更会影响好友列表排序顺序，合并好友更新 + 排序变更为一次 batch
 		if isPinnedChanged {
-			if _, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, ownerUserID, []string{friendUserID, model.VersionSortChangeID}, model.VersionStateUpdate); err != nil {
+			if _, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, model.FriendDID(ownerUserID), []string{friendUserID, model.VersionSortChangeID}, model.VersionStateUpdate); err != nil {
 				l.Errorf("incr version log batch for friend+sort update failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 			}
 		} else {
-			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, ownerUserID, friendUserID, model.VersionStateUpdate); err != nil {
+			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateUpdate); err != nil {
 				l.Errorf("incr version log for friend update failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 			}
 		}
@@ -272,10 +272,9 @@ func (l *Logic) SetFriendRemark(ctx context.Context, req *pbrelation.SetFriendRe
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, ownerUserID, friendUserID, model.VersionStateUpdate); err != nil {
+	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateUpdate); err != nil {
 		l.Errorf("incr version log for friend update failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 	}
-
 	return &pbrelation.SetFriendRemarkResp{}, nil
 }
 
@@ -310,7 +309,7 @@ func (l *Logic) AddBlack(ctx context.Context, req *pbrelation.AddBlackReq) (*pbr
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, ownerUserID, blackUserID, model.VersionStateInsert); err != nil {
+	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.BlackDID(ownerUserID), blackUserID, model.VersionStateInsert); err != nil {
 		l.Errorf("incr version log for black insert failed, owner: %s, black: %s, err: %v", ownerUserID, blackUserID, err)
 	}
 
@@ -334,7 +333,7 @@ func (l *Logic) RemoveBlack(ctx context.Context, req *pbrelation.RemoveBlackReq)
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, ownerUserID, blackUserID, model.VersionStateDelete); err != nil {
+	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.BlackDID(ownerUserID), blackUserID, model.VersionStateDelete); err != nil {
 		l.Errorf("incr version log for black delete failed, owner: %s, black: %s, err: %v", ownerUserID, blackUserID, err)
 	}
 
@@ -477,7 +476,7 @@ func (l *Logic) GetIncrementalFriendsApplyTo(ctx context.Context, req *pbrelatio
 	clientVersion := uint(req.GetVersion())
 	clientVersionID := req.GetVersionID()
 
-	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, userID, clientVersion, SyncLimit)
+	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, model.FriendDID(userID), clientVersion, SyncLimit)
 	if err != nil {
 		l.Errorf("find change log failed, userID: %s, err: %v", userID, err)
 		return nil, err
@@ -542,7 +541,7 @@ func (l *Logic) fullFriendsApplyToResp(ctx context.Context, userID string) (*pbr
 		changes = append(changes, modelToSDKFriendRequest(r))
 	}
 	var curVersion uint64
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, userID); err2 == nil && verLog != nil {
+	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.FriendDID(userID)); err2 == nil && verLog != nil {
 		curVersion = uint64(verLog.Version)
 	}
 	return &pbrelation.GetIncrementalFriendsApplyToResp{
@@ -563,7 +562,7 @@ func (l *Logic) GetIncrementalFriendsApplyFrom(ctx context.Context, req *pbrelat
 	clientVersion := uint(req.GetVersion())
 	clientVersionID := req.GetVersionID()
 
-	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, userID, clientVersion, SyncLimit)
+	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, model.FriendDID(userID), clientVersion, SyncLimit)
 	if err != nil {
 		l.Errorf("find change log failed, userID: %s, err: %v", userID, err)
 		return nil, err
@@ -628,7 +627,7 @@ func (l *Logic) fullFriendsApplyFromResp(ctx context.Context, userID string) (*p
 		changes = append(changes, modelToSDKFriendRequest(r))
 	}
 	var curVersion uint64
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, userID); err2 == nil && verLog != nil {
+	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.FriendDID(userID)); err2 == nil && verLog != nil {
 		curVersion = uint64(verLog.Version)
 	}
 	return &pbrelation.GetIncrementalFriendsApplyFromResp{
@@ -979,7 +978,7 @@ func (l *Logic) GetIncrementalFriends(ctx context.Context, req *pbrelation.GetIn
 	clientVersion := uint(req.GetVersion())
 	clientVersionID := req.GetVersionID()
 
-	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, userID, clientVersion, SyncLimit)
+	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, model.FriendDID(userID), clientVersion, SyncLimit)
 	if err != nil {
 		l.Errorf("find change log failed, userID: %s, err: %v", userID, err)
 		return nil, err
@@ -1042,7 +1041,7 @@ func (l *Logic) fullFriendsResp(ctx context.Context, userID string) (*pbrelation
 		inserts = append(inserts, modelToFriendInfo(f))
 	}
 	var curVersion uint64
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, userID); err2 == nil && verLog != nil {
+	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.FriendDID(userID)); err2 == nil && verLog != nil {
 		curVersion = uint64(verLog.Version)
 	}
 	return &pbrelation.GetIncrementalFriendsResp{
@@ -1064,7 +1063,7 @@ func (l *Logic) GetIncrementalBlacks(ctx context.Context, req *pbrelation.GetInc
 	clientVersion := uint(req.GetVersion())
 	clientVersionID := req.GetVersionID()
 
-	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, userID, clientVersion, SyncLimit)
+	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, model.BlackDID(userID), clientVersion, SyncLimit)
 	if err != nil {
 		l.Errorf("find change log failed, userID: %s, err: %v", userID, err)
 		return nil, err
@@ -1121,7 +1120,7 @@ func (l *Logic) fullBlacksResp(ctx context.Context, userID string) (*pbrelation.
 		inserts = append(inserts, modelToBlackInfo(b))
 	}
 	var curVersion uint64
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, userID); err2 == nil && verLog != nil {
+	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.BlackDID(userID)); err2 == nil && verLog != nil {
 		curVersion = uint64(verLog.Version)
 	}
 	return &pbrelation.GetIncrementalBlacksResp{
@@ -1149,14 +1148,13 @@ func (l *Logic) GetFullFriendUserIDs(ctx context.Context, req *pbrelation.GetFul
 	for _, f := range friends {
 		userIDs = append(userIDs, f.FriendUserID)
 	}
-	sort.Strings(userIDs)
-	curHash := hashIDs(userIDs)
+	curHash := hash.HashStringSet(userIDs)
 
 	resp := &pbrelation.GetFullFriendUserIDsResp{
 		Equal:   req.GetIdHash() != 0 && req.GetIdHash() == curHash,
 		UserIDs: userIDs,
 	}
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, userID); err2 == nil && verLog != nil {
+	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.FriendDID(userID)); err2 == nil && verLog != nil {
 		resp.VersionID = verLog.ID.Hex()
 		resp.Version = uint64(verLog.Version)
 	} else if err2 != nil {

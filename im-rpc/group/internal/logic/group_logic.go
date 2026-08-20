@@ -3,9 +3,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"hash/fnv"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
@@ -16,6 +13,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	groupModel "github.com/PaperMan11/goim/pkg/storage/mongo/group"
 
+	"github.com/PaperMan11/goim/pkg/utils/hash"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
@@ -464,7 +462,7 @@ func (l *Logic) JoinGroup(ctx context.Context, req *pbgroup.JoinGroupReq) (*pbgr
 	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, memberID, model.VersionStateInsert); err != nil {
 		l.Errorf("incr version log for member insert failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
 	}
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, memberID, groupID, model.VersionStateInsert); err != nil {
+	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(memberID), groupID, model.VersionStateInsert); err != nil {
 		l.Errorf("incr version log for member insert failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
 	}
 
@@ -502,7 +500,7 @@ func (l *Logic) QuitGroup(ctx context.Context, req *pbgroup.QuitGroupReq) (*pbgr
 	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, userID, model.VersionStateDelete); err != nil {
 		l.Errorf("incr version log for member delete failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
 	}
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, userID, groupID, model.VersionStateDelete); err != nil {
+	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), groupID, model.VersionStateDelete); err != nil {
 		l.Errorf("incr version log for member delete failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
 	}
 
@@ -650,7 +648,7 @@ func (l *Logic) KickGroupMember(ctx context.Context, req *pbgroup.KickGroupMembe
 			l.Errorf("incr version log batch for member delete failed, groupID: %s, err: %v", groupID, err)
 		}
 		for _, userID := range kickedUserIDs {
-			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, userID, groupID, model.VersionStateDelete); err != nil {
+			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), groupID, model.VersionStateDelete); err != nil {
 				l.Errorf("incr version log for member delete failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
 			}
 		}
@@ -734,7 +732,7 @@ func (l *Logic) DismissGroup(ctx context.Context, req *pbgroup.DismissGroupReq) 
 		memberIDs, _ := l.svcCtx.GroupModel.FindMemberIDsByGroup(ctx, groupID)
 		_ = l.svcCtx.GroupModel.DeleteMembers(ctx, groupID, memberIDs)
 		for _, userID := range memberIDs {
-			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, userID, groupID, model.VersionStateDelete); err != nil {
+			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), groupID, model.VersionStateDelete); err != nil {
 				l.Errorf("incr version log for member delete failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
 			}
 		}
@@ -1516,7 +1514,7 @@ func (l *Logic) GetIncrementalJoinGroup(ctx context.Context, req *pbgroup.GetInc
 	clientVersionID := req.GetVersionID()
 
 	// FindChangeLog：全有或全无
-	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, userID, clientVersion, SyncLimit)
+	verLog, err := l.svcCtx.VersionLogModel.FindChangeLog(ctx, model.JoinGroupDID(userID), clientVersion, SyncLimit)
 	if err != nil {
 		l.Errorf("find change log failed, userID: %s, err: %v", userID, err)
 		return nil, err
@@ -1588,7 +1586,7 @@ func (l *Logic) fullJoinGroupResp(ctx context.Context, userID string) (*pbgroup.
 		}
 	}
 	var curVersion uint64
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, userID); err2 == nil && verLog != nil {
+	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.JoinGroupDID(userID)); err2 == nil && verLog != nil {
 		curVersion = uint64(verLog.Version)
 	}
 	return &pbgroup.GetIncrementalJoinGroupResp{
@@ -1611,8 +1609,7 @@ func (l *Logic) GetFullGroupMemberUserIDs(ctx context.Context, req *pbgroup.GetF
 		l.Errorf("find member ids by group failed, groupID: %s, err: %v", groupID, err)
 		return nil, err
 	}
-	sort.Strings(userIDs)
-	curHash := hashIDs(userIDs)
+	curHash := hash.HashStringSet(userIDs)
 
 	resp := &pbgroup.GetFullGroupMemberUserIDsResp{
 		Equal:   req.GetIdHash() != 0 && req.GetIdHash() == curHash,
@@ -1643,30 +1640,19 @@ func (l *Logic) GetFullJoinGroupIDs(ctx context.Context, req *pbgroup.GetFullJoi
 	for _, m := range members {
 		groupIDs = append(groupIDs, m.GroupID)
 	}
-	sort.Strings(groupIDs)
-	curHash := hashIDs(groupIDs)
+	curHash := hash.HashStringSet(groupIDs)
 
 	resp := &pbgroup.GetFullJoinGroupIDsResp{
 		Equal:    req.GetIdHash() != 0 && req.GetIdHash() == curHash,
 		GroupIDs: groupIDs,
 	}
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, userID); err2 == nil && verLog != nil {
+	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.JoinGroupDID(userID)); err2 == nil && verLog != nil {
 		resp.VersionID = verLog.ID.Hex()
 		resp.Version = uint64(verLog.Version)
 	} else if err2 != nil {
 		l.Errorf("get version log failed, userID: %s, err: %v", userID, err2)
 	}
 	return resp, nil
-}
-
-// hashIDs 计算有序ID列表的 FNV-1a 哈希，用于全量同步的等值比较。
-func hashIDs(ids []string) uint64 {
-	if len(ids) == 0 {
-		return 0
-	}
-	h := fnv.New64a()
-	h.Write([]byte(strings.Join(ids, ",")))
-	return h.Sum64()
 }
 
 // ==================== 辅助函数 ====================

@@ -26,6 +26,29 @@ const (
 	DefaultDeleteVersion = 0
 )
 
+// DID 命名空间前缀。
+// 同一 userID 的好友、黑名单、加入群、会话变更必须存储在不同的 VersionLogTable 文档中，
+// 否则 logs 数组会混杂不同类型的 EID，导致 ClassifyIncrementalLogs 分类混乱和 EID 跨命名空间冲突。
+// 群成员版本日志的 DID = groupID（不与 userID 冲突，无需前缀）。
+const (
+	VersionDIDFriend       = "friend:"    // 好友版本日志：DID = friend: + userID
+	VersionDIDBlack        = "black:"     // 黑名单版本日志：DID = black: + userID
+	VersionDIDJoinGroup    = "joingroup:" // 加入群版本日志：DID = joingroup: + userID
+	VersionDIDConversation = "conv:"      // 会话版本日志：DID = conv: + userID
+)
+
+// FriendDID 构造好友版本日志的 DID
+func FriendDID(userID string) string { return VersionDIDFriend + userID }
+
+// BlackDID 构造黑名单版本日志的 DID
+func BlackDID(userID string) string { return VersionDIDBlack + userID }
+
+// JoinGroupDID 构造加入群版本日志的 DID
+func JoinGroupDID(userID string) string { return VersionDIDJoinGroup + userID }
+
+// ConversationDID 构造会话版本日志的 DID
+func ConversationDID(userID string) string { return VersionDIDConversation + userID }
+
 // VersionLogElem 单条版本日志，记录一次变更
 type VersionLogElem struct {
 	EID        string    `bson:"e_id"`        // 实体ID（成员变更=用户ID，群组信息变更=VersionGroupChangeID）

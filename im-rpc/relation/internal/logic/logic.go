@@ -2,8 +2,6 @@ package logic
 
 import (
 	"context"
-	"hash/fnv"
-	"strings"
 
 	"github.com/PaperMan11/goim/im-rpc/relation/internal/svc"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
@@ -104,14 +102,4 @@ func modelToBlackInfo(b *model.Black) *sdkws.BlackInfo {
 		OperatorUserID: b.OperatorUserID,
 		Ex:             b.Extra,
 	}
-}
-
-// hashIDs 计算有序ID列表的 FNV-1a 哈希，用于全量同步的等值比较。
-func hashIDs(ids []string) uint64 {
-	if len(ids) == 0 {
-		return 0
-	}
-	h := fnv.New64a()
-	h.Write([]byte(strings.Join(ids, ",")))
-	return h.Sum64()
 }

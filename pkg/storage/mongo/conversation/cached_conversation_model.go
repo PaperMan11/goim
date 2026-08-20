@@ -30,10 +30,10 @@ func NewCachedConversationModel(inner ConversationModel, rdb goredis.UniversalCl
 	}
 }
 
-func (m *cachedConversationModel) convCacheKeys(owner, convID string) []string {
+func (m *cachedConversationModel) convCacheKeys(convID string) []string {
 	return []string{
-		GetConversationInfoKey(owner, convID),
-		GetConversationLatestKey(owner, convID),
+		GetConversationInfoKey(convID),
+		GetConversationLatestKey(convID),
 	}
 }
 
@@ -47,7 +47,7 @@ func (m *cachedConversationModel) InsertConversation(ctx context.Context, convs 
 		return err
 	}
 	for _, conv := range convs {
-		sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(conv.OwnerUserID, conv.ConversationID)...)
+		sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(conv.ConversationID)...)
 	}
 	return nil
 }
@@ -57,7 +57,7 @@ func (m *cachedConversationModel) UpsertConversation(ctx context.Context, conv *
 	if err != nil {
 		return err
 	}
-	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(conv.OwnerUserID, conv.ConversationID)...)
+	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(conv.ConversationID)...)
 	return nil
 }
 
@@ -67,19 +67,19 @@ func (m *cachedConversationModel) FindConversation(ctx context.Context, ownerUse
 	}
 
 	var conv model.Conversation
-	key := GetConversationInfoKey(ownerUserID, conversationID)
+	key := GetConversationInfoKey(conversationID)
 	found, err := sredis.CacheGet(ctx, m.redis, key, &conv)
 	if err != nil {
 		return nil, err
 	}
 	if found {
-		if conv.ConversationID == "" {
+		if conv.ConversationID == "" || conv.OwnerUserID != ownerUserID {
 			return nil, ErrConversationNotFound
 		}
 		return &conv, nil
 	}
 
-	sfKey := sfKeyPrefixConvInfo + ownerUserID + ":" + conversationID
+	sfKey := sfKeyPrefixConvInfo + conversationID
 	v, err := m.barrier.Do(sfKey, func() (any, error) {
 		var innerConv model.Conversation
 		found2, err2 := sredis.CacheGet(ctx, m.redis, key, &innerConv)
@@ -113,7 +113,7 @@ func (m *cachedConversationModel) FindConversation(ctx context.Context, ownerUse
 		}
 		return nil, err
 	}
-	if v == nil {
+	if v == nil || v.(*model.Conversation).OwnerUserID != ownerUserID {
 		return nil, ErrConversationNotFound
 	}
 	return v.(*model.Conversation), nil
@@ -129,11 +129,11 @@ func (m *cachedConversationModel) FindConversationsByIDs(ctx context.Context, ow
 
 	for _, convID := range convIDs {
 		var conv model.Conversation
-		found, err := sredis.CacheGet(ctx, m.redis, GetConversationInfoKey(ownerUserID, convID), &conv)
+		found, err := sredis.CacheGet(ctx, m.redis, GetConversationInfoKey(convID), &conv)
 		if err != nil {
 			return nil, err
 		}
-		if found && conv.ConversationID != "" {
+		if found && conv.ConversationID != "" && conv.OwnerUserID == ownerUserID {
 			result = append(result, &conv)
 			continue
 		}
@@ -146,7 +146,7 @@ func (m *cachedConversationModel) FindConversationsByIDs(ctx context.Context, ow
 
 	sort.Strings(missIDs)
 	sum := sha1.Sum([]byte(strings.Join(missIDs, ",")))
-	sfKey := sfKeyPrefixBatchConv + ownerUserID + ":" + hex.EncodeToString(sum[:])
+	sfKey := sfKeyPrefixBatchConv + hex.EncodeToString(sum[:])
 
 	v, err := m.barrier.Do(sfKey, func() (any, error) {
 		for i, cid := range missIDs {
@@ -171,7 +171,7 @@ func (m *cachedConversationModel) FindConversationsByIDs(ctx context.Context, ow
 			continue
 		}
 		var conv model.Conversation
-		found, err := sredis.CacheGet(ctx, m.redis, GetConversationInfoKey(ownerUserID, cid), &conv)
+		found, err := sredis.CacheGet(ctx, m.redis, GetConversationInfoKey(cid), &conv)
 		if err != nil {
 			return nil, err
 		}
@@ -192,7 +192,7 @@ func (m *cachedConversationModel) UpdateConversation(ctx context.Context, owner,
 	if err != nil {
 		return err
 	}
-	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(owner, convID)...)
+	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(convID)...)
 	return nil
 }
 
@@ -202,7 +202,7 @@ func (m *cachedConversationModel) UpdateConversations(ctx context.Context, owner
 		return err
 	}
 	for _, convID := range convIDs {
-		sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(ownerUserID, convID)...)
+		sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(convID)...)
 	}
 	return nil
 }
@@ -212,7 +212,7 @@ func (m *cachedConversationModel) DeleteConversation(ctx context.Context, owner,
 	if err != nil {
 		return err
 	}
-	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(owner, convID)...)
+	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(convID)...)
 	return nil
 }
 
@@ -226,7 +226,7 @@ func (m *cachedConversationModel) DeleteConversationsByOwner(ctx context.Context
 		return err
 	}
 	for _, conv := range convs {
-		sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(conv.OwnerUserID, conv.ConversationID)...)
+		sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(conv.ConversationID)...)
 	}
 	return nil
 }
@@ -236,7 +236,7 @@ func (m *cachedConversationModel) UpsertConversationLatestMsg(ctx context.Contex
 	if err != nil {
 		return err
 	}
-	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(latest.OwnerUserID, latest.ConversationID)...)
+	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(latest.ConversationID)...)
 	return nil
 }
 
@@ -246,7 +246,7 @@ func (m *cachedConversationModel) FindLatestMsg(ctx context.Context, owner, conv
 	}
 
 	var latest model.ConversationLatestMsg
-	key := GetConversationLatestKey(owner, convID)
+	key := GetConversationLatestKey(convID)
 	found, err := sredis.CacheGet(ctx, m.redis, key, &latest)
 	if err != nil {
 		return nil, err
@@ -258,7 +258,7 @@ func (m *cachedConversationModel) FindLatestMsg(ctx context.Context, owner, conv
 		return &latest, nil
 	}
 
-	sfKey := sfKeyPrefixConvLatest + owner + ":" + convID
+	sfKey := sfKeyPrefixConvLatest + convID
 	v, err := m.barrier.Do(sfKey, func() (any, error) {
 		var innerLatest model.ConversationLatestMsg
 		found2, err2 := sredis.CacheGet(ctx, m.redis, key, &innerLatest)
@@ -307,6 +307,6 @@ func (m *cachedConversationModel) DeleteLatestMsg(ctx context.Context, owner, co
 	if err != nil {
 		return err
 	}
-	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(owner, convID)...)
+	sredis.CacheDelDouble(ctx, m.redis, m.convCacheKeys(convID)...)
 	return nil
 }
