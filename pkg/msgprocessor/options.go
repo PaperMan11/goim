@@ -151,3 +151,10 @@ func (o Options) IsSenderConversationUpdate() bool {
 func (o Options) IsReactionFromCache() bool {
 	return o.Is(constant.IsReactionFromCache)
 }
+
+func SetOrSwitchOption(options map[string]bool, key string, b bool) {
+	if options == nil {
+		options = map[string]bool{}
+	}
+	options[key] = b
+}

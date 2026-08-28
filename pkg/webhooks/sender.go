@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/metrics"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -265,8 +266,8 @@ func (rm *RetryManager) processRetry(record *DeliveryRecord) {
 		record.Status = DeliveryStatusAbandoned
 		record.ErrorMessage = "max retries exceeded"
 		rm.deliveryRepo.Update(record)
-		webhookEventAbandoned.Inc()
-		webhookEventRetrying.Dec()
+		metrics.WebhookEventAbandoned.Inc()
+		metrics.WebhookEventRetrying.Dec()
 		return
 	}
 
@@ -309,8 +310,8 @@ func (rm *RetryManager) processRetry(record *DeliveryRecord) {
 		record.AttemptCount++
 		rm.deliveryRepo.Update(record)
 
-		webhookDeliveryTotal.Inc(record.WebhookURL, "retry_failed", string(record.EventType))
-		webhookRetryCount.ObserveFloat(float64(record.AttemptCount), record.WebhookURL, string(record.EventType))
+		metrics.WebhookDeliveryTotal.Inc(record.WebhookURL, "retry_failed", string(record.EventType))
+		metrics.WebhookRetryCount.ObserveFloat(float64(record.AttemptCount), record.WebhookURL, string(record.EventType))
 
 		// 重新放入重试队列
 		rm.retryQueue <- record
@@ -325,8 +326,8 @@ func (rm *RetryManager) processRetry(record *DeliveryRecord) {
 		record.Duration = resp.Duration
 		rm.deliveryRepo.Update(record)
 
-		webhookDeliveryTotal.Inc(record.WebhookURL, "retry_success", string(record.EventType))
-		webhookEventRetrying.Dec()
+		metrics.WebhookDeliveryTotal.Inc(record.WebhookURL, "retry_success", string(record.EventType))
+		metrics.WebhookEventRetrying.Dec()
 	} else {
 		// HTTP 状态码非 2xx，视为失败
 		record.Status = DeliveryStatusFailed
@@ -342,12 +343,12 @@ func (rm *RetryManager) processRetry(record *DeliveryRecord) {
 			record.AttemptCount++
 			rm.retryQueue <- record
 
-			webhookDeliveryTotal.Inc(record.WebhookURL, "retry_failed", string(record.EventType))
-			webhookRetryCount.ObserveFloat(float64(record.AttemptCount), record.WebhookURL, string(record.EventType))
+			metrics.WebhookDeliveryTotal.Inc(record.WebhookURL, "retry_failed", string(record.EventType))
+			metrics.WebhookRetryCount.ObserveFloat(float64(record.AttemptCount), record.WebhookURL, string(record.EventType))
 		} else {
 			record.Status = DeliveryStatusAbandoned
-			webhookEventAbandoned.Inc()
-			webhookEventRetrying.Dec()
+			metrics.WebhookEventAbandoned.Inc()
+			metrics.WebhookEventRetrying.Dec()
 		}
 
 		rm.deliveryRepo.Update(record)

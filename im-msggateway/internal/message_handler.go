@@ -8,6 +8,7 @@ import (
 	"github.com/PaperMan11/goim/im-msggateway/internal/compressor"
 	"github.com/PaperMan11/goim/im-msggateway/internal/encoder"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/metrics"
 	pbmsg "github.com/PaperMan11/goim/pkg/protocol/msg"
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
@@ -54,7 +55,7 @@ func (p *MessagePipeline) HandleRaw(conn Connection, message []byte) error {
 	start := timex.Now()
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
-		msgHandleDurationHistogram.ObserveFloat(duration)
+		metrics.MsgHandleDurationHistogram.ObserveFloat(duration)
 	}()
 
 	req := MallocRequest()
@@ -64,14 +65,14 @@ func (p *MessagePipeline) HandleRaw(conn Connection, message []byte) error {
 	compressor := compressor.GetCompressor(compression)
 	decompressed, err := compressor.Decompress(message)
 	if err != nil {
-		msgHandleErrorCounter.Inc("decompress_failed")
+		metrics.MsgHandleErrorCounter.Inc("decompress_failed")
 		return err
 	}
 
 	sdkType := conn.Context().HandshakeInfo().GetSDKType()
 	decoder := encoder.GetEncoder(sdkType)
 	if err := decoder.Unmarshal(decompressed, req); err != nil {
-		msgHandleErrorCounter.Inc("unmarshal_failed")
+		metrics.MsgHandleErrorCounter.Inc("unmarshal_failed")
 		return err
 	}
 
@@ -110,70 +111,70 @@ func (h *BusinessHandler) Handle(conn Connection, req *Request) error {
 	start := timex.Now()
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
-		businessOpDurationHistogram.ObserveFloat(duration, opName)
+		metrics.BusinessOpDurationHistogram.ObserveFloat(duration, opName)
 		if err != nil {
-			businessOpErrorCounter.Inc(opName)
+			metrics.BusinessOpErrorCounter.Inc(opName)
 		}
 	}()
 
 	switch req.ReqIdentifier {
 	case WSGetNewestSeq:
 		opName = "get_newest_seq"
-		businessOpCounter.Inc(opName)
+		metrics.BusinessOpCounter.Inc(opName)
 		data, err = h.handleGetNewestSeq(conn.Context(), req)
 	case WSPullMsgBySeqList:
 		opName = "pull_msg_by_seq"
-		businessOpCounter.Inc(opName)
-		pullMsgCounter.Inc("by_seq_list")
+		metrics.BusinessOpCounter.Inc(opName)
+		metrics.PullMsgCounter.Inc("by_seq_list")
 		data, err = h.handlePullMsgBySeqList(conn.Context(), req)
 	case WSSendMsg:
 		opName = "send_msg"
-		businessOpCounter.Inc(opName)
-		sendMsgCounter.Inc("normal")
+		metrics.BusinessOpCounter.Inc(opName)
+		metrics.SendMsgCounter.Inc("normal")
 		data, err = h.handleSendMsg(conn.Context(), req)
 	case WSSendSignalMsg:
 		opName = "send_signal_msg"
-		businessOpCounter.Inc(opName)
-		sendMsgCounter.Inc("signal")
+		metrics.BusinessOpCounter.Inc(opName)
+		metrics.SendMsgCounter.Inc("signal")
 		data, err = h.handleSendSignalMsg(conn.Context(), req)
 	case WSPullMsg:
 		opName = "pull_msg"
-		businessOpCounter.Inc(opName)
-		pullMsgCounter.Inc("normal")
+		metrics.BusinessOpCounter.Inc(opName)
+		metrics.PullMsgCounter.Inc("normal")
 		data, err = h.handlePullMsg(conn.Context(), req)
 	case WSGetConvMaxReadSeq:
 		opName = "get_conv_max_read_seq"
-		businessOpCounter.Inc(opName)
+		metrics.BusinessOpCounter.Inc(opName)
 		data, err = h.handleGetConvMaxReadSeq(conn.Context(), req)
 	case WsPullConvLastMessage:
 		opName = "pull_conv_last_msg"
-		businessOpCounter.Inc(opName)
-		pullMsgCounter.Inc("last_message")
+		metrics.BusinessOpCounter.Inc(opName)
+		metrics.PullMsgCounter.Inc("last_message")
 		data, err = h.handlePullConvLastMessage(conn.Context(), req)
 	case WSPushMsg:
 		opName = "push_msg"
-		businessOpCounter.Inc(opName)
+		metrics.BusinessOpCounter.Inc(opName)
 		data, err = h.handlePushMsg(conn.Context(), req)
 	case WSKickOnlineMsg:
 		opName = "kick_online"
-		businessOpCounter.Inc(opName)
+		metrics.BusinessOpCounter.Inc(opName)
 		data, err = h.handleKickOnlineMsg(conn.Context(), req)
 	case WSLogoutMsg:
 		opName = "logout"
-		businessOpCounter.Inc(opName)
+		metrics.BusinessOpCounter.Inc(opName)
 		data, err = h.handleLogoutMsg(conn.Context(), req)
 	case WSSetBackgroundStatus:
 		opName = "set_background_status"
-		businessOpCounter.Inc(opName)
+		metrics.BusinessOpCounter.Inc(opName)
 		data, err = h.handleSetBackgroundStatus(conn.Context(), req)
 	case WSSubUserOnlineStatus:
 		opName = "sub_online_status"
-		businessOpCounter.Inc(opName)
-		subscribeCounter.Inc("online_status")
+		metrics.BusinessOpCounter.Inc(opName)
+		metrics.SubscribeCounter.Inc("online_status")
 		data, err = h.handleSubUserOnlineStatus(conn.Context(), req)
 	case WSDataError:
 		opName = "data_error"
-		businessOpCounter.Inc(opName)
+		metrics.BusinessOpCounter.Inc(opName)
 		data, err = h.handleDataError(conn.Context(), req)
 	default:
 		opName = "unknown_message"

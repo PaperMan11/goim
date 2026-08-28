@@ -87,6 +87,8 @@ type GroupService interface {
 	GetFullGroupMemberUserIDs(ctx context.Context, in *pbgroup.GetFullGroupMemberUserIDsReq, opts ...grpc.CallOption) (*pbgroup.GetFullGroupMemberUserIDsResp, error)
 	// 获取完整加入群组ID列表
 	GetFullJoinGroupIDs(ctx context.Context, in *pbgroup.GetFullJoinGroupIDsReq, opts ...grpc.CallOption) (*pbgroup.GetFullJoinGroupIDsResp, error)
+	// 是否为群成员
+	IsGroupMember(ctx context.Context, in *pbgroup.IsGroupMemberReq, opts ...grpc.CallOption) (*pbgroup.IsGroupMemberResp, error)
 }
 
 type defaultGroupService struct {
@@ -292,6 +294,11 @@ func (s *defaultGroupService) GetFullJoinGroupIDs(ctx context.Context, in *pbgro
 	return groupClient.GetFullJoinGroupIDs(ctx, in, opts...)
 }
 
+func (s *defaultGroupService) IsGroupMember(ctx context.Context, in *pbgroup.IsGroupMemberReq, opts ...grpc.CallOption) (*pbgroup.IsGroupMemberResp, error) {
+	groupClient := pbgroup.NewGroupClient(s.cli.Conn())
+	return groupClient.IsGroupMember(ctx, in, opts...)
+}
+
 type stubGroupService struct {
 }
 
@@ -453,4 +460,8 @@ func (s *stubGroupService) GetFullGroupMemberUserIDs(ctx context.Context, in *pb
 
 func (s *stubGroupService) GetFullJoinGroupIDs(ctx context.Context, in *pbgroup.GetFullJoinGroupIDsReq, opts ...grpc.CallOption) (*pbgroup.GetFullJoinGroupIDsResp, error) {
 	return &pbgroup.GetFullJoinGroupIDsResp{}, nil
+}
+
+func (s *stubGroupService) IsGroupMember(ctx context.Context, in *pbgroup.IsGroupMemberReq, opts ...grpc.CallOption) (*pbgroup.IsGroupMemberResp, error) {
+	return &pbgroup.IsGroupMemberResp{}, nil
 }

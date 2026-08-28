@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/metrics"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -96,8 +97,8 @@ func (d *Dispatcher) processEvent(event *WebhookEvent) {
 	logx.Infof("Processing event %s (%s) to %d webhooks", event.EventID, event.EventType, len(webhooks))
 
 	// 更新指标
-	webhookEventTotal.Inc(string(event.EventType), "processed")
-	webhookEventPending.Inc()
+	metrics.WebhookEventTotal.Inc(string(event.EventType), "processed")
+	metrics.WebhookEventPending.Inc()
 
 	// 并发发送到所有 webhook
 	var wg sync.WaitGroup
@@ -112,7 +113,7 @@ func (d *Dispatcher) processEvent(event *WebhookEvent) {
 	wg.Wait()
 
 	// 更新指标
-	webhookEventPending.Dec()
+	metrics.WebhookEventPending.Dec()
 }
 
 // deliverEvent 投递事件到指定的 webhook
@@ -163,16 +164,16 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 	record.UpdatedAt = timex.Now()
 
 	// 更新指标
-	webhookDeliveryTotal.Inc(config.URL, "total", string(event.EventType))
-	webhookDeliveryDuration.ObserveFloat(duration.Seconds(), config.URL, string(event.EventType))
+	metrics.WebhookDeliveryTotal.Inc(config.URL, "total", string(event.EventType))
+	metrics.WebhookDeliveryDuration.ObserveFloat(duration.Seconds(), config.URL, string(event.EventType))
 
 	if err != nil {
 		// 发送失败
 		record.Status = DeliveryStatusFailed
 		record.ErrorMessage = err.Error()
 
-		webhookEventTotal.Inc(string(event.EventType), "failed")
-		webhookDeliveryTotal.Inc(config.URL, "failed", string(event.EventType))
+		metrics.WebhookEventTotal.Inc(string(event.EventType), "failed")
+		metrics.WebhookDeliveryTotal.Inc(config.URL, "failed", string(event.EventType))
 
 		logx.Errorf("Failed to deliver event %s to %s: %v", event.EventID, config.URL, err)
 
@@ -180,19 +181,19 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 		if d.retryManager != nil && config.MaxRetries > 0 {
 			record.Status = DeliveryStatusRetrying
 			record.NextAttempt = timex.Now().Add(config.RetryInterval)
-			webhookEventRetrying.Inc()
+			metrics.WebhookEventRetrying.Inc()
 
 			d.retryManager.ScheduleRetry(record)
 		} else {
 			record.Status = DeliveryStatusAbandoned
-			webhookEventAbandoned.Inc()
+			metrics.WebhookEventAbandoned.Inc()
 		}
 	} else if resp.Success {
 		// 发送成功
 		record.Status = DeliveryStatusSuccess
 
-		webhookEventTotal.Inc(string(event.EventType), "success")
-		webhookDeliveryTotal.Inc(config.URL, "success", string(event.EventType))
+		metrics.WebhookEventTotal.Inc(string(event.EventType), "success")
+		metrics.WebhookDeliveryTotal.Inc(config.URL, "success", string(event.EventType))
 
 		logx.Infof("Successfully delivered event %s to %s (status: %d, duration: %v)",
 			event.EventID, config.URL, resp.StatusCode, duration)
@@ -201,8 +202,8 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 		record.Status = DeliveryStatusFailed
 		record.ErrorMessage = resp.Error
 
-		webhookEventTotal.Inc(string(event.EventType), "failed")
-		webhookDeliveryTotal.Inc(config.URL, "failed", string(event.EventType))
+		metrics.WebhookEventTotal.Inc(string(event.EventType), "failed")
+		metrics.WebhookDeliveryTotal.Inc(config.URL, "failed", string(event.EventType))
 
 		logx.Errorf("Failed to deliver event %s to %s (status: %d, error: %s)",
 			event.EventID, config.URL, resp.StatusCode, resp.Error)
@@ -211,12 +212,12 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 		if d.retryManager != nil && config.MaxRetries > 0 {
 			record.Status = DeliveryStatusRetrying
 			record.NextAttempt = timex.Now().Add(config.RetryInterval)
-			webhookEventRetrying.Inc()
+			metrics.WebhookEventRetrying.Inc()
 
 			d.retryManager.ScheduleRetry(record)
 		} else {
 			record.Status = DeliveryStatusAbandoned
-			webhookEventAbandoned.Inc()
+			metrics.WebhookEventAbandoned.Inc()
 		}
 	}
 

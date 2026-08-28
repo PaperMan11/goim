@@ -6,6 +6,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
+	"github.com/PaperMan11/goim/pkg/metrics"
 	"github.com/PaperMan11/goim/pkg/utils/workerpool"
 )
 
@@ -168,8 +169,8 @@ func (cm *connManager) addDirectly(conn Connection, addSeq uint64) error {
 	cm.connAddSeq[conn.ID()] = addSeq
 	cm.connCount++
 
-	totalConnCounter.Inc()
-	activeConnGauge.Set(float64(cm.connCount))
+	metrics.TotalConnCounter.Inc()
+	metrics.ActiveConnGauge.Set(float64(cm.connCount))
 	return nil
 }
 
@@ -457,8 +458,8 @@ func (cm *connManager) removeLocked(connID string) error {
 
 	_ = conn.Close()
 
-	connCloseCounter.Inc("normal")
-	activeConnGauge.Set(float64(cm.connCount))
+	metrics.ConnCloseCounter.Inc("normal")
+	metrics.ActiveConnGauge.Set(float64(cm.connCount))
 	return nil
 }
 
@@ -565,6 +566,6 @@ func (cm *connManager) CloseAll() {
 	cm.connSeq = 0
 	cm.connAddSeq = make(map[string]uint64)
 
-	connCloseCounter.Add(float64(closedCount), "server_stop")
-	activeConnGauge.Set(0)
+	metrics.ConnCloseCounter.Add(float64(closedCount), "server_stop")
+	metrics.ActiveConnGauge.Set(0)
 }

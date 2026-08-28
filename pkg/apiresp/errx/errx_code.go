@@ -55,6 +55,9 @@ const (
 	ErrCodeGroupTypeNotSupport   = 1205
 	ErrCodeGroupRequestHandled   = 1206
 	ErrCodeGroupNotFoundError    = 1207 // Group does not exist
+	ErrCodeGroupMutedError       = 1208 // Group is muted
+	ErrCodeGroupMemberMutedError = 1209 // Group member is muted
+	ErrCodeGroupDismissedError   = 1210 // Group has been dismissed by the owner or admin.
 
 	// Relationship error codes.
 	ErrCodeCanNotAddYourselfError   = 1301 // Cannot add yourself as a friend
@@ -62,6 +65,7 @@ const (
 	ErrCodeNotPeersFriend           = 1303 // Not the peer's friend
 	ErrCodeRelationshipAlreadyError = 1304 // Already in a friend relationship
 	ErrCodeFriendRequestHandled     = 1305 // Friend request has already been handled
+	ErrCodeBlackByPeer              = 1306 // Black by the peer
 
 	// Message error codes.
 	ErrCodeMessageHasReadDisable = 1401

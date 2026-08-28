@@ -10,6 +10,7 @@ import (
 	"github.com/PaperMan11/goim/im-msggateway/internal/compressor"
 	"github.com/PaperMan11/goim/im-msggateway/internal/encoder"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/metrics"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"github.com/gorilla/websocket"
 	"github.com/zeromicro/go-zero/core/logc"
@@ -111,15 +112,15 @@ func (c *WsConnection) readPump() {
 				if messageType == websocket.BinaryMessage {
 					msgType = "binary"
 				}
-				msgReceivedCounter.Inc(msgType)
-				msgSizeHistogram.ObserveFloat(float64(len(message)))
+				metrics.MsgReceivedCounter.Inc(msgType)
+				metrics.MsgSizeHistogram.ObserveFloat(float64(len(message)))
 
 				err = c.server.HandleMessage(c, message)
 				if err != nil {
 					c.closeWithError(err)
 					if !errors.Is(err, errx.LogoutError) {
 						logc.Errorf(c.ctx, "conn %s handle message error: %v", c.ID(), err)
-						msgHandleErrorCounter.Inc("handle_failed")
+						metrics.MsgHandleErrorCounter.Inc("handle_failed")
 					} else {
 						logc.Debugf(c.ctx, "conn %s logout", c.ID())
 					}
@@ -162,10 +163,10 @@ func (c *WsConnection) writePump() {
 			if err := c.conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
 				c.closeWithError(err)
 				logc.Errorf(c.ctx, "conn %s write message error: %v", c.ID(), err)
-				msgHandleErrorCounter.Inc("send_failed")
+				metrics.MsgHandleErrorCounter.Inc("send_failed")
 				return
 			}
-			msgSentCounter.Inc("binary")
+			metrics.MsgSentCounter.Inc("binary")
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(timex.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {

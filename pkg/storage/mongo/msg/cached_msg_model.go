@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	"github.com/PaperMan11/goim/pkg/utils/convert"
@@ -40,44 +39,40 @@ func (m *cachedMsgModel) msgSeqCacheKeys(convID string, seqs []int64) []string {
 	return keys
 }
 
-func (m *cachedMsgModel) Insert(ctx context.Context, msg *model.Message) error {
-	err := m.MsgModel.Insert(ctx, msg)
+func (m *cachedMsgModel) Insert(ctx context.Context, conversationID string, msg *model.MsgDataModel) error {
+	err := m.MsgModel.Insert(ctx, conversationID, msg)
 	if err != nil {
 		return err
 	}
 	sredis.CacheDelDouble(ctx, m.redis,
-		GetMsgBySeqKey(msg.ConversationID, msg.Seq),
-		GetMsgLatestKey(msg.ConversationID),
-		GetMsgMaxSeqKey(msg.ConversationID),
-		GetMsgMinSeqKey(msg.ConversationID),
+		GetMsgBySeqKey(conversationID, msg.Seq),
+		GetMsgLatestKey(conversationID),
+		GetMsgMaxSeqKey(conversationID),
+		GetMsgMinSeqKey(conversationID),
 	)
 	return nil
 }
 
-func (m *cachedMsgModel) BatchInsert(ctx context.Context, msgs []*model.Message) error {
-	err := m.MsgModel.BatchInsert(ctx, msgs)
+func (m *cachedMsgModel) BatchInsert(ctx context.Context, conversationID string, msgs []*model.MsgDataModel) error {
+	err := m.MsgModel.BatchInsert(ctx, conversationID, msgs)
 	if err != nil {
 		return err
 	}
-	seenConv := make(map[string]struct{})
 	for _, msg := range msgs {
 		sredis.CacheDelDouble(ctx, m.redis,
-			GetMsgBySeqKey(msg.ConversationID, msg.Seq),
+			GetMsgBySeqKey(conversationID, msg.Seq),
 		)
-		if _, ok := seenConv[msg.ConversationID]; !ok {
-			seenConv[msg.ConversationID] = struct{}{}
-			sredis.CacheDelDouble(ctx, m.redis,
-				GetMsgLatestKey(msg.ConversationID),
-				GetMsgMaxSeqKey(msg.ConversationID),
-				GetMsgMinSeqKey(msg.ConversationID),
-			)
-		}
 	}
+	sredis.CacheDelDouble(ctx, m.redis,
+		GetMsgLatestKey(conversationID),
+		GetMsgMaxSeqKey(conversationID),
+		GetMsgMinSeqKey(conversationID),
+	)
 	return nil
 }
 
-func (m *cachedMsgModel) UpdateRevoke(ctx context.Context, conversationID string, seq int64, revokedContent *model.MessageRevokedContent) error {
-	err := m.MsgModel.UpdateRevoke(ctx, conversationID, seq, revokedContent)
+func (m *cachedMsgModel) UpdateRevoke(ctx context.Context, conversationID string, seq int64, revoke *model.RevokeModel) error {
+	err := m.MsgModel.UpdateRevoke(ctx, conversationID, seq, revoke)
 	if err != nil {
 		return err
 	}
@@ -103,19 +98,44 @@ func (m *cachedMsgModel) DeleteBySeq(ctx context.Context, conversationID string,
 	return nil
 }
 
-func (m *cachedMsgModel) FindBySeq(ctx context.Context, conversationID string, seq int64) (*model.Message, error) {
+func (m *cachedMsgModel) DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) error {
+	err := m.MsgModel.DeleteByTimestamp(ctx, conversationIDs, timestamp)
+	if err != nil {
+		return err
+	}
+	for _, convID := range conversationIDs {
+		sredis.CacheDelDouble(ctx, m.redis,
+			GetMsgLatestKey(convID),
+			GetMsgMaxSeqKey(convID),
+			GetMsgMinSeqKey(convID),
+		)
+	}
+	return nil
+}
+
+func (m *cachedMsgModel) MarkDeleteBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error {
+	err := m.MsgModel.MarkDeleteBySeqs(ctx, userID, conversationID, seqs)
+	if err != nil {
+		return err
+	}
+	delKeys := m.msgSeqCacheKeys(conversationID, seqs)
+	sredis.CacheDelDouble(ctx, m.redis, delKeys...)
+	return nil
+}
+
+func (m *cachedMsgModel) FindBySeq(ctx context.Context, conversationID string, seq int64) (*model.MsgDataModel, error) {
 	if m.redis == nil {
 		return m.MsgModel.FindBySeq(ctx, conversationID, seq)
 	}
 
-	var msg model.Message
+	var msg model.MsgDataModel
 	key := GetMsgBySeqKey(conversationID, seq)
 	found, err := sredis.CacheGet(ctx, m.redis, key, &msg)
 	if err != nil {
 		return nil, err
 	}
 	if found {
-		if msg.ConversationID == "" {
+		if msg.ServerMsgID == "" {
 			return nil, ErrMsgNotFound
 		}
 		return &msg, nil
@@ -123,13 +143,13 @@ func (m *cachedMsgModel) FindBySeq(ctx context.Context, conversationID string, s
 
 	sfKey := sfKeyPrefixMsgSeq + conversationID + ":" + convert.ToString(seq)
 	v, err := m.barrier.Do(sfKey, func() (any, error) {
-		var innerMsg model.Message
+		var innerMsg model.MsgDataModel
 		found2, err2 := sredis.CacheGet(ctx, m.redis, key, &innerMsg)
 		if err2 != nil {
 			return nil, err2
 		}
 		if found2 {
-			if innerMsg.ConversationID == "" {
+			if innerMsg.ServerMsgID == "" {
 				return nil, ErrMsgNotFound
 			}
 			return &innerMsg, nil
@@ -142,7 +162,7 @@ func (m *cachedMsgModel) FindBySeq(ctx context.Context, conversationID string, s
 			}
 			return nil, err2
 		}
-		version := dbMsg.SendTime.UnixMilli()
+		version := dbMsg.SendTime
 		if version <= 0 {
 			version = timex.UnixMilli()
 		}
@@ -158,22 +178,22 @@ func (m *cachedMsgModel) FindBySeq(ctx context.Context, conversationID string, s
 	if v == nil {
 		return nil, ErrMsgNotFound
 	}
-	return v.(*model.Message), nil
+	return v.(*model.MsgDataModel), nil
 }
 
-func (m *cachedMsgModel) FindLatestMsg(ctx context.Context, conversationID string) (*model.Message, error) {
+func (m *cachedMsgModel) FindLatestMsg(ctx context.Context, conversationID string) (*model.MsgDataModel, error) {
 	if m.redis == nil {
 		return m.MsgModel.FindLatestMsg(ctx, conversationID)
 	}
 
-	var msg model.Message
+	var msg model.MsgDataModel
 	key := GetMsgLatestKey(conversationID)
 	found, err := sredis.CacheGet(ctx, m.redis, key, &msg)
 	if err != nil {
 		return nil, err
 	}
 	if found {
-		if msg.ConversationID == "" {
+		if msg.ServerMsgID == "" {
 			return nil, ErrMsgNotFound
 		}
 		return &msg, nil
@@ -181,13 +201,13 @@ func (m *cachedMsgModel) FindLatestMsg(ctx context.Context, conversationID strin
 
 	sfKey := sfKeyPrefixMsgLatest + conversationID
 	v, err := m.barrier.Do(sfKey, func() (any, error) {
-		var innerMsg model.Message
+		var innerMsg model.MsgDataModel
 		found2, err2 := sredis.CacheGet(ctx, m.redis, key, &innerMsg)
 		if err2 != nil {
 			return nil, err2
 		}
 		if found2 {
-			if innerMsg.ConversationID == "" {
+			if innerMsg.ServerMsgID == "" {
 				return nil, ErrMsgNotFound
 			}
 			return &innerMsg, nil
@@ -200,7 +220,7 @@ func (m *cachedMsgModel) FindLatestMsg(ctx context.Context, conversationID strin
 			}
 			return nil, err2
 		}
-		version := dbMsg.SendTime.UnixMilli()
+		version := dbMsg.SendTime
 		if version <= 0 {
 			version = timex.UnixMilli()
 		}
@@ -216,7 +236,7 @@ func (m *cachedMsgModel) FindLatestMsg(ctx context.Context, conversationID strin
 	if v == nil {
 		return nil, ErrMsgNotFound
 	}
-	return v.(*model.Message), nil
+	return v.(*model.MsgDataModel), nil
 }
 
 func (m *cachedMsgModel) GetMaxSeq(ctx context.Context, conversationID string) (int64, error) {
@@ -321,10 +341,40 @@ func (m *cachedMsgModel) GetMinSeq(ctx context.Context, conversationID string) (
 	return v.(int64), nil
 }
 
-func (m *cachedMsgModel) FindByConversationID(ctx context.Context, conversationID string, seqStart int64, seqEnd int64, limit int) ([]*model.Message, error) {
+func (m *cachedMsgModel) FindByConversationID(ctx context.Context, conversationID string, seqStart int64, seqEnd int64, limit int) ([]*model.MsgInfoModel, error) {
 	return m.MsgModel.FindByConversationID(ctx, conversationID, seqStart, seqEnd, limit)
 }
 
-func (m *cachedMsgModel) ToSDKMsg(msg *model.Message) *sdkws.MsgData {
-	return m.MsgModel.ToSDKMsg(msg)
+func (m *cachedMsgModel) MarkReadBySeqRange(ctx context.Context, userID string, conversationID string, seqStart, seqEnd int64) error {
+	if err := m.MsgModel.MarkReadBySeqRange(ctx, userID, conversationID, seqStart, seqEnd); err != nil {
+		return err
+	}
+
+	seqs := []int64{}
+	for seq := seqStart; seq <= seqEnd; seq++ {
+		seqs = append(seqs, seq)
+	}
+	delKeys := m.msgSeqCacheKeys(conversationID, seqs)
+	delKeys = append(delKeys,
+		GetMsgLatestKey(conversationID),
+		GetMsgMaxSeqKey(conversationID),
+		GetMsgMinSeqKey(conversationID),
+	)
+	sredis.CacheDelDouble(ctx, m.redis, delKeys...)
+	return nil
+}
+
+func (m *cachedMsgModel) MarkReadBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error {
+	if err := m.MsgModel.MarkReadBySeqs(ctx, userID, conversationID, seqs); err != nil {
+		return err
+	}
+
+	delKeys := m.msgSeqCacheKeys(conversationID, seqs)
+	delKeys = append(delKeys,
+		GetMsgLatestKey(conversationID),
+		GetMsgMaxSeqKey(conversationID),
+		GetMsgMinSeqKey(conversationID),
+	)
+	sredis.CacheDelDouble(ctx, m.redis, delKeys...)
+	return nil
 }

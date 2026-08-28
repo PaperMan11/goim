@@ -8,6 +8,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/apiresp"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/metrics"
 	pbauth "github.com/PaperMan11/goim/pkg/protocol/auth"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/rpcclient/authservice"
@@ -102,7 +103,7 @@ func (s *wsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	connContext := newConnContext(w, r)
 	if s.connManager.Count() >= s.Config().MaxConns {
 		s.handleError(nil, w, errx.ConnOverMaxNumLimit)
-		rateLimitCounter.Inc()
+		metrics.RateLimitCounter.Inc()
 		return
 	}
 
@@ -137,7 +138,7 @@ func (s *wsServer) Verify(connContext ConnContext, w http.ResponseWriter) bool {
 	})
 	if err != nil {
 		s.handleError(nil, w, err)
-		authFailedCounter.Inc("token_parse_failed")
+		metrics.AuthFailedCounter.Inc("token_parse_failed")
 		return false
 	}
 
@@ -146,12 +147,12 @@ func (s *wsServer) Verify(connContext ConnContext, w http.ResponseWriter) bool {
 	logx.Debugf("Verify, userID: %s, respUserID: %s, platformID: %d, respPlatformID: %d", userID, rpcResp.UserID, platformID, rpcResp.PlatformID)
 	if rpcResp.GetUserID() != userID {
 		s.handleError(nil, w, errx.TokenInvalidError.Wrap(fmt.Sprintf("user id not match, expect: %s, actual: %s", rpcResp.GetUserID(), userID)))
-		authFailedCounter.Inc("user_id_mismatch")
+		metrics.AuthFailedCounter.Inc("user_id_mismatch")
 		return false
 	}
 	if rpcResp.GetPlatformID() != platformID {
 		s.handleError(nil, w, errx.TokenInvalidError.Wrap(fmt.Sprintf("platform not match, expect: %d, actual: %d", rpcResp.GetPlatformID(), platformID)))
-		authFailedCounter.Inc("platform_mismatch")
+		metrics.AuthFailedCounter.Inc("platform_mismatch")
 		return false
 	}
 	return true

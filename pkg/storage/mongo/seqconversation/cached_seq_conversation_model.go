@@ -30,8 +30,8 @@ func (m *cachedSeqConversationModel) jitterTTL(baseSeconds int) int {
 	return randx.JitterInt(baseSeconds, ttlJitterRatioPct)
 }
 
-func (m *cachedSeqConversationModel) UpsertConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error {
-	err := m.SeqConversationModel.UpsertConversationMaxSeq(ctx, conversationID, maxSeq)
+func (m *cachedSeqConversationModel) SetConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error {
+	err := m.SeqConversationModel.SetConversationMaxSeq(ctx, conversationID, maxSeq)
 	if err != nil {
 		return err
 	}
@@ -39,8 +39,8 @@ func (m *cachedSeqConversationModel) UpsertConversationMaxSeq(ctx context.Contex
 	return nil
 }
 
-func (m *cachedSeqConversationModel) UpsertConversationMinSeq(ctx context.Context, conversationID string, minSeq int64) error {
-	err := m.SeqConversationModel.UpsertConversationMinSeq(ctx, conversationID, minSeq)
+func (m *cachedSeqConversationModel) SetConversationMinSeq(ctx context.Context, conversationID string, minSeq int64) error {
+	err := m.SeqConversationModel.SetConversationMinSeq(ctx, conversationID, minSeq)
 	if err != nil {
 		return err
 	}
@@ -48,9 +48,9 @@ func (m *cachedSeqConversationModel) UpsertConversationMinSeq(ctx context.Contex
 	return nil
 }
 
-func (m *cachedSeqConversationModel) FindSeqConversation(ctx context.Context, conversationID string) (*model.SeqConversation, error) {
+func (m *cachedSeqConversationModel) GetSeqConversation(ctx context.Context, conversationID string) (*model.SeqConversation, error) {
 	if m.redis == nil {
-		return m.SeqConversationModel.FindSeqConversation(ctx, conversationID)
+		return m.SeqConversationModel.GetSeqConversation(ctx, conversationID)
 	}
 
 	var seq model.SeqConversation
@@ -80,7 +80,7 @@ func (m *cachedSeqConversationModel) FindSeqConversation(ctx context.Context, co
 			return &innerSeq, nil
 		}
 
-		dbSeq, err2 := m.SeqConversationModel.FindSeqConversation(ctx, conversationID)
+		dbSeq, err2 := m.SeqConversationModel.GetSeqConversation(ctx, conversationID)
 		if err2 != nil {
 			if errors.Is(err2, ErrSeqConversationNotFound) {
 				_, _ = sredis.CacheSetCAS(ctx, m.redis, key, nil, 0, m.jitterTTL(seqNilExpireSeconds))

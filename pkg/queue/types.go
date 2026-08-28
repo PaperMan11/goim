@@ -14,7 +14,7 @@ type Message interface {
 type Producer interface {
 	Push(ctx context.Context, value string) error
 	PushWithKey(ctx context.Context, key, value string) error
-	PushMessage(ctx context.Context, msg Message) error
+	// PushMessage(ctx context.Context, msg Message) error
 	Close() error
 	Name() string
 }

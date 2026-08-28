@@ -11,13 +11,21 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
+	// 发送消息是否需要关系验证
+	SendMsgNeedRelationVerify bool `json:",default=false"`
+
 	Redis redis.RedisConf
 	Mongo storagemongo.MongoConf
 
 	MsgTransferProducer queuex.KafkaConfig
 
-	AuthRpc        rpcclient.RpcConf
-	UserRpc        rpcclient.RpcConf
+	AuthRpc     rpcclient.RpcConf
+	UserRpc     rpcclient.RpcConf
+	ConvRpc     rpcclient.RpcConf
+	RelationRpc rpcclient.RpcConf
+	GroupRpc    rpcclient.RpcConf
+	MsgRpc      rpcclient.RpcConf
+
 	MsgGatewayRpc  rpcclient.RpcConf
 	LocalCacheConf localcache.CacheConfig
 

@@ -1,11 +1,11 @@
-package kafka
+package metrics
 
 import "github.com/zeromicro/go-zero/core/metric"
 
 var (
 	// ========== Producer 指标 ==========
 
-	kafkaProducerMessagesTotal = metric.NewCounterVec(
+	KafkaProducerMessagesTotal = metric.NewCounterVec(
 		&metric.CounterVecOpts{
 			Name:   "kafka_producer_messages_total",
 			Help:   "Total number of messages produced by Kafka producer",
@@ -13,7 +13,7 @@ var (
 		},
 	)
 
-	kafkaProducerErrorsTotal = metric.NewCounterVec(
+	KafkaProducerErrorsTotal = metric.NewCounterVec(
 		&metric.CounterVecOpts{
 			Name:   "kafka_producer_errors_total",
 			Help:   "Total number of errors occurred during message production",
@@ -21,7 +21,7 @@ var (
 		},
 	)
 
-	kafkaProducerMessageSizeBytes = metric.NewHistogramVec(
+	KafkaProducerMessageSizeBytes = metric.NewHistogramVec(
 		&metric.HistogramVecOpts{
 			Name:    "kafka_producer_message_size_bytes",
 			Help:    "Size of messages produced by Kafka producer",
@@ -30,7 +30,7 @@ var (
 		},
 	)
 
-	kafkaProducerSendDurationSeconds = metric.NewHistogramVec(
+	KafkaProducerSendDurationSeconds = metric.NewHistogramVec(
 		&metric.HistogramVecOpts{
 			Name:    "kafka_producer_send_duration_seconds",
 			Help:    "Duration of sending messages to Kafka",
@@ -41,7 +41,7 @@ var (
 
 	// ========== Consumer 指标 ==========
 
-	kafkaConsumerMessagesTotal = metric.NewCounterVec(
+	KafkaConsumerMessagesTotal = metric.NewCounterVec(
 		&metric.CounterVecOpts{
 			Name:   "kafka_consumer_messages_total",
 			Help:   "Total number of messages consumed by Kafka consumer",
@@ -49,7 +49,7 @@ var (
 		},
 	)
 
-	kafkaConsumerErrorsTotal = metric.NewCounterVec(
+	KafkaConsumerErrorsTotal = metric.NewCounterVec(
 		&metric.CounterVecOpts{
 			Name:   "kafka_consumer_errors_total",
 			Help:   "Total number of errors occurred during message consumption",
@@ -57,7 +57,7 @@ var (
 		},
 	)
 
-	kafkaConsumerCommitErrorsTotal = metric.NewCounterVec(
+	KafkaConsumerCommitErrorsTotal = metric.NewCounterVec(
 		&metric.CounterVecOpts{
 			Name:   "kafka_consumer_commit_errors_total",
 			Help:   "Total number of commit errors occurred during message consumption",
@@ -65,7 +65,7 @@ var (
 		},
 	)
 
-	kafkaConsumerMessageQueueSize = metric.NewGaugeVec(
+	KafkaConsumerMessageQueueSize = metric.NewGaugeVec(
 		&metric.GaugeVecOpts{
 			Name:   "kafka_consumer_message_queue_size",
 			Help:   "Number of messages waiting in the consumer queue",
@@ -73,7 +73,7 @@ var (
 		},
 	)
 
-	kafkaConsumerMessageSizeBytes = metric.NewHistogramVec(
+	KafkaConsumerMessageSizeBytes = metric.NewHistogramVec(
 		&metric.HistogramVecOpts{
 			Name:    "kafka_consumer_message_size_bytes",
 			Help:    "Size of messages consumed by Kafka consumer",
@@ -82,7 +82,7 @@ var (
 		},
 	)
 
-	kafkaConsumerProcessDurationSeconds = metric.NewHistogramVec(
+	KafkaConsumerProcessDurationSeconds = metric.NewHistogramVec(
 		&metric.HistogramVecOpts{
 			Name:    "kafka_consumer_process_duration_seconds",
 			Help:    "Duration of processing consumed messages",
@@ -91,7 +91,7 @@ var (
 		},
 	)
 
-	kafkaConsumerFetchDurationSeconds = metric.NewHistogramVec(
+	KafkaConsumerFetchDurationSeconds = metric.NewHistogramVec(
 		&metric.HistogramVecOpts{
 			Name:    "kafka_consumer_fetch_duration_seconds",
 			Help:    "Duration of fetching messages from Kafka",

@@ -31,18 +31,20 @@ type SeqAllocator interface {
 }
 
 type RedisSeqAllocator struct {
-	redisClient    goredis.UniversalClient
+	redisClient goredis.UniversalClient
+	// Lua 脚本
 	allocateSeq    string
 	commitSeq      string
 	allocateScript *goredis.Script
 	commitScript   *goredis.Script
-	poolSize       int
-	lockSecond     int
-	dataSecond     int
-	getMaxSeqFn    GetMaxSeqFn
-	maxRetries     int
-	retryInterval  time.Duration
-	retryBackoff   bool
+	// 配置
+	poolSize      int
+	lockSecond    int
+	dataSecond    int
+	getMaxSeqFn   GetMaxSeqFn
+	maxRetries    int
+	retryInterval time.Duration
+	retryBackoff  bool
 }
 
 type GetMaxSeqFn func(ctx context.Context, conversationID string) (int64, error)
@@ -89,6 +91,14 @@ func WithRetryBackoff(enable bool) RedisSeqAllocatorOption {
 	return func(r *RedisSeqAllocator) {
 		r.retryBackoff = enable
 	}
+}
+
+func MustNewRedisSeqAllocator(redisClient goredis.UniversalClient, options ...RedisSeqAllocatorOption) *RedisSeqAllocator {
+	allocator, err := NewRedisSeqAllocator(redisClient, options...)
+	if err != nil {
+		panic(err)
+	}
+	return allocator
 }
 
 func NewRedisSeqAllocator(redisClient goredis.UniversalClient, options ...RedisSeqAllocatorOption) (*RedisSeqAllocator, error) {

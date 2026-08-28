@@ -16,12 +16,12 @@ var (
 )
 
 type SeqConversationModel interface {
-	BatchGetConversationMaxSeqs(ctx context.Context, conversationIDs []string) (map[string]int64, error)
-	FindSeqConversation(ctx context.Context, conversationID string) (*model.SeqConversation, error)
+	BatchGetConversationSeqs(ctx context.Context, conversationIDs []string) (map[string]*model.SeqConversation, error)
+	GetSeqConversation(ctx context.Context, conversationID string) (*model.SeqConversation, error)
 	GetConversationMaxSeq(ctx context.Context, conversationID string) (int64, error)
 	GetConversationMinSeq(ctx context.Context, conversationID string) (int64, error)
-	UpsertConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error
-	UpsertConversationMinSeq(ctx context.Context, conversationID string, minSeq int64) error
+	SetConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error
+	SetConversationMinSeq(ctx context.Context, conversationID string, minSeq int64) error
 }
 
 type defaultSeqConversationModel struct {
@@ -34,22 +34,17 @@ func NewSeqConversationModel(mod *mon.Model) SeqConversationModel {
 	}
 }
 
-func (s *defaultSeqConversationModel) UpsertConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error {
-	update := bson.M{
+func (s *defaultSeqConversationModel) SetConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error {
+	_, err := s.mod.UpdateOne(ctx, bson.M{"conversation_id": conversationID}, bson.M{
 		"$set": bson.M{
 			"max_seq":    maxSeq,
 			"updated_at": timex.Now(),
 		},
-		"$setOnInsert": bson.M{
-			"conversation_id": conversationID,
-			"min_seq":         maxSeq,
-		},
-	}
-	_, err := s.mod.UpdateOne(ctx, bson.M{"conversation_id": conversationID}, update)
+	})
 	return err
 }
 
-func (s *defaultSeqConversationModel) UpsertConversationMinSeq(ctx context.Context, conversationID string, minSeq int64) error {
+func (s *defaultSeqConversationModel) SetConversationMinSeq(ctx context.Context, conversationID string, minSeq int64) error {
 	_, err := s.mod.UpdateOne(ctx, bson.M{"conversation_id": conversationID}, bson.M{
 		"$set": bson.M{
 			"min_seq":    minSeq,
@@ -77,20 +72,20 @@ func (s *defaultSeqConversationModel) GetConversationMinSeq(ctx context.Context,
 	return seq.MinSeq, nil
 }
 
-func (s *defaultSeqConversationModel) BatchGetConversationMaxSeqs(ctx context.Context, conversationIDs []string) (map[string]int64, error) {
-	var seqs []model.SeqConversation
+func (s *defaultSeqConversationModel) BatchGetConversationSeqs(ctx context.Context, conversationIDs []string) (map[string]*model.SeqConversation, error) {
+	var seqs []*model.SeqConversation
 	err := s.mod.Find(ctx, &seqs, bson.M{"conversation_id": bson.M{"$in": conversationIDs}})
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[string]int64)
+	result := make(map[string]*model.SeqConversation)
 	for _, seq := range seqs {
-		result[seq.ConversationID] = seq.MaxSeq
+		result[seq.ConversationID] = seq
 	}
 	return result, nil
 }
 
-func (s *defaultSeqConversationModel) FindSeqConversation(ctx context.Context, conversationID string) (*model.SeqConversation, error) {
+func (s *defaultSeqConversationModel) GetSeqConversation(ctx context.Context, conversationID string) (*model.SeqConversation, error) {
 	var seq model.SeqConversation
 	err := s.mod.FindOne(ctx, &seq, bson.M{"conversation_id": conversationID})
 	if err != nil {

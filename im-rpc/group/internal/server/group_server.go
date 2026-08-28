@@ -172,3 +172,7 @@ func (s *GroupServer) GetFullGroupMemberUserIDs(ctx context.Context, req *pbgrou
 func (s *GroupServer) GetFullJoinGroupIDs(ctx context.Context, req *pbgroup.GetFullJoinGroupIDsReq) (*pbgroup.GetFullJoinGroupIDsResp, error) {
 	return logic.NewLogic(ctx, s.svcCtx).GetFullJoinGroupIDs(ctx, req)
 }
+
+func (s *GroupServer) IsGroupMember(ctx context.Context, req *pbgroup.IsGroupMemberReq) (*pbgroup.IsGroupMemberResp, error) {
+	return logic.NewLogic(ctx, s.svcCtx).IsGroupMember(ctx, req)
+}

@@ -1,6 +1,7 @@
 package msgprocessor
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
@@ -13,10 +14,9 @@ func IsGroupConversationID(conversationID string) bool {
 }
 
 func buildSortedConversationID(prefix string, id1, id2 string) string {
-	if id1 < id2 {
-		return prefix + id1 + "_" + id2
-	}
-	return prefix + id2 + "_" + id1
+	arr := []string{id1, id2}
+	slices.Sort(arr)
+	return prefix + strings.Join(arr, "_")
 	// return prefix + id1 + "_" + id2
 }
 

@@ -1691,3 +1691,22 @@ func equalsIgnoreCase(a, b string) bool {
 	}
 	return true
 }
+
+func (l *Logic) IsGroupMember(ctx context.Context, req *pbgroup.IsGroupMemberReq) (*pbgroup.IsGroupMemberResp, error) {
+	groupID := req.GetGroupID()
+	if groupID == "" {
+		return nil, errx.ArgsError.Wrap("groupID is required")
+	}
+	userID := req.GetUserID()
+	if userID == "" {
+		return nil, errx.ArgsError.Wrap("userID is required")
+	}
+	isMember, err := l.svcCtx.GroupModel.IsMember(ctx, groupID, userID)
+	if err != nil {
+		l.Errorf("is member failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
+		return nil, err
+	}
+	return &pbgroup.IsGroupMemberResp{
+		IsMember: isMember,
+	}, nil
+}

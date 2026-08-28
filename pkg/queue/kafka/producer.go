@@ -13,6 +13,7 @@ import (
 	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/zeromicro/go-zero/core/logx"
 
+	"github.com/PaperMan11/goim/pkg/metrics"
 	"github.com/PaperMan11/goim/pkg/queue"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
@@ -117,16 +118,16 @@ func (p *KafkaProducer) pushMessage(ctx context.Context, msg kafka.Message) erro
 	err := p.producer.WriteMessages(ctx, msg)
 	duration := time.Since(start).Seconds()
 
-	kafkaProducerMessageSizeBytes.ObserveFloat(msgSize, p.topic)
-	kafkaProducerSendDurationSeconds.ObserveFloat(duration, p.topic)
+	metrics.KafkaProducerMessageSizeBytes.ObserveFloat(msgSize, p.topic)
+	metrics.KafkaProducerSendDurationSeconds.ObserveFloat(duration, p.topic)
 
 	if err != nil {
-		kafkaProducerMessagesTotal.Inc(p.topic, "failed")
-		kafkaProducerErrorsTotal.Inc(p.topic, "send_error")
+		metrics.KafkaProducerMessagesTotal.Inc(p.topic, "failed")
+		metrics.KafkaProducerErrorsTotal.Inc(p.topic, "send_error")
 		return err
 	}
 
-	kafkaProducerMessagesTotal.Inc(p.topic, "success")
+	metrics.KafkaProducerMessagesTotal.Inc(p.topic, "success")
 	return nil
 }
 

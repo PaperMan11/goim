@@ -55,6 +55,9 @@ var (
 	GroupTypeNotSupport   = NewErrInfo(ErrCodeGroupTypeNotSupport, "group type not supported")
 	GroupRequestHandled   = NewErrInfo(ErrCodeGroupRequestHandled, "group request has already been handled")
 	GroupNotFoundError    = NewErrInfo(ErrCodeGroupNotFoundError, "group does not exist")
+	GroupMutedError       = NewErrInfo(ErrCodeGroupMutedError, "group is muted")
+	GroupMemberMutedError = NewErrInfo(ErrCodeGroupMemberMutedError, "group member is muted")
+	GroupDismissedError   = NewErrInfo(ErrCodeGroupDismissedError, "group has been dismissed")
 
 	// Relationship error codes.
 	CanNotAddYourselfError   = NewErrInfo(ErrCodeCanNotAddYourselfError, "cannot add yourself as a friend")
@@ -62,6 +65,7 @@ var (
 	NotPeersFriend           = NewErrInfo(ErrCodeNotPeersFriend, "not the peer's friend")
 	RelationshipAlreadyError = NewErrInfo(ErrCodeRelationshipAlreadyError, "already in a friend relationship")
 	FriendRequestHandled     = NewErrInfo(ErrCodeFriendRequestHandled, "friend request has already been handled")
+	BlackByPeer              = NewErrInfo(ErrCodeBlackByPeer, "black by the peer")
 
 	// Message error codes.
 	MessageHasReadDisable = NewErrInfo(ErrCodeMessageHasReadDisable, "message has been read")

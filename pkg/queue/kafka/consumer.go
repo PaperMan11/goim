@@ -16,6 +16,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/threading"
 
+	"github.com/PaperMan11/goim/pkg/metrics"
 	"github.com/PaperMan11/goim/pkg/queue"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
@@ -237,7 +238,7 @@ func (c *KafkaConsumer) fetchLoop(handle func(msg queue.Message)) {
 			msg, err := c.consumer.FetchMessage(c.ctx)
 			duration := time.Since(start).Seconds()
 
-			kafkaConsumerFetchDurationSeconds.ObserveFloat(duration, c.cfg.Topic, c.cfg.GroupID)
+			metrics.KafkaConsumerFetchDurationSeconds.ObserveFloat(duration, c.cfg.Topic, c.cfg.GroupID)
 
 			if err != nil {
 				if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
@@ -249,7 +250,7 @@ func (c *KafkaConsumer) fetchLoop(handle func(msg queue.Message)) {
 					return
 				}
 				logx.Errorf("Error on reading message: %v", err)
-				kafkaConsumerErrorsTotal.Inc(c.cfg.Topic, c.cfg.GroupID, "fetch_error")
+				metrics.KafkaConsumerErrorsTotal.Inc(c.cfg.Topic, c.cfg.GroupID, "fetch_error")
 				time.Sleep(time.Second)
 				continue
 			}
@@ -271,7 +272,7 @@ func (c *KafkaConsumer) consumeLoop() {
 		case <-c.ctx.Done():
 			return
 		case msg := <-c.msgChan:
-			kafkaConsumerMessageQueueSize.Set(float64(len(c.msgChan)), c.cfg.Topic, c.cfg.GroupID)
+			metrics.KafkaConsumerMessageQueueSize.Set(float64(len(c.msgChan)), c.cfg.Topic, c.cfg.GroupID)
 
 			err := c.consumerOne(c.ctx, msg)
 			if err != nil {
@@ -286,7 +287,7 @@ func (c *KafkaConsumer) consumeLoop() {
 
 			if !c.options.manualCommit {
 				if err := msg.Commit(c.ctx); err != nil {
-					kafkaConsumerCommitErrorsTotal.Inc(c.cfg.Topic, c.cfg.GroupID)
+					metrics.KafkaConsumerCommitErrorsTotal.Inc(c.cfg.Topic, c.cfg.GroupID)
 					logx.Errorf("Commit failed: %v", err)
 				}
 			}
@@ -309,7 +310,7 @@ func (c *KafkaConsumer) commitInOrder() {
 			}
 
 			if err := msg.Commit(c.ctx); err != nil {
-				kafkaConsumerCommitErrorsTotal.Inc(c.cfg.Topic, c.cfg.GroupID)
+				metrics.KafkaConsumerCommitErrorsTotal.Inc(c.cfg.Topic, c.cfg.GroupID)
 				logx.Errorf("commit failed, message: %v, error: %v", msg, err)
 			}
 		}
@@ -318,19 +319,19 @@ func (c *KafkaConsumer) commitInOrder() {
 
 func (c *KafkaConsumer) consumerOne(ctx context.Context, message queue.Message) error {
 	msgSize := float64(len(message.Value()))
-	kafkaConsumerMessageSizeBytes.ObserveFloat(msgSize, c.cfg.Topic, c.cfg.GroupID)
+	metrics.KafkaConsumerMessageSizeBytes.ObserveFloat(msgSize, c.cfg.Topic, c.cfg.GroupID)
 
 	start := timex.Now()
 	err := c.handler(ctx, message)
 	duration := time.Since(start).Seconds()
 
-	kafkaConsumerProcessDurationSeconds.ObserveFloat(duration, c.cfg.Topic, c.cfg.GroupID)
+	metrics.KafkaConsumerProcessDurationSeconds.ObserveFloat(duration, c.cfg.Topic, c.cfg.GroupID)
 
 	if err != nil {
-		kafkaConsumerMessagesTotal.Inc(c.cfg.Topic, c.cfg.GroupID, "failed")
-		kafkaConsumerErrorsTotal.Inc(c.cfg.Topic, c.cfg.GroupID, "process_error")
+		metrics.KafkaConsumerMessagesTotal.Inc(c.cfg.Topic, c.cfg.GroupID, "failed")
+		metrics.KafkaConsumerErrorsTotal.Inc(c.cfg.Topic, c.cfg.GroupID, "process_error")
 	} else {
-		kafkaConsumerMessagesTotal.Inc(c.cfg.Topic, c.cfg.GroupID, "success")
+		metrics.KafkaConsumerMessagesTotal.Inc(c.cfg.Topic, c.cfg.GroupID, "success")
 	}
 	return err
 }
