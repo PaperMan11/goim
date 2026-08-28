@@ -318,7 +318,7 @@ message SearchMessageReq {
   string sendID = 1;                            // 发送者ID
   string recvID = 2;                            // 接收者ID
   int32 contentType = 3;                        // 消息类型
-  string sendTime = 4;                           // 发送时间
+  int64 sendTime = 4;                           // 发送时间
   int32 sessionType = 5;                        // 会话类型
   openim.sdkws.RequestPagination pagination = 6; // 分页参数
 }

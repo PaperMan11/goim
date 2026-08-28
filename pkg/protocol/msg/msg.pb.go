@@ -2689,7 +2689,7 @@ type SearchMessageReq struct {
 	SendID        string                   `protobuf:"bytes,1,opt,name=sendID,proto3" json:"sendID,omitempty"`            // 发送者ID
 	RecvID        string                   `protobuf:"bytes,2,opt,name=recvID,proto3" json:"recvID,omitempty"`            // 接收者ID
 	ContentType   int32                    `protobuf:"varint,3,opt,name=contentType,proto3" json:"contentType,omitempty"` // 消息类型
-	SendTime      string                   `protobuf:"bytes,4,opt,name=sendTime,proto3" json:"sendTime,omitempty"`        // 发送时间
+	SendTime      int64                    `protobuf:"varint,4,opt,name=sendTime,proto3" json:"sendTime,omitempty"`       // 发送时间
 	SessionType   int32                    `protobuf:"varint,5,opt,name=sessionType,proto3" json:"sessionType,omitempty"` // 会话类型
 	Pagination    *sdkws.RequestPagination `protobuf:"bytes,6,opt,name=pagination,proto3" json:"pagination,omitempty"`    // 分页参数
 	unknownFields protoimpl.UnknownFields
@@ -2747,11 +2747,11 @@ func (x *SearchMessageReq) GetContentType() int32 {
 	return 0
 }
 
-func (x *SearchMessageReq) GetSendTime() string {
+func (x *SearchMessageReq) GetSendTime() int64 {
 	if x != nil {
 		return x.SendTime
 	}
-	return ""
+	return 0
 }
 
 func (x *SearchMessageReq) GetSessionType() int32 {
@@ -4507,7 +4507,7 @@ const file_msg_msg_proto_rawDesc = "" +
 	"\x06sendID\x18\x01 \x01(\tR\x06sendID\x12\x16\n" +
 	"\x06recvID\x18\x02 \x01(\tR\x06recvID\x12 \n" +
 	"\vcontentType\x18\x03 \x01(\x05R\vcontentType\x12\x1a\n" +
-	"\bsendTime\x18\x04 \x01(\tR\bsendTime\x12 \n" +
+	"\bsendTime\x18\x04 \x01(\x03R\bsendTime\x12 \n" +
 	"\vsessionType\x18\x05 \x01(\x05R\vsessionType\x12?\n" +
 	"\n" +
 	"pagination\x18\x06 \x01(\v2\x1f.openim.sdkws.RequestPaginationR\n" +

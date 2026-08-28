@@ -516,6 +516,18 @@ message BatchGetIncrementalGroupMemberResp {
   map<string, getIncrementalGroupMemberResp> respList = 1; // 响应列表(key为groupID)
 }
 
+// 是否为群成员请求
+message IsGroupMemberReq {
+  string groupID = 1;      // 群组ID
+  string userID = 2;      // 用户ID
+}
+
+// 是否为群成员响应
+message IsGroupMemberResp {
+  bool isMember = 1; // 是否为群成员
+}
+
+
 // ================================ 服务定义 ================================
 
 // 群组管理服务
@@ -598,4 +610,6 @@ service group {
   rpc GetFullGroupMemberUserIDs(GetFullGroupMemberUserIDsReq) returns (GetFullGroupMemberUserIDsResp);
   // 获取完整加入群组ID列表
   rpc GetFullJoinGroupIDs(GetFullJoinGroupIDsReq) returns (GetFullJoinGroupIDsResp);
+  // 是否为群成员
+  rpc IsGroupMember(IsGroupMemberReq) returns (IsGroupMemberResp);
 }

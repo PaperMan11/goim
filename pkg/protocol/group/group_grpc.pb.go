@@ -61,6 +61,7 @@ const (
 	Group_GetIncrementalJoinGroup_FullMethodName           = "/openim.group.group/getIncrementalJoinGroup"
 	Group_GetFullGroupMemberUserIDs_FullMethodName         = "/openim.group.group/GetFullGroupMemberUserIDs"
 	Group_GetFullJoinGroupIDs_FullMethodName               = "/openim.group.group/GetFullJoinGroupIDs"
+	Group_IsGroupMember_FullMethodName                     = "/openim.group.group/IsGroupMember"
 )
 
 // GroupClient is the client API for Group service.
@@ -147,6 +148,8 @@ type GroupClient interface {
 	GetFullGroupMemberUserIDs(ctx context.Context, in *GetFullGroupMemberUserIDsReq, opts ...grpc.CallOption) (*GetFullGroupMemberUserIDsResp, error)
 	// 获取完整加入群组ID列表
 	GetFullJoinGroupIDs(ctx context.Context, in *GetFullJoinGroupIDsReq, opts ...grpc.CallOption) (*GetFullJoinGroupIDsResp, error)
+	// 是否为群成员
+	IsGroupMember(ctx context.Context, in *IsGroupMemberReq, opts ...grpc.CallOption) (*IsGroupMemberResp, error)
 }
 
 type groupClient struct {
@@ -547,6 +550,16 @@ func (c *groupClient) GetFullJoinGroupIDs(ctx context.Context, in *GetFullJoinGr
 	return out, nil
 }
 
+func (c *groupClient) IsGroupMember(ctx context.Context, in *IsGroupMemberReq, opts ...grpc.CallOption) (*IsGroupMemberResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsGroupMemberResp)
+	err := c.cc.Invoke(ctx, Group_IsGroupMember_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GroupServer is the server API for Group service.
 // All implementations must embed UnimplementedGroupServer
 // for forward compatibility.
@@ -631,6 +644,8 @@ type GroupServer interface {
 	GetFullGroupMemberUserIDs(context.Context, *GetFullGroupMemberUserIDsReq) (*GetFullGroupMemberUserIDsResp, error)
 	// 获取完整加入群组ID列表
 	GetFullJoinGroupIDs(context.Context, *GetFullJoinGroupIDsReq) (*GetFullJoinGroupIDsResp, error)
+	// 是否为群成员
+	IsGroupMember(context.Context, *IsGroupMemberReq) (*IsGroupMemberResp, error)
 	mustEmbedUnimplementedGroupServer()
 }
 
@@ -757,6 +772,9 @@ func (UnimplementedGroupServer) GetFullGroupMemberUserIDs(context.Context, *GetF
 }
 func (UnimplementedGroupServer) GetFullJoinGroupIDs(context.Context, *GetFullJoinGroupIDsReq) (*GetFullJoinGroupIDsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFullJoinGroupIDs not implemented")
+}
+func (UnimplementedGroupServer) IsGroupMember(context.Context, *IsGroupMemberReq) (*IsGroupMemberResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IsGroupMember not implemented")
 }
 func (UnimplementedGroupServer) mustEmbedUnimplementedGroupServer() {}
 func (UnimplementedGroupServer) testEmbeddedByValue()               {}
@@ -1481,6 +1499,24 @@ func _Group_GetFullJoinGroupIDs_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Group_IsGroupMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsGroupMemberReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GroupServer).IsGroupMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Group_IsGroupMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GroupServer).IsGroupMember(ctx, req.(*IsGroupMemberReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Group_ServiceDesc is the grpc.ServiceDesc for Group service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1643,6 +1679,10 @@ var Group_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetFullJoinGroupIDs",
 			Handler:    _Group_GetFullJoinGroupIDs_Handler,
+		},
+		{
+			MethodName: "IsGroupMember",
+			Handler:    _Group_IsGroupMember_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
