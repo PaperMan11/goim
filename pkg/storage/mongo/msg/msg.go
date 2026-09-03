@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
@@ -69,24 +70,118 @@ func docIDPrefix(conversationID string) bson.M {
 	return bson.M{"doc_id": bson.M{"$regex": "^" + conversationID + ":"}}
 }
 
-// Insert 向分桶文档中插入一条消息。
-// 通过 Upsert 创建文档（若不存在），$set 指定数组索引位置的消息槽位。
+// buildSlotUpdate 构建按索引位置精确"追加/写入"槽位的聚合管道 $set 片段。
+// 思路：用 $let + $range 从 0..targetIndex 生成一个长度为 targetIndex+1 的数组，
+// 对每个位置 i：i==targetIndex → 写目标 msgInfo；i<targetIndex 且文档已有该槽位 → 保留原值；否则填 nil（稀疏占位）。
+// 这样无论文档是否存在、是否中间有空槽，一次 Update 就能把目标槽位"追加"到位，不会因为先写 msgs.50 导致文档重建时产生 0..49 的膨胀。
+func buildSlotUpdate(targetIndex int64, msgInfo any) bson.M {
+	iExpr := "$$i"
+	newSize := bson.M{"$max": []any{bson.M{"$size": bson.M{"$ifNull": []any{"$msgs", []any{}}}}, targetIndex + 1}}
+	return bson.M{
+		"$let": bson.M{
+			"vars": bson.M{
+				"old": bson.M{"$ifNull": []any{"$msgs", []any{}}},
+			},
+			"in": bson.M{
+				"$map": bson.M{
+					"input": bson.M{"$range": []any{0, newSize, 1}},
+					"as":    "i",
+					"in": bson.M{
+						"$cond": bson.M{
+							"if":   bson.M{"$eq": []any{iExpr, targetIndex}},
+							"then": msgInfo,
+							"else": bson.M{
+								"$cond": bson.M{
+									"if":   bson.M{"$lt": []any{iExpr, bson.M{"$size": "$$old"}}},
+									"then": bson.M{"$arrayElemAt": []any{"$$old", iExpr}},
+									"else": nil,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// buildMultiSlotUpdate 构建同一文档下多个槽位的聚合管道 $set 片段（用于 BatchInsert）。
+// 输入 slots 是按 msgIndex -> MsgInfo 去重后的映射。整体策略与 buildSlotUpdate 相同，
+// 只是 $cond 分支内依次判断「当前 i 是否命中 slots 中的任一目标索引」，从而一次管道写入多个槽位。
+func buildMultiSlotUpdate(slots map[int64]*model.MsgInfoModel) bson.M {
+	maxIdx := int64(-1)
+	for idx := range slots {
+		if idx > maxIdx {
+			maxIdx = idx
+		}
+	}
+	if maxIdx < 0 {
+		return bson.M{"$ifNull": []any{"$msgs", []any{}}}
+	}
+
+	// 从最内层开始，构建形如：if i==maxIdx -> s[maxIdx] else (if i==maxIdx-1 -> s[maxIdx-1] else ...)
+	// 最后套 default 分支：i<len(old) 取原值，否则 nil（$$old 在下面的 $let.vars 里被绑定）
+	var elseExpr = bson.M{
+		"$cond": bson.M{
+			"if":   bson.M{"$lt": []any{"$$i", bson.M{"$size": "$$old"}}},
+			"then": bson.M{"$arrayElemAt": []any{"$$old", "$$i"}},
+			"else": nil,
+		},
+	}
+
+	// 按索引升序构建 switch（最内层→最外层），为了可读性先收集升序切片
+	idxs := make([]int64, 0, len(slots))
+	for idx := range slots {
+		idxs = append(idxs, idx)
+	}
+	// 从大到小嵌套，大索引的判断在外层
+	slices.Sort(idxs)
+	for i := len(idxs) - 1; i >= 0; i-- {
+		idx := idxs[i]
+		elseExpr = bson.M{
+			"$cond": bson.M{
+				"if":   bson.M{"$eq": []any{"$$i", idx}},
+				"then": slots[idx],
+				"else": elseExpr,
+			},
+		}
+	}
+
+	newSize := bson.M{"$max": []any{bson.M{"$size": "$$old"}, maxIdx + 1}}
+	return bson.M{
+		"$let": bson.M{
+			"vars": bson.M{
+				"old": bson.M{"$ifNull": []any{"$msgs", []any{}}},
+			},
+			"in": bson.M{
+				"$map": bson.M{
+					"input": bson.M{"$range": []any{0, newSize, 1}},
+					"as":    "i",
+					"in":    elseExpr,
+				},
+			},
+		},
+	}
+}
+
+// Insert 向分桶文档中插入一条消息（支持追加写入）。
+// 采用聚合管道 Update + Upsert：无论文档是否存在、msgIndex 是否大于当前数组长度，
+// 都能把目标槽位精确写入到正确索引位置，中间位置保留原值或填 nil（避免稀疏膨胀）。
+// 等价于"把这条消息追加到该桶文档的 seq%100 位置"语义。
 func (m *defaultMsgModel) Insert(ctx context.Context, conversationID string, msg *model.MsgDataModel) error {
 	doc := &model.MsgDocModel{}
 	docID := doc.GetDocID(conversationID, msg.Seq)
 	msgIndex := doc.GetMsgIndex(msg.Seq)
 
-	msgInfo := &model.MsgInfoModel{
-		Msg: msg,
-	}
+	msgInfo := &model.MsgInfoModel{Msg: msg}
 
 	filter := bson.M{"doc_id": docID}
-	update := bson.M{
-		"$set": bson.M{
-			"msgs." + convert.ToString(msgIndex): msgInfo,
-		},
-		"$setOnInsert": bson.M{
-			"doc_id": docID,
+	update := bson.A{
+		bson.M{
+			"$set": bson.M{
+				"doc_id": docID, // upsert 时写入，已存在则不变
+				"msgs":   buildSlotUpdate(msgIndex, msgInfo),
+			},
 		},
 	}
 	opts := options.UpdateOne().SetUpsert(true)
@@ -94,21 +189,35 @@ func (m *defaultMsgModel) Insert(ctx context.Context, conversationID string, msg
 	return err
 }
 
-// BatchInsert 批量插入消息。按 seq 分组到不同文档，逐文档 Upsert。
+// BatchInsert 批量插入消息（按 docID 分桶后追加写入，一个文档一次 UpdateOne）。
+// 1) 把 msgs 按 docID 分组，每组再按 msgIndex 去重（同一 seq 覆盖写）。
+// 2) 对每个 docID 执行一次聚合管道 Update，把所有槽位一次性追加到 msgs 对应索引位置。
+// 效果：N 条消息若落在 M 个桶文档，只执行 M 次 UpdateOne（M <= N），远优于旧实现的 N 次。
 func (m *defaultMsgModel) BatchInsert(ctx context.Context, conversationID string, msgs []*model.MsgDataModel) error {
-	doc := &model.MsgDocModel{}
-	for _, msg := range msgs {
-		docID := doc.GetDocID(conversationID, msg.Seq)
-		msgIndex := doc.GetMsgIndex(msg.Seq)
+	if len(msgs) == 0 {
+		return nil
+	}
+	docHelper := &model.MsgDocModel{}
 
-		msgInfo := &model.MsgInfoModel{Msg: msg}
+	// docID -> map[msgIndex]MsgInfoModel（同桶同索引下后来者覆盖前者，seq 全局唯一时不会出现冲突）
+	grouped := make(map[string]map[int64]*model.MsgInfoModel)
+	for _, msg := range msgs {
+		docID := docHelper.GetDocID(conversationID, msg.Seq)
+		msgIndex := docHelper.GetMsgIndex(msg.Seq)
+		if _, ok := grouped[docID]; !ok {
+			grouped[docID] = make(map[int64]*model.MsgInfoModel)
+		}
+		grouped[docID][msgIndex] = &model.MsgInfoModel{Msg: msg}
+	}
+
+	for docID, slots := range grouped {
 		filter := bson.M{"doc_id": docID}
-		update := bson.M{
-			"$set": bson.M{
-				"msgs." + convert.ToString(msgIndex): msgInfo,
-			},
-			"$setOnInsert": bson.M{
-				"doc_id": docID,
+		update := bson.A{
+			bson.M{
+				"$set": bson.M{
+					"doc_id": docID,
+					"msgs":   buildMultiSlotUpdate(slots),
+				},
 			},
 		}
 		opts := options.UpdateOne().SetUpsert(true)

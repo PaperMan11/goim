@@ -12,7 +12,9 @@ import (
 	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/msgprocessor"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
+	"github.com/PaperMan11/goim/pkg/protocol/conversation"
 	pbconv "github.com/PaperMan11/goim/pkg/protocol/conversation"
+	"github.com/PaperMan11/goim/pkg/protocol/group"
 	pbgroup "github.com/PaperMan11/goim/pkg/protocol/group"
 	pbmsg "github.com/PaperMan11/goim/pkg/protocol/msg"
 	pbrelation "github.com/PaperMan11/goim/pkg/protocol/relation"
@@ -75,7 +77,7 @@ func (l *Logic) sendSingleChatMsg(ctx context.Context, msgData *sdkws.MsgData) e
 		return err
 	}
 
-	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
+	conversationID := msgprocessor.GetConversationIDByMsg(msgData)
 	isAllowed, err := l.isRecvMsgAllowed(ctx, msgData.RecvID, conversationID, msgData)
 	if err != nil {
 		return err
@@ -1092,5 +1094,143 @@ func (l *Logic) GetSendMsgStatus(ctx context.Context, req *pbmsg.GetSendMsgStatu
 	}
 	return &pbmsg.GetSendMsgStatusResp{
 		Status: convert.ToInt32(status),
+	}, nil
+}
+
+func (l *Logic) AddMsg(ctx context.Context, req *pbmsg.AddMsgReq) (*pbmsg.AddMsgResp, error) {
+	msg := req.GetMsgData()
+	conversationID := req.GetConversationID()
+
+	seq, err := l.svcCtx.SeqAllocator.Allocate(ctx, conversationID)
+	if err != nil {
+		l.Errorf("allocate seq failed, err: %v, conversationID: %s", err, conversationID)
+		return nil, err
+	}
+	isNewConversation := seq == 1
+	msg.Seq = seq
+	if isNewConversation {
+		switch msg.SessionType {
+		case constant.SingleChatType, constant.NotificationChatType:
+			_, err = l.svcCtx.ConvService.CreateSingleChatConversations(ctx, &conversation.CreateSingleChatConversationsReq{
+				RecvID:           msg.RecvID,
+				SendID:           msg.SendID,
+				ConversationID:   conversationID,
+				ConversationType: msg.SessionType,
+			})
+			if err != nil {
+				l.Errorf("create single chat conversations failed, err: %v, conversationID: %s", err, conversationID)
+				return nil, err
+			}
+		case constant.ReadGroupChatType:
+			groupInfoResp, err := l.svcCtx.GroupService.GetGroupMemberUserIDs(ctx, &group.GetGroupMemberUserIDsReq{
+				GroupID: msg.GroupID,
+			})
+			if err != nil {
+				l.Errorf("get group member user ids failed, err: %v, groupID: %s", err, msg.GroupID)
+				return nil, err
+			}
+			memberUserIDs := groupInfoResp.GetUserIDs()
+			_, err = l.svcCtx.ConvService.CreateGroupChatConversations(ctx, &conversation.CreateGroupChatConversationsReq{
+				GroupID: msg.GroupID,
+				UserIDs: memberUserIDs,
+			})
+			if err != nil {
+				l.Errorf("create group chat conversations failed, err: %v, groupID: %s", err, msg.GroupID)
+				return nil, err
+			}
+		default:
+			// 未知会话类型，创建会话
+			return nil, errors.New("unknown conversation session type")
+		}
+	}
+
+	err = l.svcCtx.MsgModel.Insert(ctx, conversationID, sdkMsgToModelMsg(msg))
+	if err != nil {
+		l.Errorf("insert msg failed, err: %v, conversationID: %s", err, conversationID)
+		return nil, err
+	}
+
+	err = l.svcCtx.SeqConversationModel.SetConversationMaxSeq(ctx, conversationID, seq)
+	if err != nil {
+		l.Errorf("set conversation max seq failed, err: %v, conversationID: %s", err, conversationID)
+	}
+	return &pbmsg.AddMsgResp{
+		LastSeq: seq,
+	}, nil
+}
+
+func (l *Logic) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddMsgsResp, error) {
+	msgs := req.GetMsgs()
+	conversationID := req.GetConversationID()
+
+	if len(msgs) == 0 {
+		return &pbmsg.AddMsgsResp{}, nil
+	}
+
+	seqStart, seqEnd, err := l.svcCtx.SeqAllocator.AllocateBatch(ctx, conversationID, len(msgs))
+	if err != nil {
+		l.Errorf("allocate seq failed, err: %v, conversationID: %s", err, conversationID)
+		return nil, err
+	}
+	isNewConversation := seqStart == 1
+	for _, msg := range msgs {
+		if seqStart > seqEnd {
+			break
+		}
+		msg.Seq = seqStart
+		seqStart++
+	}
+	if isNewConversation {
+		switch msgs[0].SessionType {
+		case constant.SingleChatType, constant.NotificationChatType:
+			_, err = l.svcCtx.ConvService.CreateSingleChatConversations(ctx, &conversation.CreateSingleChatConversationsReq{
+				RecvID:           msgs[0].RecvID,
+				SendID:           msgs[0].SendID,
+				ConversationID:   conversationID,
+				ConversationType: msgs[0].SessionType,
+			})
+			if err != nil {
+				l.Errorf("create single chat conversations failed, err: %v, conversationID: %s", err, conversationID)
+				return nil, err
+			}
+		case constant.ReadGroupChatType:
+			groupInfoResp, err := l.svcCtx.GroupService.GetGroupMemberUserIDs(ctx, &group.GetGroupMemberUserIDsReq{
+				GroupID: msgs[0].GroupID,
+			})
+			if err != nil {
+				l.Errorf("get group member user ids failed, err: %v, groupID: %s", err, msgs[0].GroupID)
+				return nil, err
+			}
+			memberUserIDs := groupInfoResp.GetUserIDs()
+			_, err = l.svcCtx.ConvService.CreateGroupChatConversations(ctx, &conversation.CreateGroupChatConversationsReq{
+				GroupID: msgs[0].GroupID,
+				UserIDs: memberUserIDs,
+			})
+			if err != nil {
+				l.Errorf("create group chat conversations failed, err: %v, groupID: %s", err, msgs[0].GroupID)
+				return nil, err
+			}
+		default:
+			// 未知会话类型，创建会话
+			return nil, errors.New("unknown conversation session type")
+		}
+	}
+
+	modelMsgs := make([]*model.MsgDataModel, 0, len(msgs))
+	for _, msg := range msgs {
+		modelMsgs = append(modelMsgs, sdkMsgToModelMsg(msg))
+	}
+	err = l.svcCtx.MsgModel.BatchInsert(ctx, conversationID, modelMsgs)
+	if err != nil {
+		l.Errorf("insert msg failed, err: %v, conversationID: %s", err, conversationID)
+		return nil, err
+	}
+
+	err = l.svcCtx.SeqConversationModel.SetConversationMaxSeq(ctx, conversationID, seqEnd)
+	if err != nil {
+		l.Errorf("set conversation max seq failed, err: %v, conversationID: %s", err, conversationID)
+	}
+	return &pbmsg.AddMsgsResp{
+		LastSeq: seqEnd,
 	}, nil
 }

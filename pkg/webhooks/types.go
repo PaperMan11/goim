@@ -14,6 +14,7 @@ const (
 	EventMessageRead            EventType = "message.read"             // 消息已读
 	EventMessageReactionAdded   EventType = "message.reaction_added"   // 消息表情回应添加
 	EventMessageReactionRemoved EventType = "message.reaction_removed" // 消息表情回应删除
+	EventMessageSaved           EventType = "message.saved"            // 消息已保存
 
 	// 用户相关事件
 	EventUserOnline        EventType = "user.online"         // 用户上线

@@ -182,3 +182,13 @@ func (s *MsgServer) GetLastMessage(ctx context.Context, req *pbmsg.GetLastMessag
 	l := logic.NewLogic(ctx, s.svcCtx)
 	return l.GetLastMessage(ctx, req)
 }
+
+func (s *MsgServer) AddMsg(ctx context.Context, req *pbmsg.AddMsgReq) (*pbmsg.AddMsgResp, error) {
+	l := logic.NewLogic(ctx, s.svcCtx)
+	return l.AddMsg(ctx, req)
+}
+
+func (s *MsgServer) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddMsgsResp, error) {
+	l := logic.NewLogic(ctx, s.svcCtx)
+	return l.AddMsgs(ctx, req)
+}

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"runtime"
 
+	"github.com/PaperMan11/goim/pkg/msgprocessor"
+	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	queuex "github.com/PaperMan11/goim/pkg/queue"
 	kafkax "github.com/PaperMan11/goim/pkg/queue/kafka"
 	"github.com/PaperMan11/goim/pkg/rpcclient/conversationservice"
@@ -14,6 +16,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	webhookStore "github.com/PaperMan11/goim/pkg/storage/webhook"
+	"github.com/PaperMan11/goim/pkg/utils/batcher"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/mon"
@@ -30,6 +33,7 @@ var (
 type MsgTransfer struct {
 	cfg                   *Config
 	msgTransferConsumer   queuex.Consumer
+	msgPersistentConsumer queuex.Consumer
 	msgPersistentProducer queuex.Producer
 	msgPushProducer       queuex.Producer
 	webhookManager        *webhooks.Manager
@@ -39,12 +43,7 @@ type MsgTransfer struct {
 	groupService          groupservice.GroupService
 	conversationService   conversationservice.ConversationService
 	userService           userservice.UserService
-	msgRpcClient          zrpc.Client
-	pushRpcClient         zrpc.Client
-	gatewayRpcClient      zrpc.Client
-	groupRpcClient        zrpc.Client
-	conversationRpcClient zrpc.Client
-	userRpcClient         zrpc.Client
+	batcher               *batcher.Batcher[*sdkws.MsgData]
 }
 
 func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
@@ -57,6 +56,7 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 	}
 
 	msgTransferConsumer := kafkax.MustNewConsumer(cfg.MsgTransferConsumer)
+	msgPersistentConsumer := kafkax.MustNewConsumer(cfg.MsgPersistentConsumer)
 	msgPersistentProducer := kafkax.MustNewProducer(cfg.MsgPersistentProducer)
 	msgPushProducer := kafkax.MustNewProducer(cfg.MsgPushProducer)
 
@@ -122,9 +122,16 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 		userService = userservice.NewStubUserService()
 	}
 
+	// 初始化批量处理器
+	batcher := batcher.NewBatcher[*sdkws.MsgData]()
+	batcher.SetResetFunc(func(md *sdkws.MsgData) {
+		md.Reset()
+	})
+
 	mt := &MsgTransfer{
 		cfg:                   cfg,
 		msgTransferConsumer:   msgTransferConsumer,
+		msgPersistentConsumer: msgPersistentConsumer,
 		msgPersistentProducer: msgPersistentProducer,
 		msgPushProducer:       msgPushProducer,
 		webhookManager:        webhookManager,
@@ -134,15 +141,13 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 		groupService:          groupService,
 		conversationService:   conversationService,
 		userService:           userService,
-		msgRpcClient:          msgRpcClient,
-		pushRpcClient:         pushRpcClient,
-		gatewayRpcClient:      gatewayRpcClient,
-		groupRpcClient:        groupRpcClient,
-		conversationRpcClient: conversationRpcClient,
-		userRpcClient:         userRpcClient,
+		batcher:               batcher,
 	}
 
-	if err := mt.msgTransferConsumer.Subscribe(mt.handleMsg); err != nil {
+	if err := mt.msgTransferConsumer.Subscribe(mt.consumeMsg); err != nil {
+		return nil, err
+	}
+	if err := mt.msgPersistentConsumer.Subscribe(mt.consumePersistentMsgs); err != nil {
 		return nil, err
 	}
 
@@ -186,7 +191,15 @@ func (mt *MsgTransfer) Start() {
 		return
 	}
 
+	if err := mt.msgPersistentConsumer.Start(); err != nil {
+		logx.Errorf("Failed to start msg persistent consumer: %v", err)
+		return
+	}
+
 	mt.webhookManager.Start()
+	mt.batcher.Start(func(msg *sdkws.MsgData) string {
+		return msgprocessor.GetConversationIDByMsg(msg)
+	}, mt.batchHandleMsg)
 
 	logx.Infof("MsgTransfer Started, consumer topic: %s, persistent producer topic: %s, push producer topic: %s",
 		mt.msgTransferConsumer.Name(), mt.msgPersistentProducer.Name(), mt.msgPushProducer.Name())
@@ -198,15 +211,20 @@ func (mt *MsgTransfer) Stop() {
 		logx.Errorf("Failed to close msg persistent producer: %v", err)
 	}
 
-	if err := mt.msgTransferConsumer.Stop(); err != nil {
-		logx.Errorf("Failed to stop msg transfer consumer: %v", err)
-	}
-
 	if err := mt.msgPushProducer.Close(); err != nil {
 		logx.Errorf("Failed to close msg push producer: %v", err)
 	}
 
+	if err := mt.msgTransferConsumer.Stop(); err != nil {
+		logx.Errorf("Failed to stop msg transfer consumer: %v", err)
+	}
+
+	if err := mt.msgPersistentConsumer.Stop(); err != nil {
+		logx.Errorf("Failed to stop msg persistent consumer: %v", err)
+	}
+
 	mt.webhookManager.Stop()
+	mt.batcher.Stop()
 
 	logx.Infof("MsgTransfer Stopped")
 }

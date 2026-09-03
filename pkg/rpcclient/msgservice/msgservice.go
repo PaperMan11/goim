@@ -76,6 +76,10 @@ type MsgService interface {
 	GetLastMessageSeqByTime(ctx context.Context, in *pbmsg.GetLastMessageSeqByTimeReq, opts ...grpc.CallOption) (*pbmsg.GetLastMessageSeqByTimeResp, error)
 	// 获取最后消息
 	GetLastMessage(ctx context.Context, in *pbmsg.GetLastMessageReq, opts ...grpc.CallOption) (*pbmsg.GetLastMessageResp, error)
+	// 新增消息
+	AddMsg(ctx context.Context, in *pbmsg.AddMsgReq, opts ...grpc.CallOption) (*pbmsg.AddMsgResp, error)
+	// 批量新增消息
+	AddMsgs(ctx context.Context, in *pbmsg.AddMsgsReq, opts ...grpc.CallOption) (*pbmsg.AddMsgsResp, error)
 }
 
 type defaultMsgService struct {
@@ -284,6 +288,18 @@ func (s *defaultMsgService) GetLastMessage(ctx context.Context, in *pbmsg.GetLas
 	return authClient.GetLastMessage(ctx, in, opts...)
 }
 
+// 新增消息
+func (s *defaultMsgService) AddMsg(ctx context.Context, in *pbmsg.AddMsgReq, opts ...grpc.CallOption) (*pbmsg.AddMsgResp, error) {
+	authClient := pbmsg.NewMsgClient(s.cli.Conn())
+	return authClient.AddMsg(ctx, in, opts...)
+}
+
+// 批量新增消息
+func (s *defaultMsgService) AddMsgs(ctx context.Context, in *pbmsg.AddMsgsReq, opts ...grpc.CallOption) (*pbmsg.AddMsgsResp, error) {
+	authClient := pbmsg.NewMsgClient(s.cli.Conn())
+	return authClient.AddMsgs(ctx, in, opts...)
+}
+
 // stub
 type stubMsgService struct {
 }
@@ -455,4 +471,14 @@ func (s *stubMsgService) GetLastMessageSeqByTime(ctx context.Context, in *pbmsg.
 // 获取最后消息
 func (s *stubMsgService) GetLastMessage(ctx context.Context, in *pbmsg.GetLastMessageReq, opts ...grpc.CallOption) (*pbmsg.GetLastMessageResp, error) {
 	return &pbmsg.GetLastMessageResp{}, nil
+}
+
+// 新增消息
+func (s *stubMsgService) AddMsg(ctx context.Context, in *pbmsg.AddMsgReq, opts ...grpc.CallOption) (*pbmsg.AddMsgResp, error) {
+	return &pbmsg.AddMsgResp{}, nil
+}
+
+// 批量新增消息
+func (s *stubMsgService) AddMsgs(ctx context.Context, in *pbmsg.AddMsgsReq, opts ...grpc.CallOption) (*pbmsg.AddMsgsResp, error) {
+	return &pbmsg.AddMsgsResp{}, nil
 }

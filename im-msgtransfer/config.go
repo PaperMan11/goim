@@ -11,6 +11,7 @@ import (
 type Config struct {
 	service.ServiceConf
 	MsgTransferConsumer   queuex.KafkaConfig
+	MsgPersistentConsumer queuex.KafkaConfig
 	MsgPersistentProducer queuex.KafkaConfig
 	MsgPushProducer       queuex.KafkaConfig
 	Redis                 redis.RedisConf

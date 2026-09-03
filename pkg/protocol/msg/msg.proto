@@ -499,6 +499,27 @@ message GetLastMessageResp {
   map<string, openim.sdkws.MsgData> msgs = 1;  // 会话ID到消息数据的映射
 }
 
+message AddMsgReq {
+  string conversationID = 1;  // 会话ID
+  openim.sdkws.MsgData msgData = 2;  // 消息数据
+}
+
+// 新增消息响应
+message AddMsgResp {
+  int64 lastSeq = 1;  // 最后序列号
+}
+
+// 批量新增消息请求
+message AddMsgsReq {
+  string conversationID = 1;  // 会话ID
+  repeated openim.sdkws.MsgData msgs = 2;  // 消息列表
+}
+
+// 批量新增消息响应
+message AddMsgsResp {
+  int64 lastSeq = 1;  // 最后序列号
+}
+
 // ================================ 服务定义 ================================
 
 // 消息管理服务
@@ -569,4 +590,8 @@ service msg {
   rpc GetLastMessageSeqByTime(GetLastMessageSeqByTimeReq) returns (GetLastMessageSeqByTimeResp);
   // 获取最后消息
   rpc GetLastMessage(GetLastMessageReq) returns (GetLastMessageResp);
+  // 新增消息
+  rpc AddMsg(AddMsgReq) returns (AddMsgResp);
+  // 批量新增消息
+  rpc AddMsgs(AddMsgsReq) returns (AddMsgsResp);
 }

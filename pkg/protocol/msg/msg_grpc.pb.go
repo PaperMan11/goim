@@ -53,6 +53,8 @@ const (
 	Msg_SetUserConversationMinSeq_FullMethodName        = "/openim.msg.msg/SetUserConversationMinSeq"
 	Msg_GetLastMessageSeqByTime_FullMethodName          = "/openim.msg.msg/GetLastMessageSeqByTime"
 	Msg_GetLastMessage_FullMethodName                   = "/openim.msg.msg/GetLastMessage"
+	Msg_AddMsg_FullMethodName                           = "/openim.msg.msg/AddMsg"
+	Msg_AddMsgs_FullMethodName                          = "/openim.msg.msg/AddMsgs"
 )
 
 // MsgClient is the client API for Msg service.
@@ -127,6 +129,10 @@ type MsgClient interface {
 	GetLastMessageSeqByTime(ctx context.Context, in *GetLastMessageSeqByTimeReq, opts ...grpc.CallOption) (*GetLastMessageSeqByTimeResp, error)
 	// 获取最后消息
 	GetLastMessage(ctx context.Context, in *GetLastMessageReq, opts ...grpc.CallOption) (*GetLastMessageResp, error)
+	// 新增消息
+	AddMsg(ctx context.Context, in *AddMsgReq, opts ...grpc.CallOption) (*AddMsgResp, error)
+	// 批量新增消息
+	AddMsgs(ctx context.Context, in *AddMsgsReq, opts ...grpc.CallOption) (*AddMsgsResp, error)
 }
 
 type msgClient struct {
@@ -467,6 +473,26 @@ func (c *msgClient) GetLastMessage(ctx context.Context, in *GetLastMessageReq, o
 	return out, nil
 }
 
+func (c *msgClient) AddMsg(ctx context.Context, in *AddMsgReq, opts ...grpc.CallOption) (*AddMsgResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddMsgResp)
+	err := c.cc.Invoke(ctx, Msg_AddMsg_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) AddMsgs(ctx context.Context, in *AddMsgsReq, opts ...grpc.CallOption) (*AddMsgsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddMsgsResp)
+	err := c.cc.Invoke(ctx, Msg_AddMsgs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 // All implementations must embed UnimplementedMsgServer
 // for forward compatibility.
@@ -539,6 +565,10 @@ type MsgServer interface {
 	GetLastMessageSeqByTime(context.Context, *GetLastMessageSeqByTimeReq) (*GetLastMessageSeqByTimeResp, error)
 	// 获取最后消息
 	GetLastMessage(context.Context, *GetLastMessageReq) (*GetLastMessageResp, error)
+	// 新增消息
+	AddMsg(context.Context, *AddMsgReq) (*AddMsgResp, error)
+	// 批量新增消息
+	AddMsgs(context.Context, *AddMsgsReq) (*AddMsgsResp, error)
 	mustEmbedUnimplementedMsgServer()
 }
 
@@ -647,6 +677,12 @@ func (UnimplementedMsgServer) GetLastMessageSeqByTime(context.Context, *GetLastM
 }
 func (UnimplementedMsgServer) GetLastMessage(context.Context, *GetLastMessageReq) (*GetLastMessageResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLastMessage not implemented")
+}
+func (UnimplementedMsgServer) AddMsg(context.Context, *AddMsgReq) (*AddMsgResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddMsg not implemented")
+}
+func (UnimplementedMsgServer) AddMsgs(context.Context, *AddMsgsReq) (*AddMsgsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddMsgs not implemented")
 }
 func (UnimplementedMsgServer) mustEmbedUnimplementedMsgServer() {}
 func (UnimplementedMsgServer) testEmbeddedByValue()             {}
@@ -1263,6 +1299,42 @@ func _Msg_GetLastMessage_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_AddMsg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddMsgReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).AddMsg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_AddMsg_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).AddMsg(ctx, req.(*AddMsgReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_AddMsgs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddMsgsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).AddMsgs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Msg_AddMsgs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).AddMsgs(ctx, req.(*AddMsgsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Msg_ServiceDesc is the grpc.ServiceDesc for Msg service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1401,6 +1473,14 @@ var Msg_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetLastMessage",
 			Handler:    _Msg_GetLastMessage_Handler,
+		},
+		{
+			MethodName: "AddMsg",
+			Handler:    _Msg_AddMsg_Handler,
+		},
+		{
+			MethodName: "AddMsgs",
+			Handler:    _Msg_AddMsgs_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
