@@ -45,7 +45,7 @@ func main() {
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)
 		}
-		hubServer.Start()
+		// hubServer.Start()
 		proc.AddWrapUpListener(func() {
 			close()
 		})

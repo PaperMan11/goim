@@ -8,7 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logc"
 )
 
-func (mt *MsgTransfer) triggerMessageSavedEvent(ctx context.Context, msg *sdkws.MsgData) {
+func (mt *MsgTransfer) webhookMessageSaved(ctx context.Context, msg *sdkws.MsgData) {
 	if err := mt.webhookManager.Dispatch(&webhooks.WebhookEvent{
 		EventType: webhooks.EventMessageSaved,
 		Data: map[string]interface{}{

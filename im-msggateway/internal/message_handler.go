@@ -346,14 +346,19 @@ func (h *BusinessHandler) handleLogoutMsg(ctx context.Context, req *Request) (re
 	return nil, errx.DataError.Wrap("logout_msg req not support")
 }
 
-// handleSetBackgroundStatus 处理设置背景状态请求
+// handleSetBackgroundStatus 处理设置后台状态请求
 func (h *BusinessHandler) handleSetBackgroundStatus(ctx context.Context, req *Request) (respData []byte, err error) {
 	return nil, errx.DataError.Wrap("set_background_status req not support")
 }
 
 // handleSubUserOnlineStatus 处理订阅用户在线状态请求
 func (h *BusinessHandler) handleSubUserOnlineStatus(ctx context.Context, req *Request) (respData []byte, err error) {
-	return nil, errx.DataError.Wrap("sub_user_online_status req not support")
+	var reqData sdkws.SubUserOnlineStatus
+	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		return nil, errx.DataError.Wrap("sub_user_online_status req data unmarshal error")
+	}
+	// todo: 处理订阅用户在线状态请求
+	return []byte{}, nil
 }
 
 // handleDataError 处理数据错误请求

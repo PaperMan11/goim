@@ -179,7 +179,7 @@ func (mt *MsgTransfer) toMongoTopic(ctx context.Context, conversationID string, 
 	}
 
 	for _, msg := range msgs {
-		mt.triggerMessageSavedEvent(ctx, msg)
+		mt.webhookMessageSaved(ctx, msg)
 	}
 	return nil
 }
