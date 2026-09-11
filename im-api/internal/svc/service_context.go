@@ -15,7 +15,10 @@ import (
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	relationservice "github.com/PaperMan11/goim/pkg/rpcclient/relationservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	"github.com/zeromicro/go-zero/zrpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	"github.com/redis/go-redis/v9"
@@ -36,6 +39,12 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	clientOpts := []zrpc.ClientOption{
+		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		// zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)),
+		zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"iphash"}`)),
+		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
+	}
 	// rpc clients
 	var (
 		userService                 userservice.UserService
@@ -54,32 +63,32 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if c.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
-		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf))
+		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...))
 	}
 	if c.ConvRpc.Stub {
 		convService = convservice.NewStubConversationService()
 	} else {
-		convService = convservice.NewConversationService(zrpc.MustNewClient(c.ConvRpc.RpcClientConf))
+		convService = convservice.NewConversationService(zrpc.MustNewClient(c.ConvRpc.RpcClientConf, clientOpts...))
 	}
 	if c.RelationRpc.Stub {
 		relationService = relationservice.NewStubRelationService()
 	} else {
-		relationService = relationservice.NewRelationService(zrpc.MustNewClient(c.RelationRpc.RpcClientConf))
+		relationService = relationservice.NewRelationService(zrpc.MustNewClient(c.RelationRpc.RpcClientConf, clientOpts...))
 	}
 	if c.GroupRpc.Stub {
 		groupService = groupservice.NewStubGroupService()
 	} else {
-		groupService = groupservice.NewGroupService(zrpc.MustNewClient(c.GroupRpc.RpcClientConf))
+		groupService = groupservice.NewGroupService(zrpc.MustNewClient(c.GroupRpc.RpcClientConf, clientOpts...))
 	}
 	if c.MsgRpc.Stub {
 		msgService = msgservice.NewStubMsgService()
 	} else {
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(c.MsgRpc.RpcClientConf))
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(c.MsgRpc.RpcClientConf, clientOpts...))
 	}
 	if c.AuthRpc.Stub {
 		authService = authservice.NewStubAuthService()
 	} else {
-		authService = authservice.NewAuthService(zrpc.MustNewClient(c.AuthRpc.RpcClientConf))
+		authService = authservice.NewAuthService(zrpc.MustNewClient(c.AuthRpc.RpcClientConf, clientOpts...))
 	}
 	redisCli := sredis.MustNewRedis(c.Redis)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)

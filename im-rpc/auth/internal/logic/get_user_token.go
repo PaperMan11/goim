@@ -119,7 +119,7 @@ func (l *GetUserTokenLogic) handleSingleLogin(ctx context.Context, userID string
 		return nil, token.ErrUserExists
 	}
 
-	return nil, nil
+	return []*token.TokenInfo{}, nil
 }
 
 func (l *GetUserTokenLogic) handleReplaceLogin(ctx context.Context, userID string) ([]*token.TokenInfo, error) {

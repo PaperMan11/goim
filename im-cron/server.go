@@ -7,10 +7,13 @@ import (
 	redLocker "github.com/PaperMan11/goim/pkg/lock/redis"
 	convservice "github.com/PaperMan11/goim/pkg/rpcclient/conversationservice"
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
+	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/robfig/cron/v3"
 )
@@ -28,21 +31,23 @@ func NewCronServer(cfg *Config) *CronServer {
 	redisClient := sredis.MustNewRedis(cfg.Redis)
 	locker := redLocker.NewRedisLocker(redisClient)
 
+	clientOpts := []zrpc.ClientOption{
+		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		// zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)),
+		zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"iphash"}`)),
+		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
+	}
 	var (
-		convRpcClient zrpc.Client
-		msgRpcClient  zrpc.Client
-		convService   convservice.ConversationService
-		msgService    msgservice.MsgService
+		convService convservice.ConversationService
+		msgService  msgservice.MsgService
 	)
 	if !cfg.ConvRpc.Stub {
-		convRpcClient = zrpc.MustNewClient(cfg.ConvRpc.RpcClientConf)
-		convService = convservice.NewConversationService(convRpcClient)
+		convService = convservice.NewConversationService(zrpc.MustNewClient(cfg.ConvRpc.RpcClientConf, clientOpts...))
 	} else {
 		convService = convservice.NewStubConversationService()
 	}
 	if !cfg.MsgRpc.Stub {
-		msgRpcClient = zrpc.MustNewClient(cfg.MsgRpc.RpcClientConf)
-		msgService = msgservice.NewMsgService(msgRpcClient)
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(cfg.MsgRpc.RpcClientConf, clientOpts...))
 	} else {
 		msgService = msgservice.NewStubMsgService()
 	}

@@ -11,8 +11,11 @@ import (
 	"github.com/PaperMan11/goim/pkg/rpcclient/groupservice"
 	msgRpcClient "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	conversationModel "github.com/PaperMan11/goim/pkg/storage/mongo/conversation"
@@ -79,6 +82,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 }
 
 func (sc *ServiceContext) initRpcClient() {
+	clientOpts := []zrpc.ClientOption{
+		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		// zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)),
+		zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"iphash"}`)),
+		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
+	}
 	var (
 		userService  userservice.UserService
 		groupService groupservice.GroupService
@@ -87,17 +96,17 @@ func (sc *ServiceContext) initRpcClient() {
 	if sc.Config.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
-		userService = userservice.NewUserService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf))
+		userService = userservice.NewUserService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
 	}
 	if sc.Config.GroupRpc.Stub {
 		groupService = groupservice.NewStubGroupService()
 	} else {
-		groupService = groupservice.NewGroupService(zrpc.MustNewClient(sc.Config.GroupRpc.RpcClientConf))
+		groupService = groupservice.NewGroupService(zrpc.MustNewClient(sc.Config.GroupRpc.RpcClientConf, clientOpts...))
 	}
 	if sc.Config.MsgRpc.Stub {
 		msgService = msgRpcClient.NewStubMsgService()
 	} else {
-		msgService = msgRpcClient.NewMsgService(zrpc.MustNewClient(sc.Config.MsgRpc.RpcClientConf))
+		msgService = msgRpcClient.NewMsgService(zrpc.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
 	}
 	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
 	sc.GroupService = groupServiceCache.NewGroupServiceWrapperCache(groupService, sc.LocalCache)

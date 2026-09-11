@@ -14,6 +14,7 @@ import (
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	pushservice "github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
 	userservice "github.com/PaperMan11/goim/pkg/rpcclient/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	webhookStore "github.com/PaperMan11/goim/pkg/storage/webhook"
 	"github.com/PaperMan11/goim/pkg/webhooks"
@@ -24,6 +25,7 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -84,6 +86,12 @@ func startHubServer(c *internal.MsgGatewayConfig, wsServer internal.WsServer) (h
 }
 
 func newWsServer(c *internal.MsgGatewayConfig) internal.WsServer {
+	clientOpts := []zrpc.ClientOption{
+		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		// zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)),
+		zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"iphash"}`)),
+		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
+	}
 	var (
 		authService authservice.AuthService
 		userService userservice.UserService
@@ -93,22 +101,22 @@ func newWsServer(c *internal.MsgGatewayConfig) internal.WsServer {
 	if c.AuthRpc.Stub {
 		authService = authservice.NewStubAuthService()
 	} else {
-		authService = authservice.NewAuthService(zrpc.MustNewClient(c.AuthRpc.RpcClientConf))
+		authService = authservice.NewAuthService(zrpc.MustNewClient(c.AuthRpc.RpcClientConf, clientOpts...))
 	}
 	if c.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
-		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf))
+		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...))
 	}
 	if c.MsgRpc.Stub {
 		msgService = msgservice.NewStubMsgService()
 	} else {
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(c.MsgRpc.RpcClientConf))
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(c.MsgRpc.RpcClientConf, clientOpts...))
 	}
 	if c.PushRpc.Stub {
 		pushService = pushservice.NewStubPushService()
 	} else {
-		pushService = pushservice.NewPushService(zrpc.MustNewClient(c.PushRpc.RpcClientConf))
+		pushService = pushservice.NewPushService(zrpc.MustNewClient(c.PushRpc.RpcClientConf, clientOpts...))
 	}
 
 	// 消息处理器

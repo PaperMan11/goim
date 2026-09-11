@@ -13,12 +13,15 @@ import (
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	webhookStore "github.com/PaperMan11/goim/pkg/storage/webhook"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"github.com/zeromicro/go-zero/zrpc"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Pusher struct {
@@ -54,59 +57,53 @@ func NewPusher(cfg *Config) (*Pusher, error) {
 	webhookStore := webhookStore.NewWebhookMongoStore(monClient, redisClient)
 	webhookManager := webhooks.NewManager(webhookStore, runtime.NumCPU())
 
+	clientOpts := []zrpc.ClientOption{
+		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		// zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`)),
+		zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"iphash"}`)),
+		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
+	}
 	var (
-		msgRpcClient          zrpc.Client
-		pushRpcClient         zrpc.Client
-		gatewayRpcClient      zrpc.Client
-		groupRpcClient        zrpc.Client
-		conversationRpcClient zrpc.Client
-		userRpcClient         zrpc.Client
-		msgService            msgservice.MsgService
-		pushService           pushservice.PushService
-		msgGatewayService     msggatewayservice.MsgGatewayService
-		groupService          groupservice.GroupService
-		conversationService   conversationservice.ConversationService
-		userService           userservice.UserService
+		msgService          msgservice.MsgService
+		pushService         pushservice.PushService
+		msgGatewayService   msggatewayservice.MsgGatewayService
+		groupService        groupservice.GroupService
+		conversationService conversationservice.ConversationService
+		userService         userservice.UserService
 	)
 
 	if !cfg.MsgRpc.Stub {
-		msgRpcClient = zrpc.MustNewClient(cfg.MsgRpc.RpcClientConf)
-		msgService = msgservice.NewMsgService(msgRpcClient)
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(cfg.MsgRpc.RpcClientConf, clientOpts...))
 	} else {
 		msgService = msgservice.NewStubMsgService()
 	}
 
 	if !cfg.PushRpc.Stub {
-		pushRpcClient = zrpc.MustNewClient(cfg.PushRpc.RpcClientConf)
-		pushService = pushservice.NewPushService(pushRpcClient)
+		pushService = pushservice.NewPushService(zrpc.MustNewClient(cfg.PushRpc.RpcClientConf, clientOpts...))
 	} else {
 		pushService = pushservice.NewStubPushService()
 	}
 
 	if !cfg.GatewayRpc.Stub {
-		gatewayRpcClient = zrpc.MustNewClient(cfg.GatewayRpc.RpcClientConf)
-		msgGatewayService = msggatewayservice.NewMsgGatewayService(gatewayRpcClient)
+		msgGatewayService = msggatewayservice.NewMsgGatewayService(zrpc.MustNewClient(cfg.GatewayRpc.RpcClientConf, clientOpts...))
 	} else {
 		msgGatewayService = msggatewayservice.NewStubMsgGatewayService()
 	}
 
 	if !cfg.GroupRpc.Stub {
-		groupRpcClient = zrpc.MustNewClient(cfg.GroupRpc.RpcClientConf)
-		groupService = groupservice.NewGroupService(groupRpcClient)
+		groupService = groupservice.NewGroupService(zrpc.MustNewClient(cfg.GroupRpc.RpcClientConf, clientOpts...))
 	} else {
 		groupService = groupservice.NewStubGroupService()
 	}
 
 	if !cfg.ConversationRpc.Stub {
-		conversationRpcClient = zrpc.MustNewClient(cfg.ConversationRpc.RpcClientConf)
-		conversationService = conversationservice.NewConversationService(conversationRpcClient)
+		conversationService = conversationservice.NewConversationService(zrpc.MustNewClient(cfg.ConversationRpc.RpcClientConf, clientOpts...))
 	} else {
 		conversationService = conversationservice.NewStubConversationService()
 	}
 
 	if !cfg.UserRpc.Stub {
-		userRpcClient = zrpc.MustNewClient(cfg.UserRpc.RpcClientConf)
-		userService = userservice.NewUserService(userRpcClient)
+		userService = userservice.NewUserService(zrpc.MustNewClient(cfg.UserRpc.RpcClientConf, clientOpts...))
 	} else {
 		userService = userservice.NewStubUserService()
 	}
