@@ -8,27 +8,29 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/lock"
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	red "github.com/redis/go-redis/v9"
 )
 
-func setupTestRedis(t *testing.T) *redis.Redis {
+func setupTestRedis(t *testing.T) red.UniversalClient {
 	redisHost := "192.168.241.128:6379"
 	redisPass := "123456"
-	r, err := redis.NewRedis(redis.RedisConf{
-		Host: redisHost,
-		Type: "node",
-		Pass: redisPass,
+	r := red.NewClient(&red.Options{
+		Addr:     redisHost,
+		Password: redisPass,
+		DB:       0,
 	})
-	if err != nil {
+
+	ctx := context.Background()
+	if err := r.Ping(ctx).Err(); err != nil {
 		t.Skipf("Redis not available at %s: %v", redisHost, err)
 	}
 
 	t.Cleanup(func() {
-		ctx := context.Background()
-		keys, _ := r.KeysCtx(ctx, "lock:*")
+		keys, _ := r.Keys(ctx, "lock:*").Result()
 		if len(keys) > 0 {
-			r.DelCtx(ctx, keys...)
+			_ = r.Del(ctx, keys...).Err()
 		}
+		_ = r.Close()
 	})
 
 	return r
@@ -121,8 +123,8 @@ func TestRedisLocker_TryLockAlreadyLocked(t *testing.T) {
 	key := "lock:test-try-lock-already-locked"
 
 	r := setupTestRedis(t)
-	_ = r.SetCtx(ctx, key, "fake-lock-value")
-	_ = r.ExpireCtx(ctx, key, 5)
+	_ = r.Set(ctx, key, "fake-lock-value", 0).Err()
+	_ = r.Expire(ctx, key, 5*time.Second).Err()
 
 	locked, err := locker.TryLock(ctx, key)
 	if err != nil {
@@ -142,8 +144,8 @@ func TestRedisLocker_ExecWithLockRetryExhausted(t *testing.T) {
 	key := "lock:test-retry-exhausted"
 
 	r := setupTestRedis(t)
-	_ = r.SetCtx(ctx, key, "fake-lock-value")
-	_ = r.ExpireCtx(ctx, key, 5)
+	_ = r.Set(ctx, key, "fake-lock-value", 0).Err()
+	_ = r.Expire(ctx, key, 5*time.Second).Err()
 
 	err := locker.ExecWithLock(ctx, key, func() error {
 		return nil
@@ -162,8 +164,8 @@ func TestRedisLocker_ExecWithLockContextCanceled(t *testing.T) {
 
 	r := setupTestRedis(t)
 	ctxBg := context.Background()
-	_ = r.SetCtx(ctxBg, key, "fake-lock-value")
-	_ = r.ExpireCtx(ctxBg, key, 10)
+	_ = r.Set(ctxBg, key, "fake-lock-value", 0).Err()
+	_ = r.Expire(ctxBg, key, 10*time.Second).Err()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -185,8 +187,8 @@ func TestRedisLocker_NoRetry(t *testing.T) {
 	key := "lock:test-no-retry"
 
 	r := setupTestRedis(t)
-	_ = r.SetCtx(ctx, key, "fake-lock-value")
-	_ = r.ExpireCtx(ctx, key, 5)
+	_ = r.Set(ctx, key, "fake-lock-value", 0).Err()
+	_ = r.Expire(ctx, key, 5*time.Second).Err()
 
 	err := locker.ExecWithLock(ctx, key, func() error {
 		return nil

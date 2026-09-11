@@ -8,7 +8,6 @@ import (
 	"github.com/PaperMan11/goim/pkg/lock"
 	"github.com/PaperMan11/goim/pkg/utils/randx"
 	red "github.com/redis/go-redis/v9"
-	zredis "github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 const (
@@ -29,21 +28,21 @@ end`
 )
 
 type RedisLocker struct {
-	redisClient   *zredis.Redis
-	lockScript    *zredis.Script
-	unlockScript  *zredis.Script
+	redisClient   red.UniversalClient
+	lockScript    *red.Script
+	unlockScript  *red.Script
 	defaultTTL    time.Duration
 	retryStrategy lock.RetryStrategy
 	maxRetries    int
 }
 
-func NewRedisLocker(redisClient *zredis.Redis, options ...lock.Option) *RedisLocker {
+func NewRedisLocker(redisClient red.UniversalClient, options ...lock.Option) *RedisLocker {
 	opts := lock.NewOptions(options...)
 
 	return &RedisLocker{
 		redisClient:   redisClient,
-		lockScript:    zredis.NewScript(lockCommand),
-		unlockScript:  zredis.NewScript(unlockCommand),
+		lockScript:    red.NewScript(lockCommand),
+		unlockScript:  red.NewScript(unlockCommand),
 		defaultTTL:    opts.DefaultTTL,
 		retryStrategy: opts.RetryStrategy,
 		maxRetries:    opts.MaxRetries,
@@ -108,7 +107,7 @@ func (r *RedisLocker) tryObtainOnce(ctx context.Context, key string) (*lockObj, 
 	id := randomStr(randomLen)
 	ttl := int(r.defaultTTL.Milliseconds())
 
-	result, err := r.redisClient.ScriptRunCtx(ctx, r.lockScript, []string{key}, []interface{}{id, ttl})
+	result, err := r.lockScript.Run(ctx, r.redisClient, []string{key}, []interface{}{id, ttl}).Result()
 	if err != nil {
 		if errors.Is(err, red.Nil) {
 			return nil, nil
@@ -138,12 +137,12 @@ func randomStr(n int) string {
 }
 
 type lockObj struct {
-	redisClient  *zredis.Redis
-	unlockScript *zredis.Script
+	redisClient  red.UniversalClient
+	unlockScript *red.Script
 	key          string
 	id           string
 }
 
 func (l *lockObj) release(ctx context.Context) {
-	_, _ = l.redisClient.ScriptRunCtx(ctx, l.unlockScript, []string{l.key}, []interface{}{l.id})
+	_, _ = l.unlockScript.Run(ctx, l.redisClient, []string{l.key}, []interface{}{l.id}).Result()
 }
