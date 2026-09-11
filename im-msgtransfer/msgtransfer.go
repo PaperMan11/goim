@@ -46,7 +46,7 @@ type MsgTransfer struct {
 	groupService          groupservice.GroupService
 	conversationService   conversationservice.ConversationService
 	userService           userservice.UserService
-	batcher               *batcher.Batcher[*sdkws.MsgData]
+	batcher               *batcher.Batcher[sdkws.MsgData]
 }
 
 func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
@@ -120,7 +120,7 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 	}
 
 	// 初始化批量处理器
-	batcher := batcher.NewBatcher[*sdkws.MsgData]()
+	batcher := batcher.NewBatcher[sdkws.MsgData]()
 	batcher.SetResetFunc(func(md *sdkws.MsgData) {
 		md.Reset()
 	})

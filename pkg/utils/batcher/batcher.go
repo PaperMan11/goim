@@ -30,11 +30,11 @@ type Config struct {
 type BatcherOption func(*Config)
 
 // ResetFunc 用于重置对象状态的函数
-type ResetFunc[T any] func(T)
+type ResetFunc[T any] func(*T)
 
 type Batcher[T any] struct {
 	cfg       Config         // 配置
-	dataCh    chan T         // 数据通道（改为指针类型）
+	dataCh    chan *T        // 数据通道
 	doneCh    chan struct{}  // 完成通道
 	wg        sync.WaitGroup // 等待组，用于等待所有工作线程完成
 	pool      sync.Pool      // 对象池
@@ -54,7 +54,7 @@ func NewBatcher[T any](opts ...BatcherOption) *Batcher[T] {
 
 	b := &Batcher[T]{
 		cfg:    cfg,
-		dataCh: make(chan T, cfg.dataBufSize),
+		dataCh: make(chan *T, cfg.dataBufSize),
 		doneCh: make(chan struct{}, 1),
 	}
 
@@ -74,19 +74,19 @@ func (b *Batcher[T]) SetResetFunc(fn ResetFunc[T]) {
 }
 
 // Get 从对象池获取获取一个对象
-func (b *Batcher[T]) Get() T {
-	return b.pool.Get().(T)
+func (b *Batcher[T]) Get() *T {
+	return b.pool.Get().(*T)
 }
 
 // Put 将对象放回对象池
-func (b *Batcher[T]) Put(data T) {
+func (b *Batcher[T]) Put(data *T) {
 	if b.resetFunc != nil {
 		b.resetFunc(data)
 	}
 	b.pool.Put(data)
 }
 
-func (b *Batcher[T]) Push(data T) error {
+func (b *Batcher[T]) Push(data *T) error {
 	select {
 	case <-b.doneCh:
 		return ErrorBatcherClosed
@@ -95,7 +95,7 @@ func (b *Batcher[T]) Push(data T) error {
 	}
 }
 
-func (b *Batcher[T]) PushImmediately(data T) error {
+func (b *Batcher[T]) PushImmediately(data *T) error {
 	select {
 	case <-b.doneCh:
 		return ErrorBatcherClosed
@@ -106,7 +106,7 @@ func (b *Batcher[T]) PushImmediately(data T) error {
 	}
 }
 
-func (b *Batcher[T]) Start(keyExtractor func(T) string, batchFn func(key string, dataList []T)) error {
+func (b *Batcher[T]) Start(keyExtractor func(*T) string, batchFn func(key string, dataList []*T)) error {
 	b.wg.Add(b.cfg.workerNum)
 	for i := 0; i < b.cfg.workerNum; i++ {
 		go func(j int) {
@@ -124,12 +124,12 @@ func (b *Batcher[T]) Start(keyExtractor func(T) string, batchFn func(key string,
 	return nil
 }
 
-func (b *Batcher[T]) worker(keyExtractor func(T) string, batchFn func(key string, dataList []T)) {
+func (b *Batcher[T]) worker(keyExtractor func(*T) string, batchFn func(key string, dataList []*T)) {
 	ticker := time.NewTicker(b.cfg.interval)
 	defer ticker.Stop()
 
 	// 按分类键分组存储数据，key为分类键（如房间ID），value为该组的数据列表
-	dataGroups := make(map[string][]T)
+	dataGroups := make(map[string][]*T)
 
 	for {
 		select {
