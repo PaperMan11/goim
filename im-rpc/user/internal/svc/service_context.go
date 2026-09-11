@@ -29,6 +29,7 @@ type ServiceContext struct {
 	AuthVerifier authverify.AuthVerifyService
 	LocalCache   localcache.LocalCache
 	RedisCli     redis.UniversalClient
+	SingleFlight syncx.SingleFlight
 
 	// mongo models
 	UserModel userModel.UserModel
@@ -44,19 +45,21 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	redisCli := sredis.MustNewRedis(c.Redis)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()
+	singleFlight := syncx.NewSingleFlight()
 
 	userMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUser)
 	statusMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserStatus)
 	cmdMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserCommand)
 	clientConfigMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserClientConfig)
-	userInnerModel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo, clientConfigMongo, syncx.NewSingleFlight())
-	userCacheModel := userModel.NewCachedUserModel(userInnerModel, redisCli, syncx.NewSingleFlight())
+	userInnerModel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo, clientConfigMongo, singleFlight)
+	userCacheModel := userModel.NewCachedUserModel(userInnerModel, redisCli, singleFlight)
 
 	sc := &ServiceContext{
-		Config:     c,
-		UserModel:  userCacheModel,
-		LocalCache: localCache,
-		RedisCli:   redisCli,
+		Config:       c,
+		UserModel:    userCacheModel,
+		LocalCache:   localCache,
+		RedisCli:     redisCli,
+		SingleFlight: singleFlight,
 	}
 	sc.initRpcClient()
 	return sc

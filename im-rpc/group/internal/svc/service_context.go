@@ -31,6 +31,7 @@ type ServiceContext struct {
 	AuthVerifier authverify.AuthVerifyService
 	LocalCache   localcache.LocalCache
 	RedisCli     redis.UniversalClient
+	SingleFlight syncx.SingleFlight
 
 	// mongo models
 	GroupModel      groupModel.GroupModel
@@ -47,19 +48,20 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	redisCli := sredis.MustNewRedis(c.Redis)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()
+	singleFlight := syncx.NewSingleFlight()
 
 	groupMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroup)
 	memberMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupMember)
 	groupInnerModel := groupModel.NewGroupModel(groupMongo, memberMongo)
-	groupCacheModel := groupModel.NewCachedGroupModel(groupInnerModel, redisCli, syncx.NewSingleFlight())
+	groupCacheModel := groupModel.NewCachedGroupModel(groupInnerModel, redisCli, singleFlight)
 
 	versionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupVersion)
-	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, syncx.NewSingleFlight())
+	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, singleFlight)
 
 	friendReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriendRequest)
 	groupReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupRequest)
 	reqInnerModel := requestModel.NewRequestModel(friendReqMongo, groupReqMongo)
-	reqCacheModel := requestModel.NewCachedRequestModel(reqInnerModel, redisCli, syncx.NewSingleFlight())
+	reqCacheModel := requestModel.NewCachedRequestModel(reqInnerModel, redisCli, singleFlight)
 
 	sc := &ServiceContext{
 		Config:          c,
@@ -68,6 +70,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RequestModel:    reqCacheModel,
 		LocalCache:      localCache,
 		RedisCli:        redisCli,
+		SingleFlight:    singleFlight,
 	}
 	sc.initRpcClient()
 	return sc

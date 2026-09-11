@@ -30,6 +30,7 @@ import (
 	seqUserModel "github.com/PaperMan11/goim/pkg/storage/mongo/sequser"
 	allocator "github.com/PaperMan11/goim/pkg/storage/redis/allocator"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -40,6 +41,7 @@ type ServiceContext struct {
 	MsgTransferProducer queuex.Producer
 	LocalCache          localcache.LocalCache
 	RedisClient         redis.UniversalClient
+	SingleFlight        syncx.SingleFlight
 
 	// seq allocator
 	SeqAllocator allocator.SeqAllocator
@@ -59,13 +61,22 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	redisCli := sredis.MustNewRedis(c.Redis)
+	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
+	localCache.Start()
+
+	singleFlight := syncx.NewSingleFlight()
+
 	// mongo
 	msgMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionMessage)
 	convSeqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqConversation)
 	userSeqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqUser)
-	msgModel := msgModel.NewMsgModel(msgMongo)
-	seqUserModel := seqUserModel.NewSeqUserModel(userSeqMongo)
-	seqConversationModel := seqConversationModel.NewSeqConversationModel(convSeqMongo)
+	msgInnerModel := msgModel.NewMsgModel(msgMongo)
+	seqUserInnerModel := seqUserModel.NewSeqUserModel(userSeqMongo)
+	seqConversationInnerModel := seqConversationModel.NewSeqConversationModel(convSeqMongo)
+	msgModel := msgModel.NewCachedMsgModel(msgInnerModel, redisCli, singleFlight)
+	seqUserModel := seqUserModel.NewCachedSeqUserModel(seqUserInnerModel, redisCli, singleFlight)
+	seqConversationModel := seqConversationModel.NewCachedSeqConversationModel(seqConversationInnerModel, redisCli, singleFlight)
 
 	clientOpts := []zrpc.ClientOption{
 		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
@@ -112,10 +123,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		msgService = msgservice.NewMsgService(zrpc.MustNewClient(c.MsgRpc.RpcClientConf, clientOpts...))
 	}
 
-	redisCli := sredis.MustNewRedis(c.Redis)
-	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
-	localCache.Start()
-
 	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache)
 	authVerifier := authverify.NewAuthVerify(userServiceWrapperCache)
 	convServiceWrapperCache = convServiceCache.NewConversationServiceWrapperCache(convService, localCache)
@@ -133,6 +140,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	return &ServiceContext{
 		Config:               c,
+		LocalCache:           localCache,
+		RedisClient:          redisCli,
+		SingleFlight:         singleFlight,
 		AuthVerifier:         authVerifier,
 		MsgTransferProducer:  msgTransferProducer,
 		MsgModel:             msgModel,
@@ -151,6 +161,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 func (sc *ServiceContext) Close() error {
 	if sc.LocalCache != nil {
 		sc.LocalCache.Close()
+	}
+	if sc.RedisClient != nil {
+		sc.RedisClient.Close()
 	}
 	return nil
 }

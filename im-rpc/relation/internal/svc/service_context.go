@@ -29,6 +29,7 @@ type ServiceContext struct {
 	AuthVerifier authverify.AuthVerifyService
 	LocalCache   localcache.LocalCache
 	RedisCli     redis.UniversalClient
+	SingleFlight syncx.SingleFlight
 
 	// mongo models
 	FriendModel     friendModel.FriendModel
@@ -44,19 +45,20 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	redisCli := sredis.MustNewRedis(c.Redis)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()
+	singleFlight := syncx.NewSingleFlight()
 
 	friendMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriend)
 	blackMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionBlack)
 	friendInnerModel := friendModel.NewFriendModel(friendMongo, blackMongo)
-	friendCacheModel := friendModel.NewCachedFriendModel(friendInnerModel, redisCli, syncx.NewSingleFlight())
+	friendCacheModel := friendModel.NewCachedFriendModel(friendInnerModel, redisCli, singleFlight)
 
 	versionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupVersion)
-	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, syncx.NewSingleFlight())
+	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, singleFlight)
 
 	friendReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriendRequest)
 	groupReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupRequest)
 	reqInnerModel := requestModel.NewRequestModel(friendReqMongo, groupReqMongo)
-	reqCacheModel := requestModel.NewCachedRequestModel(reqInnerModel, redisCli, syncx.NewSingleFlight())
+	reqCacheModel := requestModel.NewCachedRequestModel(reqInnerModel, redisCli, singleFlight)
 
 	sc := &ServiceContext{
 		Config:          c,
@@ -65,6 +67,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RequestModel:    reqCacheModel,
 		LocalCache:      localCache,
 		RedisCli:        redisCli,
+		SingleFlight:    singleFlight,
 	}
 	sc.initRpcClient()
 	return sc

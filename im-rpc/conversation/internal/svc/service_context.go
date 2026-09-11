@@ -9,7 +9,7 @@ import (
 	msgServiceCache "github.com/PaperMan11/goim/pkg/rpccache/msgservice"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/groupservice"
-	msgRpcClient "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
+	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
@@ -32,6 +32,7 @@ type ServiceContext struct {
 	AuthVerifier authverify.AuthVerifyService
 	LocalCache   localcache.LocalCache
 	RedisCli     redis.UniversalClient
+	SingleFlight syncx.SingleFlight
 
 	// mongo models
 	ConversationModel conversationModel.ConversationModel
@@ -50,23 +51,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	redisCli := sredis.MustNewRedis(c.Redis)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()
+	singleFlight := syncx.NewSingleFlight()
 
 	convMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionConversation)
 	latestMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionConversationLatestMsg)
 	convInnerModel := conversationModel.NewConversationModel(convMongo, latestMongo)
-	convCacheModel := conversationModel.NewCachedConversationModel(convInnerModel, redisCli, syncx.NewSingleFlight())
+	convCacheModel := conversationModel.NewCachedConversationModel(convInnerModel, redisCli, singleFlight)
 
 	versionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupVersion)
-	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, syncx.NewSingleFlight())
+	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, singleFlight)
 
 	// seq 表：全局会话级 + 用户级（含 read_seq）
 	seqConvMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqConversation)
 	seqConvInner := seqConversationModel.NewSeqConversationModel(seqConvMongo)
-	seqConvCache := seqConversationModel.NewCachedSeqConversationModel(seqConvInner, redisCli, syncx.NewSingleFlight())
+	seqConvCache := seqConversationModel.NewCachedSeqConversationModel(seqConvInner, redisCli, singleFlight)
 
 	seqUserMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqUser)
 	seqUserInner := seqUserModel.NewSeqUserModel(seqUserMongo)
-	seqUserCache := seqUserModel.NewCachedSeqUserModel(seqUserInner, redisCli, syncx.NewSingleFlight())
+	seqUserCache := seqUserModel.NewCachedSeqUserModel(seqUserInner, redisCli, singleFlight)
 
 	sc := &ServiceContext{
 		Config:               c,
@@ -76,6 +78,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		SeqConversationModel: seqConvCache,
 		LocalCache:           localCache,
 		RedisCli:             redisCli,
+		SingleFlight:         singleFlight,
 	}
 	sc.initRpcClient()
 	return sc
@@ -91,7 +94,7 @@ func (sc *ServiceContext) initRpcClient() {
 	var (
 		userService  userservice.UserService
 		groupService groupservice.GroupService
-		msgService   msgRpcClient.MsgService
+		msgService   msgservice.MsgService
 	)
 	if sc.Config.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
@@ -104,9 +107,9 @@ func (sc *ServiceContext) initRpcClient() {
 		groupService = groupservice.NewGroupService(zrpc.MustNewClient(sc.Config.GroupRpc.RpcClientConf, clientOpts...))
 	}
 	if sc.Config.MsgRpc.Stub {
-		msgService = msgRpcClient.NewStubMsgService()
+		msgService = msgservice.NewStubMsgService()
 	} else {
-		msgService = msgRpcClient.NewMsgService(zrpc.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
 	}
 	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
 	sc.GroupService = groupServiceCache.NewGroupServiceWrapperCache(groupService, sc.LocalCache)
