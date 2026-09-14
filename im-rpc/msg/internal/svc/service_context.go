@@ -155,6 +155,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		ConvService:     convServiceWrapperCache,
 		RelationService: relationServiceWrapperCache,
 		GroupService:    groupServiceWrapperCache,
+		MsgService:      msgService,
 	}
 }
 

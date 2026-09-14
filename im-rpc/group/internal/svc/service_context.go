@@ -5,11 +5,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/authverify"
 	_ "github.com/PaperMan11/goim/pkg/lb/iphash"
 	"github.com/PaperMan11/goim/pkg/localcache"
-	groupServiceCache "github.com/PaperMan11/goim/pkg/rpccache/groupservice"
-	relationServiceCache "github.com/PaperMan11/goim/pkg/rpccache/relationservice"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/groupservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/relationservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
@@ -39,9 +35,7 @@ type ServiceContext struct {
 	RequestModel    requestModel.RequestModel
 
 	// rpc clients
-	UserService     userServiceCache.UserServiceWrapperCache
-	RelationService relationServiceCache.RelationServiceWrapperCache
-	GroupService    groupServiceCache.GroupServiceWrapperCache
+	UserService userServiceCache.UserServiceWrapperCache
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -84,28 +78,14 @@ func (sc *ServiceContext) initRpcClient() {
 		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
 	}
 	var (
-		userService     userservice.UserService
-		relationService relationservice.RelationService
-		groupService    groupservice.GroupService
+		userService userservice.UserService
 	)
 	if sc.Config.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
 		userService = userservice.NewUserService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
 	}
-	if sc.Config.RelationRpc.Stub {
-		relationService = relationservice.NewStubRelationService()
-	} else {
-		relationService = relationservice.NewRelationService(zrpc.MustNewClient(sc.Config.RelationRpc.RpcClientConf, clientOpts...))
-	}
-	if sc.Config.GroupRpc.Stub {
-		groupService = groupservice.NewStubGroupService()
-	} else {
-		groupService = groupservice.NewGroupService(zrpc.MustNewClient(sc.Config.GroupRpc.RpcClientConf, clientOpts...))
-	}
 	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
-	sc.RelationService = relationServiceCache.NewRelationServiceWrapperCache(relationService, sc.LocalCache)
-	sc.GroupService = groupServiceCache.NewGroupServiceWrapperCache(groupService, sc.LocalCache)
 
 	sc.AuthVerifier = authverify.NewAuthVerify(sc.UserService)
 }

@@ -6,7 +6,6 @@ import (
 	_ "github.com/PaperMan11/goim/pkg/lb/iphash"
 	"github.com/PaperMan11/goim/pkg/localcache"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/authservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msggatewayservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
@@ -24,7 +23,6 @@ type ServiceContext struct {
 	AuthVerify authverify.AuthVerifyService
 
 	UserService       userServiceCache.UserServiceWrapperCache
-	AuthService       authservice.AuthService
 	MsgGatewayService msggatewayservice.MsgGatewayService
 
 	LocalCache localcache.LocalCache
@@ -40,7 +38,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
 	}
 	userClient := zrpc.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...)
-	authClient := zrpc.MustNewClient(c.AuthRpc.RpcClientConf, clientOpts...)
 	msgGatewayClient := zrpc.MustNewClient(c.MsgGatewayRpc.RpcClientConf, clientOpts...)
 
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
@@ -59,7 +56,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		TokenStore:        token.NewRedisStore(redisCli),
 		AuthVerify:        authverify.NewAuthVerify(userServiceWrapperCache),
 		UserService:       userServiceWrapperCache,
-		AuthService:       authservice.NewAuthService(authClient),
 		MsgGatewayService: msggatewayservice.NewMsgGatewayService(msgGatewayClient),
 	}
 }

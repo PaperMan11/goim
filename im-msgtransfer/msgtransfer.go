@@ -8,12 +8,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	queuex "github.com/PaperMan11/goim/pkg/queue"
 	kafkax "github.com/PaperMan11/goim/pkg/queue/kafka"
-	"github.com/PaperMan11/goim/pkg/rpcclient/conversationservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/groupservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/msggatewayservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	webhookStore "github.com/PaperMan11/goim/pkg/storage/webhook"
@@ -40,13 +35,9 @@ type MsgTransfer struct {
 	msgPersistentProducer queuex.Producer
 	msgPushProducer       queuex.Producer
 	webhookManager        *webhooks.Manager
-	msgService            msgservice.MsgService
-	pushService           pushservice.PushService
-	msgGatewayService     msggatewayservice.MsgGatewayService
-	groupService          groupservice.GroupService
-	conversationService   conversationservice.ConversationService
-	userService           userservice.UserService
-	batcher               *batcher.Batcher[sdkws.MsgData]
+
+	msgService msgservice.MsgService
+	batcher    *batcher.Batcher[sdkws.MsgData]
 }
 
 func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
@@ -59,8 +50,8 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 	}
 
 	msgTransferConsumer := kafkax.MustNewConsumer(cfg.MsgTransferConsumer)
-	msgPersistentConsumer := kafkax.MustNewConsumer(cfg.MsgPersistentConsumer)
-	msgPersistentProducer := kafkax.MustNewProducer(cfg.MsgPersistentProducer)
+	msgPersistentConsumer := kafkax.MustNewConsumer(cfg.MsgPersistentTopic)
+	msgPersistentProducer := kafkax.MustNewProducer(cfg.MsgPersistentTopic)
 	msgPushProducer := kafkax.MustNewProducer(cfg.MsgPushProducer)
 
 	monClient := mon.MustNewModel(cfg.Mongo.Uri, cfg.Mongo.Database, "webhook")
@@ -75,48 +66,13 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
 	}
 	var (
-		msgService          msgservice.MsgService
-		pushService         pushservice.PushService
-		msgGatewayService   msggatewayservice.MsgGatewayService
-		groupService        groupservice.GroupService
-		conversationService conversationservice.ConversationService
-		userService         userservice.UserService
+		msgService msgservice.MsgService
 	)
 
 	if !cfg.MsgRpc.Stub {
 		msgService = msgservice.NewMsgService(zrpc.MustNewClient(cfg.MsgRpc.RpcClientConf, clientOpts...))
 	} else {
 		msgService = msgservice.NewStubMsgService()
-	}
-
-	if !cfg.PushRpc.Stub {
-		pushService = pushservice.NewPushService(zrpc.MustNewClient(cfg.PushRpc.RpcClientConf, clientOpts...))
-	} else {
-		pushService = pushservice.NewStubPushService()
-	}
-
-	if !cfg.GatewayRpc.Stub {
-		msgGatewayService = msggatewayservice.NewMsgGatewayService(zrpc.MustNewClient(cfg.GatewayRpc.RpcClientConf, clientOpts...))
-	} else {
-		msgGatewayService = msggatewayservice.NewStubMsgGatewayService()
-	}
-
-	if !cfg.GroupRpc.Stub {
-		groupService = groupservice.NewGroupService(zrpc.MustNewClient(cfg.GroupRpc.RpcClientConf, clientOpts...))
-	} else {
-		groupService = groupservice.NewStubGroupService()
-	}
-
-	if !cfg.ConversationRpc.Stub {
-		conversationService = conversationservice.NewConversationService(zrpc.MustNewClient(cfg.ConversationRpc.RpcClientConf, clientOpts...))
-	} else {
-		conversationService = conversationservice.NewStubConversationService()
-	}
-
-	if !cfg.UserRpc.Stub {
-		userService = userservice.NewUserService(zrpc.MustNewClient(cfg.UserRpc.RpcClientConf, clientOpts...))
-	} else {
-		userService = userservice.NewStubUserService()
 	}
 
 	// 初始化批量处理器
@@ -133,11 +89,6 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 		msgPushProducer:       msgPushProducer,
 		webhookManager:        webhookManager,
 		msgService:            msgService,
-		pushService:           pushService,
-		msgGatewayService:     msgGatewayService,
-		groupService:          groupService,
-		conversationService:   conversationService,
-		userService:           userService,
 		batcher:               batcher,
 	}
 
@@ -158,11 +109,11 @@ func validateConfig(cfg *Config) error {
 	if len(cfg.MsgTransferConsumer.Topic) == 0 {
 		return errors.New("msg transfer consumer topic cannot be empty")
 	}
-	if len(cfg.MsgPersistentProducer.Brokers) == 0 {
-		return errors.New("msg persistent producer brokers cannot be empty")
+	if len(cfg.MsgPersistentTopic.Brokers) == 0 {
+		return errors.New("msg persistent topic brokers cannot be empty")
 	}
-	if len(cfg.MsgPersistentProducer.Topic) == 0 {
-		return errors.New("msg persistent producer topic cannot be empty")
+	if len(cfg.MsgPersistentTopic.Topic) == 0 {
+		return errors.New("msg persistent topic topic cannot be empty")
 	}
 	if len(cfg.MsgPushProducer.Brokers) == 0 {
 		return errors.New("msg push producer brokers cannot be empty")

@@ -1,76 +1,66 @@
-Name: msgtransfer
-Host: 0.0.0.0
-Port: 8080
+Name: im-msgtransfer
+Mode: pro
+Log:
+  ServiceName: im-msgtransfer
+  Stat: false # go-zero 版本 >= 1.5.0 才支持
+  Mode: file
+  Encoding: plain
+  Path: logs/im-msgtransfer
+  Level: debug
+Prometheus:
+  Host: 0.0.0.0
+  Port: 11040
+  Path: /metrics
 
 MsgTransferConsumer:
   Brokers:
     - 127.0.0.1:9092
-  Topic: msg_transfer
-  GroupID: msg_transfer_group
+  Topic: msg-transfer-topic
+  GroupID: msg-transfer-group
   Offset: last
   MinBytes: 1024
   MaxBytes: 1048576
   Processors: 4
   Consumers: 2
 
-MsgPersistentProducer:
+MsgPersistentTopic:
   Brokers:
     - 127.0.0.1:9092
-  Topic: msg_persistent
+  # 消息传输主题：msg-transfer-topic
+  # 消息持久化主题：msg-persist-topic
+  # 消息推送主题：msg-push-topic
+  # 消息离线推送主题：msg-offline-push-topic
+  Topic: msg-persist-topic
+  GroupID: msg-persist-group
+  Offset: last
+  MinBytes: 1024
+  MaxBytes: 1048576
+  Processors: 4
+  Consumers: 2
+
+MsgPushProducer:
+  Brokers:
+    - 127.0.0.1:9092
+  Topic: msg-push-topic
+  GroupID: msg-push-group
 
 Redis:
   Host: 127.0.0.1:6379
-  Type: node
+  Pass: 123456
+
+LocalCacheConf:
+  Expire: 5m
+  Limit: 1000
+  Name: msgtransfer-cache
+  Topic: msgtransfer-topic
 
 Mongo:
   Uri: mongodb://127.0.0.1:27017
-  Database: openim
-
-AuthRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: auth.rpc
-  Stub: false
-
-UserRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: user.rpc
-  Stub: false
+  Database: goim
 
 MsgRpc:
   Etcd:
     Hosts:
       - 127.0.0.1:2379
     Key: msg.rpc
-  Stub: false
-
-PushRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: push.rpc
-  Stub: false
-
-GatewayRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: msggateway.rpc
-  Stub: false
-
-GroupRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: group.rpc
-  Stub: false
-
-ConversationRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: conversation.rpc
   Stub: false

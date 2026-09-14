@@ -1,8 +1,84 @@
 Name: msg.rpc
-ListenOn: 0.0.0.0:8080
+ListenOn: 0.0.0.0:18040
+Mode: pro
 Etcd:
   Hosts:
   - 127.0.0.1:2379
   Key: msg.rpc
 
+Log:
+  ServiceName: msg.rpc
+  Stat: false # go-zero 版本 >= 1.5.0 才支持
+  Mode: file
+  Encoding: plain
+  Path: logs/msg-rpc
+  Level: debug
 
+Prometheus:
+  Host: 0.0.0.0
+  Port: 28040
+  Path: /metrics
+
+Redis:
+  Host: 127.0.0.1:6379
+  Pass: 123456
+
+LocalCacheConf:
+  Expire: 5m
+  Limit: 1000
+  Name: msg-cache
+  Topic: msg-cache-topic
+
+Mongo:
+  Uri: mongodb://127.0.0.1:27017
+  Database: goim
+
+MsgTransferProducer:
+  Brokers:
+    - 127.0.0.1:9092
+  # 消息传输主题：msg-transfer-topic
+  # 消息持久化主题：msg-persist-topic
+  # 消息推送主题：msg-push-topic
+  # 消息离线推送主题：msg-offline-push-topic
+  Topic: msg-transfer-topic
+  GroupID: msg-transfer-group
+  # Username: msg-transfer-user
+  # Password: msg-transfer-password
+
+# 发送消息是否需要关系验证
+SendMsgNeedRelationVerify: false
+
+UserRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: user.rpc
+  Stub: false
+
+ConvRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: conversation.rpc
+  Stub: false
+
+RelationRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: relation.rpc
+  Stub: false
+
+GroupRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: group.rpc
+  Stub: false
+
+MsgRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: msg.rpc
+  Stub: false

@@ -1,38 +1,55 @@
 Name: conversation.rpc
-Host: 0.0.0.0
-Port: 8084
-Mode: dev
+ListenOn: 0.0.0.0:18020
+Mode: pro
+Etcd:
+  Hosts:
+  - 127.0.0.1:2379
+  Key: conversation.rpc
+
+Log:
+  ServiceName: conversation.rpc
+  Stat: false # go-zero 版本 >= 1.5.0 才支持
+  Mode: file
+  Encoding: plain
+  Path: logs/conversation-rpc
+  Level: debug
+
+Prometheus:
+  Host: 0.0.0.0
+  Port: 28020
+  Path: /metrics
 
 Redis:
-  Host: 192.168.241.128:6379
+  Host: 127.0.0.1:6379
   Pass: 123456
-
-Mongo:
-  Uri: mongodb://localhost:27017
-  Database: goim
-
-MsgTransferProducer:
-  Addrs:
-    - 192.168.241.128:9092
-  Topic: im_msg_transfer
-  Version: 0.11.0
-
-UserRpc:
-  Etcd:
-    Hosts:
-      - 192.168.241.128:2379
-    Key: user.rpc
-  Stub: true
-
-GroupRpc:
-  Etcd:
-    Hosts:
-      - 192.168.241.128:2379
-    Key: group.rpc
-  Stub: true
 
 LocalCacheConf:
   Expire: 5m
   Limit: 1000
   Name: conversation-cache
   Topic: conversation-cache-topic
+
+Mongo:
+  Uri: mongodb://127.0.0.1:27017
+  Database: goim
+
+UserRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: user.rpc
+  Stub: false
+
+GroupRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: group.rpc
+  Stub: false
+
+MsgRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: msg.rpc
+  Stub: false

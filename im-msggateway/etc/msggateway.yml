@@ -1,17 +1,14 @@
 Name: im-msggateway
 Mode: pro
 ListenOn: 0.0.0.0:8070
-
 Etcd:
   Hosts:
-    - 192.168.241.128:2379
+    - 127.0.0.1:2379
   Key: im-msggateway.rpc
-
 Prometheus:
   Host: 0.0.0.0
-  Port: 9001
+  Port: 11030
   Path: /metrics
-
 Log:
   Stat: false # go-zero 版本 >= 1.5.0 才支持
   Mode: console # [console,file,volume]
@@ -27,7 +24,7 @@ WsServer:
   WriteWait: 10 # 写入超时时间
   PongWait: 60 # 读取超时时间
   PingPeriod: 5 # 心跳周期
-  EnableAuth: false # 是否开启认证，默认开启
+  EnableAuth: true # 是否开启认证，默认开启
 
   # 多端登录策略配置
   LoginStrategy:
@@ -35,31 +32,45 @@ WsServer:
     MaxConnPerUser: 10 # 每个用户最大连接数(allow_multi策略下生效)
     MaxConnPerUserPerPlatform: 3 # 每个用户每个平台最大连接数
 
+LocalCacheConf:
+  Expire: 5m
+  Limit: 1000
+  Name: msggateway-cache
+  Topic: msggateway-topic
+
+Redis:
+  Host: 127.0.0.1:6379
+  Pass: 123456
+
+Mongo:
+  Uri: mongodb://127.0.0.1:27017
+  Database: goim
+
 # RPC 配置
 AuthRpc:
   Etcd:
     Hosts:
       - 192.168.241.128:2379
     Key: auth.rpc
-  Stub: true
+  Stub: false
 
 UserRpc:
   Etcd:
     Hosts:
       - 192.168.241.128:2379
     Key: user.rpc
-  Stub: true
+  Stub: false
 
 MsgRpc:
   Etcd:
     Hosts:
       - 192.168.241.128:2379
     Key: msg.rpc
-  Stub: true
+  Stub: false
 
 PushRpc:
   Etcd:
     Hosts:
       - 192.168.241.128:2379
     Key: push.rpc
-  Stub: true
+  Stub: false

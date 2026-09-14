@@ -1,14 +1,32 @@
 Name: im-api
 Host: 0.0.0.0
-Port: 8080
+Port: 18080
+Mode: pro
+Log:
+  ServiceName: im-api
+  Stat: false # go-zero 版本 >= 1.5.0 才支持
+  Mode: file
+  Encoding: plain
+  Path: logs/im-api
+  Level: debug
+Prometheus:
+  Host: 0.0.0.0
+  Port: 11010
+  Path: /metrics
 
 Redis:
   Host: 127.0.0.1:6379
-  Type: node
+  Pass: 123456
 
-# Mongo:
-#   Uri: mongodb://127.0.0.1:27017
-#   Database: openim
+LocalCacheConf:
+  Expire: 5m
+  Limit: 1000
+  Name: api-cache
+  Topic: api-topic
+
+Mongo:
+  Uri: mongodb://127.0.0.1:27017
+  Database: goim
 
 AuthRpc:
   Etcd:

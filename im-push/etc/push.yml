@@ -1,12 +1,22 @@
-Name: push
-Host: 0.0.0.0
-Port: 8080
+Name: im-push
+Mode: pro
+Log:
+  ServiceName: im-push
+  Stat: false # go-zero 版本 >= 1.5.0 才支持
+  Mode: file
+  Encoding: plain
+  Path: logs/im-push
+  Level: debug
+Prometheus:
+  Host: 0.0.0.0
+  Port: 11050
+  Path: /metrics
 
 OfflinePushTopic:
   Brokers:
     - 127.0.0.1:9092
-  Topic: msg_transfer
-  GroupID: push_group
+  Topic: msg-offline-push-topic
+  GroupID: msg-offline-push-group
   Offset: last
   MinBytes: 1024
   MaxBytes: 1048576
@@ -16,8 +26,8 @@ OfflinePushTopic:
 PushConsumer:
   Brokers:
     - 127.0.0.1:9092
-  Topic: msg_persistent
-  GroupID: push_group
+  Topic: msg-push-topic
+  GroupID: msg-push-group
   Offset: last
   MinBytes: 1024
   MaxBytes: 1048576
@@ -26,38 +36,23 @@ PushConsumer:
 
 Redis:
   Host: 127.0.0.1:6379
-  Type: node
+  Pass: 123456
+
+LocalCacheConf:
+  Expire: 5m
+  Limit: 1000
+  Name: push-cache
+  Topic: push-topic
 
 Mongo:
   Uri: mongodb://127.0.0.1:27017
-  Database: openim
-
-AuthRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: auth.rpc
-  Stub: false
+  Database: goim
 
 UserRpc:
   Etcd:
     Hosts:
       - 127.0.0.1:2379
     Key: user.rpc
-  Stub: false
-
-MsgRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: msg.rpc
-  Stub: false
-
-PushRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: push.rpc
   Stub: false
 
 GatewayRpc:
@@ -72,11 +67,4 @@ GroupRpc:
     Hosts:
       - 127.0.0.1:2379
     Key: group.rpc
-  Stub: false
-
-ConversationRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: conversation.rpc
   Stub: false

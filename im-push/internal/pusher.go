@@ -7,11 +7,8 @@ import (
 	offlnepush "github.com/PaperMan11/goim/im-push/internal/offlnepush"
 	queuex "github.com/PaperMan11/goim/pkg/queue"
 	kafkax "github.com/PaperMan11/goim/pkg/queue/kafka"
-	"github.com/PaperMan11/goim/pkg/rpcclient/conversationservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/groupservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msggatewayservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
-	"github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
@@ -31,11 +28,8 @@ type Pusher struct {
 	offlinePushProducer queuex.Producer
 	offlinePusher       offlnepush.OfflinePusher
 	webhookManager      *webhooks.Manager
-	msgService          msgservice.MsgService
-	pushService         pushservice.PushService
 	msgGatewayService   msggatewayservice.MsgGatewayService
 	groupService        groupservice.GroupService
-	conversationService conversationservice.ConversationService
 	userService         userservice.UserService
 }
 
@@ -64,25 +58,10 @@ func NewPusher(cfg *Config) (*Pusher, error) {
 		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
 	}
 	var (
-		msgService          msgservice.MsgService
-		pushService         pushservice.PushService
-		msgGatewayService   msggatewayservice.MsgGatewayService
-		groupService        groupservice.GroupService
-		conversationService conversationservice.ConversationService
-		userService         userservice.UserService
+		msgGatewayService msggatewayservice.MsgGatewayService
+		groupService      groupservice.GroupService
+		userService       userservice.UserService
 	)
-
-	if !cfg.MsgRpc.Stub {
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(cfg.MsgRpc.RpcClientConf, clientOpts...))
-	} else {
-		msgService = msgservice.NewStubMsgService()
-	}
-
-	if !cfg.PushRpc.Stub {
-		pushService = pushservice.NewPushService(zrpc.MustNewClient(cfg.PushRpc.RpcClientConf, clientOpts...))
-	} else {
-		pushService = pushservice.NewStubPushService()
-	}
 
 	if !cfg.GatewayRpc.Stub {
 		msgGatewayService = msggatewayservice.NewMsgGatewayService(zrpc.MustNewClient(cfg.GatewayRpc.RpcClientConf, clientOpts...))
@@ -94,12 +73,6 @@ func NewPusher(cfg *Config) (*Pusher, error) {
 		groupService = groupservice.NewGroupService(zrpc.MustNewClient(cfg.GroupRpc.RpcClientConf, clientOpts...))
 	} else {
 		groupService = groupservice.NewStubGroupService()
-	}
-
-	if !cfg.ConversationRpc.Stub {
-		conversationService = conversationservice.NewConversationService(zrpc.MustNewClient(cfg.ConversationRpc.RpcClientConf, clientOpts...))
-	} else {
-		conversationService = conversationservice.NewStubConversationService()
 	}
 
 	if !cfg.UserRpc.Stub {
@@ -115,11 +88,8 @@ func NewPusher(cfg *Config) (*Pusher, error) {
 		offlinePushProducer: offlinePushProducer,
 		offlinePusher:       offlnepush.NewOfflinePusher(&cfg.OfflinePush),
 		webhookManager:      webhookManager,
-		msgService:          msgService,
-		pushService:         pushService,
 		msgGatewayService:   msgGatewayService,
 		groupService:        groupService,
-		conversationService: conversationService,
 		userService:         userService,
 	}
 

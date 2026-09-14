@@ -1,9 +1,59 @@
 Name: auth.rpc
-ListenOn: 0.0.0.0:8080
+ListenOn: 0.0.0.0:18010
+Mode: pro
 Etcd:
   Hosts:
   - 127.0.0.1:2379
   Key: auth.rpc
+
+Log:
+  ServiceName: auth.rpc
+  Stat: false # go-zero 版本 >= 1.5.0 才支持
+  Mode: file
+  Encoding: plain
+  Path: logs/auth-rpc
+  Level: debug
+
+Prometheus:
+  Host: 0.0.0.0
+  Port: 28010
+  Path: /metrics
+
+Redis:
+  Host: 127.0.0.1:6379
+  Pass: 123456
+
+LocalCacheConf:
+  Expire: 5m
+  Limit: 1000
+  Name: auth-cache
+  Topic: auth-cache-topic
+
+UserRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: user.rpc
+  Stub: false
+
+MsgGatewayRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: msggateway.rpc
+  Stub: false
+
+LoginStrategy:
+  # 多端登录策略
+  # allow_multi: 允许多端登录
+  # single: 限制每个用户只能登录一个平台
+  # replace: 限制每个用户只能登录一个平台，登录时会替换旧连接
+  # replace_same_platform: 限制每个用户只能登录一个平台，登录时会替换旧连接，且旧连接会断开
+  LoginStrategy: allow_multi
+  # 每个用户最大连接数（allow_multi策略下生效）
+  MaxConnPerUser: 10 
+  # 每个用户每个平台最大连接数
+  MaxConnPerUserPerPlatform: 3
 
 Auth:
   AccessSecret: goim-access-secret
