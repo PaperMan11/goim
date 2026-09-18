@@ -92,6 +92,17 @@ type VersionLog struct {
 	LogLen     int                `bson:"log_len"`
 }
 
+// 查询最新 sort version
+func (v *VersionLog) GetSortVersion() uint {
+	sortVersion := uint(0)
+	for _, log := range v.Logs {
+		if log.EID == VersionSortChangeID && log.Version > sortVersion {
+			sortVersion = log.Version
+		}
+	}
+	return sortVersion
+}
+
 func (v *VersionLogTable) CollectionName() string {
 	return CollectionGroupVersion
 }

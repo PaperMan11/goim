@@ -7,7 +7,6 @@ import (
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
-	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -103,43 +102,30 @@ func (l *Logic) requireGroupAdmin(ctx context.Context, groupID string) (string, 
 	return l.requireGroupRole(ctx, groupID, constant.GroupAdmin)
 }
 
-func modelToGroupInfo(group *model.Group) *sdkws.GroupInfo {
-	if group == nil {
-		return nil
+// 检查群是否已解散
+func (l *Logic) requireGroupNotDismissed(ctx context.Context, groupID string) (*model.Group, error) {
+	group, err := l.svcCtx.GroupModel.FindGroup(ctx, groupID)
+	if err != nil {
+		l.Errorf("find group failed, groupID=%s err=%v", groupID, err)
+		return nil, errx.InternalError.WrapWithError(err)
 	}
-	return &sdkws.GroupInfo{
-		GroupID:           group.GroupID,
-		GroupName:         group.GroupName,
-		Notification:      group.Notification,
-		Introduction:      group.Introduction,
-		FaceURL:           group.FaceURL,
-		OwnerUserID:       group.OwnerUserID,
-		CreateTime:        group.CreateTime.Unix(),
-		MemberCount:       uint32(group.MemberCount),
-		Ex:                group.Extra,
-		Status:            int32(group.Status),
-		NeedVerification:  int32(group.NeedVerification),
-		LookMemberInfo:    int32(group.LookMemberInfo),
-		ApplyMemberFriend: int32(group.ApplyMemberFriend),
+	if group.Status == constant.GroupStatusDismissed {
+		l.Errorf("group %s is dismissed", groupID)
+		return nil, errx.GroupDismissedError
 	}
+	return group, nil
 }
 
-func modelToGroupMemberInfo(member *model.GroupMember) *sdkws.GroupMemberFullInfo {
-	if member == nil {
-		return nil
-	}
-	return &sdkws.GroupMemberFullInfo{
-		GroupID:        member.GroupID,
-		UserID:         member.UserID,
-		RoleLevel:      int32(member.RoleLevel),
-		JoinTime:       member.JoinTime.Unix(),
-		Nickname:       member.Nickname,
-		FaceURL:        member.FaceURL,
-		AppMangerLevel: int32(member.AppManagerLevel),
-		JoinSource:     int32(member.JoinSource),
-		OperatorUserID: member.OperatorUserID,
-		Ex:             member.Extra,
-		MuteEndTime:    member.MuteEndTime.Unix(),
-		InviterUserID:  member.InviterUserID,
+// 检测是否有权限
+func (l *Logic) requireGroupPermission(ctx context.Context, admin, user *model.GroupMember) bool {
+	switch admin.RoleLevel {
+	case constant.GroupOwner:
+		return admin.UserID != user.UserID
+	case constant.GroupAdmin:
+		return user.RoleLevel < constant.GroupAdmin && user.UserID != admin.UserID
+	case constant.GroupOrdinaryUsers:
+		return false
+	default:
+		return false
 	}
 }

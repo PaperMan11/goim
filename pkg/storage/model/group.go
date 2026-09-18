@@ -16,7 +16,7 @@ type Group struct {
 	Status                 int       `bson:"status"`                   // 群组状态（0-正常，1-禁止发言，2-已解散，3-已禁言）
 	CreatorUserID          string    `bson:"creator_user_id"`          // 创建者ID
 	GroupType              int       `bson:"group_type"`               // 群组类型（1-普通群，2-部门群等）
-	NeedVerification       int       `bson:"need_verification"`        // 是否需要验证（0-不需要，1-需要）
+	NeedVerification       int       `bson:"need_verification"`        // 是否需要验证
 	LookMemberInfo         int       `bson:"look_member_info"`         // 是否允许查看成员信息（0-不允许，1-允许）
 	ApplyMemberFriend      int       `bson:"apply_member_friend"`      // 是否允许成员添加好友（0-不允许，1-允许）
 	NotificationUpdateTime time.Time `bson:"notification_update_time"` // 公告更新时间

@@ -2,10 +2,13 @@ package svc
 
 import (
 	"github.com/PaperMan11/goim/im-rpc/group/internal/config"
+	"github.com/PaperMan11/goim/im-rpc/group/internal/notification"
 	"github.com/PaperMan11/goim/pkg/authverify"
 	_ "github.com/PaperMan11/goim/pkg/lb/iphash"
 	"github.com/PaperMan11/goim/pkg/localcache"
+	msgServiceCache "github.com/PaperMan11/goim/pkg/rpccache/msgservice"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
@@ -30,12 +33,14 @@ type ServiceContext struct {
 	SingleFlight syncx.SingleFlight
 
 	// mongo models
-	GroupModel      groupModel.GroupModel
-	VersionLogModel versionLogModel.VersionLogModel
-	RequestModel    requestModel.RequestModel
+	GroupModel         groupModel.GroupModel
+	VersionLogModel    versionLogModel.VersionLogModel
+	RequestModel       requestModel.RequestModel
+	NotificationSender *notification.NotificationSender
 
 	// rpc clients
 	UserService userServiceCache.UserServiceWrapperCache
+	MsgService  msgServiceCache.MsgServiceWrapperCache
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -79,15 +84,24 @@ func (sc *ServiceContext) initRpcClient() {
 	}
 	var (
 		userService userservice.UserService
+		msgService  msgservice.MsgService
 	)
 	if sc.Config.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
 		userService = userservice.NewUserService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
 	}
-	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
+	if sc.Config.MsgRpc.Stub {
+		msgService = msgservice.NewStubMsgService()
+	} else {
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
+	}
 
+	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
+	sc.MsgService = msgServiceCache.NewMsgServiceWrapperCache(msgService, sc.LocalCache)
 	sc.AuthVerifier = authverify.NewAuthVerify(sc.UserService)
+	// notification dispatcher
+	sc.NotificationSender = notification.NewNotificationSender(msgService, userService, sc.RequestModel, sc.GroupModel, sc.VersionLogModel)
 }
 
 func (sc *ServiceContext) Close() error {

@@ -10,9 +10,10 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	Redis redis.RedisConf
-	Mongo storagemongo.MongoConf
-
-	UserRpc        rpcclient.RpcConf
+	Redis          redis.RedisConf
+	Mongo          storagemongo.MongoConf
 	LocalCacheConf localcache.CacheConfig
+
+	UserRpc rpcclient.RpcConf
+	MsgRpc  rpcclient.RpcConf
 }
