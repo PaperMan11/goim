@@ -86,10 +86,13 @@ func (sc *ServiceContext) initRpcClient() {
 	)
 	if sc.Config.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
-		msgService = msgservice.NewStubMsgService()
 	} else {
 		userService = userservice.NewUserService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
+	}
+	if sc.Config.MsgRpc.Stub {
+		msgService = msgservice.NewStubMsgService()
+	} else {
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
 	}
 	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
 

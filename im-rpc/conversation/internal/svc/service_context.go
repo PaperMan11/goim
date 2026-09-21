@@ -2,6 +2,7 @@ package svc
 
 import (
 	"github.com/PaperMan11/goim/im-rpc/conversation/internal/config"
+	"github.com/PaperMan11/goim/im-rpc/conversation/internal/notification"
 	"github.com/PaperMan11/goim/pkg/authverify"
 	_ "github.com/PaperMan11/goim/pkg/lb/iphash"
 	"github.com/PaperMan11/goim/pkg/localcache"
@@ -28,11 +29,12 @@ import (
 )
 
 type ServiceContext struct {
-	Config       config.Config
-	AuthVerifier authverify.AuthVerifyService
-	LocalCache   localcache.LocalCache
-	RedisCli     redis.UniversalClient
-	SingleFlight syncx.SingleFlight
+	Config             config.Config
+	AuthVerifier       authverify.AuthVerifyService
+	LocalCache         localcache.LocalCache
+	RedisCli           redis.UniversalClient
+	SingleFlight       syncx.SingleFlight
+	NotificationSender *notification.NotificationSender
 
 	// mongo models
 	ConversationModel conversationModel.ConversationModel
@@ -116,6 +118,7 @@ func (sc *ServiceContext) initRpcClient() {
 	sc.MsgService = msgServiceCache.NewMsgServiceWrapperCache(msgService, sc.LocalCache)
 
 	sc.AuthVerifier = authverify.NewAuthVerify(sc.UserService)
+	sc.NotificationSender = notification.NewNotificationSender(sc.MsgService, sc.UserService)
 }
 
 func (sc *ServiceContext) Close() error {

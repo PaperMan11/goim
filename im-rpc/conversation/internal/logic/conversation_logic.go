@@ -667,6 +667,11 @@ func (l *Logic) SetConversation(ctx context.Context, req *pbconversation.SetConv
 		}
 	}
 
+	// send conversation change notification
+	if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, ownerUserID, []string{conversationID}); err != nil {
+		l.Errorf("send conversation change notification failed, owner: %s, conv: %s, err: %v", ownerUserID, conversationID, err)
+	}
+
 	return &pbconversation.SetConversationResp{}, nil
 }
 
@@ -784,6 +789,20 @@ func (l *Logic) SetConversations(ctx context.Context, req *pbconversation.SetCon
 		}
 	}
 
+	// send conversation change notification
+	for _, uid := range userIDs {
+		if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, uid, []string{conversationID}); err != nil {
+			l.Errorf("send conversation change notification failed, owner: %s, conv: %s, err: %v", uid, conversationID, err)
+		}
+	}
+	if convReq.GetIsPrivateChat() != nil && convReq.GetConversationType() != constant.ReadGroupChatType {
+		for _, uid := range userIDs {
+			if err := l.svcCtx.NotificationSender.PrivatePrivateChatNotification(ctx, uid, uid, conversationID, getOptionalBool(convReq.IsPrivateChat)); err != nil {
+				l.Errorf("send private private chat notification failed, owner: %s, conv: %s, err: %v", uid, conversationID, err)
+			}
+		}
+	}
+
 	return &pbconversation.SetConversationsResp{}, nil
 }
 
@@ -866,6 +885,13 @@ func (l *Logic) UpdateConversation(ctx context.Context, req *pbconversation.Upda
 		}
 	}
 
+	// send conversation change notification
+	for _, uid := range userIDs {
+		if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, uid, []string{conversationID}); err != nil {
+			l.Errorf("send conversation change notification failed, owner: %s, conv: %s, err: %v", uid, conversationID, err)
+		}
+	}
+
 	return &pbconversation.UpdateConversationResp{}, nil
 }
 
@@ -944,6 +970,13 @@ func (l *Logic) SetConversationMaxSeq(ctx context.Context, req *pbconversation.S
 	// 	}
 	// }
 
+	// send conversation change notification
+	for _, uid := range req.GetOwnerUserID() {
+		if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, uid, []string{req.GetConversationID()}); err != nil {
+			l.Errorf("send conversation change notification failed, owner: %s, conv: %s, err: %v", uid, req.GetConversationID(), err)
+		}
+	}
+
 	return &pbconversation.SetConversationMaxSeqResp{}, nil
 }
 
@@ -977,6 +1010,13 @@ func (l *Logic) SetConversationMinSeq(ctx context.Context, req *pbconversation.S
 	// 		l.Errorf("incr version log for min_seq update failed, owner: %s, conv: %s, err: %v", uid, conversationID, err)
 	// 	}
 	// }
+
+	// send conversation change notification
+	for _, uid := range req.GetOwnerUserID() {
+		if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, uid, []string{req.GetConversationID()}); err != nil {
+			l.Errorf("send conversation change notification failed, owner: %s, conv: %s, err: %v", uid, req.GetConversationID(), err)
+		}
+	}
 
 	return &pbconversation.SetConversationMinSeqResp{}, nil
 }

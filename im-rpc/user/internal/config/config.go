@@ -13,5 +13,6 @@ type Config struct {
 	Redis          redis.RedisConf
 	Mongo          storagemongo.MongoConf
 	UserRpc        rpcclient.RpcConf
+	MsgRpc         rpcclient.RpcConf
 	LocalCacheConf localcache.CacheConfig
 }

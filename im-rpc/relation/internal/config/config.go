@@ -14,5 +14,6 @@ type Config struct {
 	Mongo storagemongo.MongoConf
 
 	UserRpc        rpcclient.RpcConf
+	MsgRpc         rpcclient.RpcConf
 	LocalCacheConf localcache.CacheConfig
 }
