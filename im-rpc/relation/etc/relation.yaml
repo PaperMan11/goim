@@ -41,3 +41,10 @@ UserRpc:
     Key: user.rpc
   Stub: false
   
+MsgRpc:
+  Etcd:
+    Hosts:
+      - 192.168.241.128:2379
+    Key: msg.rpc
+  Stub: false
+  

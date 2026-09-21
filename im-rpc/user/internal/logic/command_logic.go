@@ -37,6 +37,8 @@ func (l *Logic) ProcessUserCommandAdd(ctx context.Context, req *pbuser.ProcessUs
 		return nil, err
 	}
 
+	l.svcCtx.NotificationSender.UserCommandAddedNotification(ctx, req.GetUserID(), req.GetUserID())
+
 	return &pbuser.ProcessUserCommandAddResp{}, nil
 }
 
@@ -60,6 +62,8 @@ func (l *Logic) ProcessUserCommandUpdate(ctx context.Context, req *pbuser.Proces
 		return nil, err
 	}
 
+	l.svcCtx.NotificationSender.UserCommandUpdatedNotification(ctx, req.GetUserID(), req.GetUserID())
+
 	return &pbuser.ProcessUserCommandUpdateResp{}, nil
 }
 
@@ -73,6 +77,8 @@ func (l *Logic) ProcessUserCommandDelete(ctx context.Context, req *pbuser.Proces
 		l.Errorf("DeleteUserCommand err: %v", err)
 		return nil, err
 	}
+
+	l.svcCtx.NotificationSender.UserCommandDeletedNotification(ctx, req.GetUserID(), req.GetUserID())
 
 	return &pbuser.ProcessUserCommandDeleteResp{}, nil
 }
