@@ -6,6 +6,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
+	"github.com/PaperMan11/goim/pkg/mconvert"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	pbrelation "github.com/PaperMan11/goim/pkg/protocol/relation"
 	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
@@ -65,6 +66,10 @@ func (l *Logic) ApplyToAddFriend(ctx context.Context, req *pbrelation.ApplyToAdd
 	if err := l.svcCtx.RequestModel.UpsertFriendRequest(ctx, friendReq); err != nil {
 		l.Errorf("upsert friend request failed, from: %s, to: %s, err: %v", fromUserID, toUserID, err)
 		return nil, err
+	}
+
+	if err := l.svcCtx.NotificationSender.FriendApplyReceived(ctx, fromUserID, toUserID); err != nil {
+		l.Errorf("send friend apply received notification failed, from: %s, to: %s, err: %v", fromUserID, toUserID, err)
 	}
 
 	return &pbrelation.ApplyToAddFriendResp{}, nil
@@ -131,11 +136,25 @@ func (l *Logic) RespondFriendApply(ctx context.Context, req *pbrelation.RespondF
 		}
 
 		// 分别对两个用户写版本日志（好友命名空间）
-		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(fromUserID), toUserID, model.VersionStateInsert); err != nil {
+		_, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(fromUserID), toUserID, model.VersionStateInsert)
+		if err != nil {
 			l.Errorf("incr version log for friend insert failed, owner: %s, friend: %s, err: %v", fromUserID, toUserID, err)
+			return nil, err
 		}
-		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(toUserID), fromUserID, model.VersionStateInsert); err != nil {
+		toUserVersion, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(toUserID), fromUserID, model.VersionStateInsert)
+		if err != nil {
 			l.Errorf("incr version log for friend insert failed, owner: %s, friend: %s, err: %v", toUserID, fromUserID, err)
+			return nil, err
+		}
+
+		if err := l.svcCtx.NotificationSender.FriendApplyAgreedNotification(ctx, fromUserID, toUserID, req.GetHandleMsg(), uint64(toUserVersion.Version), toUserVersion.ID.Hex()); err != nil {
+			l.Errorf("send friend apply agreed notification failed, from: %s, to: %s, err: %v", fromUserID, toUserID, err)
+		}
+	}
+	if modelHandleResult == constant.FriendResponseRefuse {
+		// 发送拒绝通知
+		if err := l.svcCtx.NotificationSender.FriendApplyRejectedNotification(ctx, fromUserID, toUserID, req.GetHandleMsg()); err != nil {
+			l.Errorf("send friend apply rejected notification failed, from: %s, to: %s, err: %v", fromUserID, toUserID, err)
 		}
 	}
 
@@ -197,8 +216,14 @@ func (l *Logic) DeleteFriend(ctx context.Context, req *pbrelation.DeleteFriendRe
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateDelete); err != nil {
+	ownerUserVersion, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateDelete)
+	if err != nil {
 		l.Errorf("incr version log for friend delete failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
+		return nil, err
+	}
+
+	if err := l.svcCtx.NotificationSender.FriendDeletedNotification(ctx, ownerUserID, friendUserID, uint64(ownerUserVersion.Version), ownerUserVersion.ID.Hex()); err != nil {
+		l.Errorf("send friend deleted notification failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 	}
 
 	return &pbrelation.DeleteFriendResp{}, nil
@@ -272,9 +297,16 @@ func (l *Logic) SetFriendRemark(ctx context.Context, req *pbrelation.SetFriendRe
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateUpdate); err != nil {
+	ownerUserVersion, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateUpdate)
+	if err != nil {
 		l.Errorf("incr version log for friend update failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
+		return nil, err
 	}
+
+	if err := l.svcCtx.NotificationSender.FriendRemarkSetNotification(ctx, ownerUserID, friendUserID, uint64(ownerUserVersion.GetSortVersion()), uint64(ownerUserVersion.Version), ownerUserVersion.ID.Hex()); err != nil {
+		l.Errorf("send friend remark set notification failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
+	}
+
 	return &pbrelation.SetFriendRemarkResp{}, nil
 }
 
@@ -309,8 +341,14 @@ func (l *Logic) AddBlack(ctx context.Context, req *pbrelation.AddBlackReq) (*pbr
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.BlackDID(ownerUserID), blackUserID, model.VersionStateInsert); err != nil {
+	_, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.BlackDID(ownerUserID), blackUserID, model.VersionStateInsert)
+	if err != nil {
 		l.Errorf("incr version log for black insert failed, owner: %s, black: %s, err: %v", ownerUserID, blackUserID, err)
+		return nil, err
+	}
+
+	if err = l.svcCtx.NotificationSender.FriendBlacklistAddedNotification(ctx, ownerUserID, blackUserID); err != nil {
+		l.Errorf("send friend blacklist added notification failed, owner: %s, black: %s, err: %v", ownerUserID, blackUserID, err)
 	}
 
 	return &pbrelation.AddBlackResp{}, nil
@@ -335,6 +373,11 @@ func (l *Logic) RemoveBlack(ctx context.Context, req *pbrelation.RemoveBlackReq)
 
 	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.BlackDID(ownerUserID), blackUserID, model.VersionStateDelete); err != nil {
 		l.Errorf("incr version log for black delete failed, owner: %s, black: %s, err: %v", ownerUserID, blackUserID, err)
+		return nil, err
+	}
+
+	if err := l.svcCtx.NotificationSender.FriendBlacklistRemovedNotification(ctx, ownerUserID, blackUserID); err != nil {
+		l.Errorf("send friend blacklist removed notification failed, owner: %s, black: %s, err: %v", ownerUserID, blackUserID, err)
 	}
 
 	return &pbrelation.RemoveBlackResp{}, nil
@@ -703,7 +746,7 @@ func (l *Logic) GetPaginationFriends(ctx context.Context, req *pbrelation.GetPag
 
 	var friendsInfo []*sdkws.FriendInfo
 	for _, f := range friends[start:end] {
-		friendsInfo = append(friendsInfo, modelToFriendInfo(f))
+		friendsInfo = append(friendsInfo, mconvert.ModelToPbFriendInfo(f))
 	}
 
 	return &pbrelation.GetPaginationFriendsResp{
@@ -728,7 +771,7 @@ func (l *Logic) GetDesignatedFriends(ctx context.Context, req *pbrelation.GetDes
 
 	var friendsInfo []*sdkws.FriendInfo
 	for _, f := range friends {
-		friendsInfo = append(friendsInfo, modelToFriendInfo(f))
+		friendsInfo = append(friendsInfo, mconvert.ModelToPbFriendInfo(f))
 	}
 
 	return &pbrelation.GetDesignatedFriendsResp{
@@ -784,7 +827,7 @@ func (l *Logic) GetSpecifiedFriendsInfo(ctx context.Context, req *pbrelation.Get
 		if err != nil && !isFriendNotFound(err) {
 			l.Errorf("find friend failed, owner: %s, friend: %s, err: %v", ownerUserID, targetUserID, err)
 		} else if friend != nil {
-			info.FriendInfo = modelToFriendInfo(friend)
+			info.FriendInfo = mconvert.ModelToPbFriendInfo(friend)
 		}
 
 		// 获取黑名单信息
@@ -792,7 +835,7 @@ func (l *Logic) GetSpecifiedFriendsInfo(ctx context.Context, req *pbrelation.Get
 		if err != nil && !isBlackNotFound(err) {
 			l.Errorf("find black failed, owner: %s, black: %s, err: %v", ownerUserID, targetUserID, err)
 		} else if black != nil {
-			info.BlackInfo = modelToBlackInfo(black)
+			info.BlackInfo = mconvert.ModelToPbBlackInfo(black)
 		}
 
 		infos = append(infos, info)
@@ -821,7 +864,7 @@ func (l *Logic) GetSpecifiedBlacks(ctx context.Context, req *pbrelation.GetSpeci
 			l.Errorf("find black failed, owner: %s, black: %s, err: %v", ownerUserID, targetUserID, err)
 			continue
 		}
-		blacks = append(blacks, modelToBlackInfo(black))
+		blacks = append(blacks, mconvert.ModelToPbBlackInfo(black))
 	}
 
 	return &pbrelation.GetSpecifiedBlacksResp{
@@ -871,7 +914,7 @@ func (l *Logic) GetPaginationBlacks(ctx context.Context, req *pbrelation.GetPagi
 
 	var blackInfos []*sdkws.BlackInfo
 	for _, b := range blacks[start:end] {
-		blackInfos = append(blackInfos, modelToBlackInfo(b))
+		blackInfos = append(blackInfos, mconvert.ModelToPbBlackInfo(b))
 	}
 
 	return &pbrelation.GetPaginationBlacksResp{
@@ -1016,12 +1059,12 @@ func (l *Logic) GetIncrementalFriends(ctx context.Context, req *pbrelation.GetIn
 		}
 		for _, id := range c.InsertIDs {
 			if f, ok := friendMap[id]; ok {
-				resp.Insert = append(resp.Insert, modelToFriendInfo(f))
+				resp.Insert = append(resp.Insert, mconvert.ModelToPbFriendInfo(f))
 			}
 		}
 		for _, id := range c.UpdateIDs {
 			if f, ok := friendMap[id]; ok {
-				resp.Update = append(resp.Update, modelToFriendInfo(f))
+				resp.Update = append(resp.Update, mconvert.ModelToPbFriendInfo(f))
 			}
 		}
 	}
@@ -1038,7 +1081,7 @@ func (l *Logic) fullFriendsResp(ctx context.Context, userID string) (*pbrelation
 	}
 	inserts := make([]*sdkws.FriendInfo, 0, len(friends))
 	for _, f := range friends {
-		inserts = append(inserts, modelToFriendInfo(f))
+		inserts = append(inserts, mconvert.ModelToPbFriendInfo(f))
 	}
 	var curVersion uint64
 	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.FriendDID(userID)); err2 == nil && verLog != nil {
@@ -1098,9 +1141,9 @@ func (l *Logic) GetIncrementalBlacks(ctx context.Context, req *pbrelation.GetInc
 		}
 		if black != nil {
 			if _, isInsert := insertSet[blackUserID]; isInsert {
-				resp.Insert = append(resp.Insert, modelToBlackInfo(black))
+				resp.Insert = append(resp.Insert, mconvert.ModelToPbBlackInfo(black))
 			} else {
-				resp.Update = append(resp.Update, modelToBlackInfo(black))
+				resp.Update = append(resp.Update, mconvert.ModelToPbBlackInfo(black))
 			}
 		}
 	}
@@ -1117,7 +1160,7 @@ func (l *Logic) fullBlacksResp(ctx context.Context, userID string) (*pbrelation.
 	}
 	inserts := make([]*sdkws.BlackInfo, 0, len(blacks))
 	for _, b := range blacks {
-		inserts = append(inserts, modelToBlackInfo(b))
+		inserts = append(inserts, mconvert.ModelToPbBlackInfo(b))
 	}
 	var curVersion uint64
 	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.BlackDID(userID)); err2 == nil && verLog != nil {

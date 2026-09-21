@@ -6,8 +6,6 @@ import (
 	"github.com/PaperMan11/goim/im-rpc/relation/internal/svc"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
-	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
-	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -68,38 +66,4 @@ func (l *Logic) requireValidUser(targetUserID string) error {
 		return errx.UserIDNotFoundError
 	}
 	return nil
-}
-
-func modelToFriendInfo(f *model.Friend) *sdkws.FriendInfo {
-	if f == nil {
-		return nil
-	}
-	return &sdkws.FriendInfo{
-		OwnerUserID: f.OwnerUserID,
-		FriendUser: &sdkws.UserInfo{
-			UserID: f.FriendUserID,
-		},
-		Remark:         f.Remark,
-		CreateTime:     f.CreateTime.Unix(),
-		AddSource:      int32(f.AddSource),
-		OperatorUserID: f.OperatorUserID,
-		Ex:             f.Extra,
-		IsPinned:       f.IsPinned,
-	}
-}
-
-func modelToBlackInfo(b *model.Black) *sdkws.BlackInfo {
-	if b == nil {
-		return nil
-	}
-	return &sdkws.BlackInfo{
-		OwnerUserID: b.OwnerUserID,
-		BlackUserInfo: &sdkws.PublicUserInfo{
-			UserID: b.BlackUserID,
-		},
-		CreateTime:     b.CreateTime.Unix(),
-		AddSource:      int32(b.AddSource),
-		OperatorUserID: b.OperatorUserID,
-		Ex:             b.Extra,
-	}
 }

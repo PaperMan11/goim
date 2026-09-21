@@ -2,10 +2,12 @@ package svc
 
 import (
 	"github.com/PaperMan11/goim/im-rpc/relation/internal/config"
+	"github.com/PaperMan11/goim/im-rpc/relation/internal/notification"
 	"github.com/PaperMan11/goim/pkg/authverify"
 	_ "github.com/PaperMan11/goim/pkg/lb/iphash"
 	"github.com/PaperMan11/goim/pkg/localcache"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
@@ -29,6 +31,7 @@ type ServiceContext struct {
 	RedisCli     redis.UniversalClient
 	SingleFlight syncx.SingleFlight
 
+	NotificationSender *notification.NotificationSender
 	// mongo models
 	FriendModel     friendModel.FriendModel
 	VersionLogModel versionLogModel.VersionLogModel
@@ -79,15 +82,19 @@ func (sc *ServiceContext) initRpcClient() {
 	}
 	var (
 		userService userservice.UserService
+		msgService  msgservice.MsgService
 	)
 	if sc.Config.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
+		msgService = msgservice.NewStubMsgService()
 	} else {
 		userService = userservice.NewUserService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
+		msgService = msgservice.NewMsgService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
 	}
 	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
 
 	sc.AuthVerifier = authverify.NewAuthVerify(sc.UserService)
+	sc.NotificationSender = notification.NewNotificationSender(msgService, sc.UserService, sc.RequestModel, sc.FriendModel)
 }
 
 func (sc *ServiceContext) Close() error {

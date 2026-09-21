@@ -16,8 +16,8 @@ import (
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	queuex "github.com/PaperMan11/goim/pkg/queue"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
-	"github.com/gogo/protobuf/proto"
 	"github.com/zeromicro/go-zero/core/logc"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
