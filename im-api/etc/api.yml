@@ -16,7 +16,7 @@ Prometheus:
 
 Redis:
   Host: 127.0.0.1:6379
-  Pass: 123456
+  Pass: "123456"
 
 LocalCacheConf:
   Expire: 5m

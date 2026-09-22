@@ -1,10 +1,9 @@
 Name: relation.rpc
-Host: 0.0.0.0
 ListenOn: 0.0.0.0:18050
 Mode: pro
 Etcd:
   Hosts:
-  - 127.0.0.1:2379
+    - 127.0.0.1:2379
   Key: relation.rpc
 
 Log:
@@ -22,7 +21,8 @@ Prometheus:
 
 Redis:
   Host: 127.0.0.1:6379
-  Pass: 123456
+  Pass: "123456"
+  Key: relation.redis
 
 LocalCacheConf:
   Expire: 5m

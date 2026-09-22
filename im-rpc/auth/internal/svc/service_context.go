@@ -29,7 +29,7 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
-	redisCli := sredis.MustNewRedis(c.Redis)
+	redisCli := sredis.MustNewRedis(c.Redis.RedisConf)
 
 	clientOpts := []zrpc.ClientOption{
 		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),

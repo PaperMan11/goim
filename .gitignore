@@ -24,6 +24,9 @@ bin/
 build/
 dist/
 
+# Runtime pid files
+run/
+
 # Editor directories and files
 .vscode/
 .idea/

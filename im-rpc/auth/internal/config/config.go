@@ -4,13 +4,11 @@ import (
 	"github.com/PaperMan11/goim/pkg/localcache"
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
 	"github.com/PaperMan11/goim/pkg/rpcclient"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	Redis         redis.RedisConf
 	LoginStrategy loginstrategy.LoginStrategyConf
 
 	AuthRpc       rpcclient.RpcConf

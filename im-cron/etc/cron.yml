@@ -17,7 +17,7 @@ CronTask:
 
 Redis:
   Host: 127.0.0.1:6379
-  Pass: 123456
+  Pass: "123456"
 
 # RPC 配置
 ConvRpc:

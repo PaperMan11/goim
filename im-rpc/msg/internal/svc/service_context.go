@@ -61,7 +61,7 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
-	redisCli := sredis.MustNewRedis(c.Redis)
+	redisCli := sredis.MustNewRedis(c.Redis.RedisConf)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()
 
