@@ -5,7 +5,6 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/apiresp"
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
 	"github.com/zeromicro/go-zero/core/logc"
 	"google.golang.org/grpc"
 )
@@ -23,10 +22,10 @@ func Call[A, B any](c *gin.Context, rpc func(ctx context.Context, req A, opts ..
 		return
 	}
 
-	if err := copier.Copy(&resp, &resp); err != nil {
-		writeErr(c, err)
-		return
-	}
+	// if err := copier.Copy(&resp, &resp); err != nil {
+	// 	writeErr(c, err)
+	// 	return
+	// }
 
 	apiresp.Success(c.Writer, resp)
 }
