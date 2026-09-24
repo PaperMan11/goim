@@ -6,6 +6,7 @@ import (
 	_ "github.com/PaperMan11/goim/pkg/lb/iphash"
 	"github.com/PaperMan11/goim/pkg/localcache"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcclient"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msggatewayservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
@@ -37,8 +38,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		zrpc.WithDialOption(grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"iphash"}`)),
 		zrpc.WithUnaryClientInterceptor(clientinterceptors.ClientContextInterceptor()),
 	}
-	userClient := zrpc.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...)
-	msgGatewayClient := zrpc.MustNewClient(c.MsgGatewayRpc.RpcClientConf, clientOpts...)
+	userClient := rpcclient.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...)
+	msgGatewayClient := rpcclient.MustNewClient(c.MsgGatewayRpc.RpcClientConf, clientOpts...)
 
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()

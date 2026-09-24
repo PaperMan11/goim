@@ -31,7 +31,7 @@ func (l *ParseTokenLogic) ParseToken(req *auth.ParseTokenReq) (*auth.ParseTokenR
 		return nil, errx.TokenUnknownError
 	}
 
-	token, err := jwtx.ParseToken(req.Token, l.svcCtx.Config.Auth.AccessSecret)
+	token, err := jwtx.ParseToken(req.Token, l.svcCtx.Config.JwtAuth.AccessSecret)
 	switch {
 	case errors.Is(err, jwtx.ErrTokenExpired):
 		return nil, errx.TokenExpiredError

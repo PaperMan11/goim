@@ -10,6 +10,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/localcache"
 	pbmsggateway "github.com/PaperMan11/goim/pkg/protocol/msggateway"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcclient"
 	authservice "github.com/PaperMan11/goim/pkg/rpcclient/authservice"
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	pushservice "github.com/PaperMan11/goim/pkg/rpcclient/pushservice"
@@ -68,7 +69,7 @@ func startHubServer(c *internal.MsgGatewayConfig, wsServer internal.WsServer) (h
 	if c.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
-		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf))
+		userService = userservice.NewUserService(rpcclient.MustNewClient(c.UserRpc.RpcClientConf))
 	}
 
 	redisCli := sredis.MustNewRedis(c.Redis.RedisConf)
@@ -101,22 +102,22 @@ func newWsServer(c *internal.MsgGatewayConfig) internal.WsServer {
 	if c.AuthRpc.Stub {
 		authService = authservice.NewStubAuthService()
 	} else {
-		authService = authservice.NewAuthService(zrpc.MustNewClient(c.AuthRpc.RpcClientConf, clientOpts...))
+		authService = authservice.NewAuthService(rpcclient.MustNewClient(c.AuthRpc.RpcClientConf, clientOpts...))
 	}
 	if c.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
-		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...))
+		userService = userservice.NewUserService(rpcclient.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...))
 	}
 	if c.MsgRpc.Stub {
 		msgService = msgservice.NewStubMsgService()
 	} else {
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(c.MsgRpc.RpcClientConf, clientOpts...))
+		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(c.MsgRpc.RpcClientConf, clientOpts...))
 	}
 	if c.PushRpc.Stub {
 		pushService = pushservice.NewStubPushService()
 	} else {
-		pushService = pushservice.NewPushService(zrpc.MustNewClient(c.PushRpc.RpcClientConf, clientOpts...))
+		pushService = pushservice.NewPushService(rpcclient.MustNewClient(c.PushRpc.RpcClientConf, clientOpts...))
 	}
 
 	// 消息处理器

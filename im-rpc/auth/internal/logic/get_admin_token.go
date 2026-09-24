@@ -57,17 +57,17 @@ func (l *GetAdminTokenLogic) GetAdminToken(req *auth.GetAdminTokenReq) (*auth.Ge
 
 func (l *GetAdminTokenLogic) generateAdminToken(_ context.Context, userID string) (*token.TokenInfo, error) {
 	tokenUUID := uuid.New().String()
-	expireAt := timex.Unix() + l.svcCtx.Config.Auth.AccessExpire
+	expireAt := timex.Unix() + l.svcCtx.Config.JwtAuth.AccessExpire
 
 	jwtToken, err := jwtx.GenerateAdminToken(
 		tokenUUID,
-		l.svcCtx.Config.Auth.Issuer,
+		l.svcCtx.Config.JwtAuth.Issuer,
 		userID,
 		constant.AdminPlatformID,
 		"",
 		[]string{"admin"},
-		l.svcCtx.Config.Auth.AccessSecret,
-		l.svcCtx.Config.Auth.AccessExpire,
+		l.svcCtx.Config.JwtAuth.AccessSecret,
+		l.svcCtx.Config.JwtAuth.AccessExpire,
 	)
 	if err != nil {
 		return nil, err

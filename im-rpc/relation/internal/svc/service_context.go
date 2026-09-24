@@ -7,6 +7,7 @@ import (
 	_ "github.com/PaperMan11/goim/pkg/lb/iphash"
 	"github.com/PaperMan11/goim/pkg/localcache"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcclient"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
@@ -87,12 +88,12 @@ func (sc *ServiceContext) initRpcClient() {
 	if sc.Config.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
-		userService = userservice.NewUserService(zrpc.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
+		userService = userservice.NewUserService(rpcclient.MustNewClient(sc.Config.UserRpc.RpcClientConf, clientOpts...))
 	}
 	if sc.Config.MsgRpc.Stub {
 		msgService = msgservice.NewStubMsgService()
 	} else {
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
+		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
 	}
 	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
 

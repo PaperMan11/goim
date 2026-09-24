@@ -8,8 +8,8 @@
 
 | 服务 | 配置文件 | HTTP/API 端口 | WebSocket 端口 | Prometheus 端口 |
 |------|----------|--------------|----------------|-----------------|
-| im-api | `im-api/etc/api.yml` | **18080** | - | 11010 |
-| im-msggateway | `im-msggateway/etc/msggateway.yml` | - (RPC: 8070) | **50001** | 11030 |
+| im-api | `im-api/etc/api.yml` | **18880** | - | 11010 |
+| im-msggateway | `im-msggateway/etc/msggateway.yml` | - (RPC: 60001) | **50001** | 11030 |
 
 ### RPC 服务层
 
@@ -38,7 +38,7 @@
 | 18000-18099 | RPC 服务 gRPC 端口 |
 | 28000-28099 | RPC 服务 Prometheus |
 | 50001 | WebSocket 长连接端口 |
-| 8070 | msggateway gRPC（ListenOn） |
+| 60001 | msggateway gRPC（ListenOn） |
 
 ## 中间件依赖
 

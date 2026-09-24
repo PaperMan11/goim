@@ -11,13 +11,12 @@ type Config struct {
 	zrpc.RpcServerConf
 	LoginStrategy loginstrategy.LoginStrategyConf
 
-	AuthRpc       rpcclient.RpcConf
 	UserRpc       rpcclient.RpcConf
 	MsgGatewayRpc rpcclient.RpcConf
 
 	LocalCacheConf localcache.CacheConfig
 
-	Auth struct {
+	JwtAuth struct {
 		AccessSecret string `json:",default=goim-access-secret"`
 		AccessExpire int64  `json:",default=86400"`
 		Issuer       string `json:",default=goim"`

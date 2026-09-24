@@ -8,6 +8,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	queuex "github.com/PaperMan11/goim/pkg/queue"
 	kafkax "github.com/PaperMan11/goim/pkg/queue/kafka"
+	"github.com/PaperMan11/goim/pkg/rpcclient"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
@@ -70,7 +71,7 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 	)
 
 	if !cfg.MsgRpc.Stub {
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(cfg.MsgRpc.RpcClientConf, clientOpts...))
+		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(cfg.MsgRpc.RpcClientConf, clientOpts...))
 	} else {
 		msgService = msgservice.NewStubMsgService()
 	}

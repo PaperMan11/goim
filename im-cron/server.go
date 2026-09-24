@@ -5,6 +5,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/lock"
 	redLocker "github.com/PaperMan11/goim/pkg/lock/redis"
+	"github.com/PaperMan11/goim/pkg/rpcclient"
 	convservice "github.com/PaperMan11/goim/pkg/rpcclient/conversationservice"
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
@@ -42,12 +43,12 @@ func NewCronServer(cfg *Config) *CronServer {
 		msgService  msgservice.MsgService
 	)
 	if !cfg.ConvRpc.Stub {
-		convService = convservice.NewConversationService(zrpc.MustNewClient(cfg.ConvRpc.RpcClientConf, clientOpts...))
+		convService = convservice.NewConversationService(rpcclient.MustNewClient(cfg.ConvRpc.RpcClientConf, clientOpts...))
 	} else {
 		convService = convservice.NewStubConversationService()
 	}
 	if !cfg.MsgRpc.Stub {
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(cfg.MsgRpc.RpcClientConf, clientOpts...))
+		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(cfg.MsgRpc.RpcClientConf, clientOpts...))
 	} else {
 		msgService = msgservice.NewStubMsgService()
 	}

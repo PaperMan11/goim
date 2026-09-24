@@ -1,6 +1,6 @@
 Name: im-api
 Host: 0.0.0.0
-Port: 18080
+Port: 18880
 Mode: pro
 Log:
   ServiceName: im-api
@@ -25,7 +25,7 @@ LocalCacheConf:
   Topic: api-topic
 
 Mongo:
-  Uri: mongodb://127.0.0.1:27017
+  Uri: mongodb://root:123456@127.0.0.1:27017/?authSource=admin
   Database: goim
 
 AuthRpc:

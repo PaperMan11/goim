@@ -84,17 +84,17 @@ func (l *GetUserTokenLogic) GetUserToken(req *auth.GetUserTokenReq) (*auth.GetUs
 
 func (l *GetUserTokenLogic) generateToken(_ context.Context, userID string, platformID int32) (*token.TokenInfo, error) {
 	tokenUUID := uuid.New().String()
-	expireAt := timex.Unix() + l.svcCtx.Config.Auth.AccessExpire
+	expireAt := timex.Unix() + l.svcCtx.Config.JwtAuth.AccessExpire
 
 	jwtToken, err := jwtx.GenerateAccessToken(
 		tokenUUID,
-		l.svcCtx.Config.Auth.Issuer,
+		l.svcCtx.Config.JwtAuth.Issuer,
 		userID,
 		platformID,
 		"",
 		nil,
-		l.svcCtx.Config.Auth.AccessSecret,
-		l.svcCtx.Config.Auth.AccessExpire,
+		l.svcCtx.Config.JwtAuth.AccessSecret,
+		l.svcCtx.Config.JwtAuth.AccessExpire,
 	)
 	if err != nil {
 		return nil, err

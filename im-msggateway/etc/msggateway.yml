@@ -1,10 +1,10 @@
 Name: im-msggateway
 Mode: pro
-ListenOn: 0.0.0.0:8070
+ListenOn: 0.0.0.0:60001
 Etcd:
   Hosts:
     - 127.0.0.1:2379
-  Key: im-msggateway.rpc
+  Key: msggateway.rpc
 Prometheus:
   Host: 0.0.0.0
   Port: 11030
@@ -44,7 +44,7 @@ Redis:
   Key: im-msggateway.redis
 
 Mongo:
-  Uri: mongodb://127.0.0.1:27017
+  Uri: mongodb://root:123456@127.0.0.1:27017/?authSource=admin
   Database: goim
 
 # RPC 配置

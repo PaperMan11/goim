@@ -9,6 +9,7 @@ import (
 	msgServiceCache "github.com/PaperMan11/goim/pkg/rpccache/msgservice"
 	relationServiceCache "github.com/PaperMan11/goim/pkg/rpccache/relationservice"
 	userServiceCache "github.com/PaperMan11/goim/pkg/rpccache/userservice"
+	"github.com/PaperMan11/goim/pkg/rpcclient"
 	"github.com/PaperMan11/goim/pkg/rpcclient/authservice"
 	convservice "github.com/PaperMan11/goim/pkg/rpcclient/conversationservice"
 	groupservice "github.com/PaperMan11/goim/pkg/rpcclient/groupservice"
@@ -63,32 +64,32 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if c.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
 	} else {
-		userService = userservice.NewUserService(zrpc.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...))
+		userService = userservice.NewUserService(rpcclient.MustNewClient(c.UserRpc.RpcClientConf, clientOpts...))
 	}
 	if c.ConvRpc.Stub {
 		convService = convservice.NewStubConversationService()
 	} else {
-		convService = convservice.NewConversationService(zrpc.MustNewClient(c.ConvRpc.RpcClientConf, clientOpts...))
+		convService = convservice.NewConversationService(rpcclient.MustNewClient(c.ConvRpc.RpcClientConf, clientOpts...))
 	}
 	if c.RelationRpc.Stub {
 		relationService = relationservice.NewStubRelationService()
 	} else {
-		relationService = relationservice.NewRelationService(zrpc.MustNewClient(c.RelationRpc.RpcClientConf, clientOpts...))
+		relationService = relationservice.NewRelationService(rpcclient.MustNewClient(c.RelationRpc.RpcClientConf, clientOpts...))
 	}
 	if c.GroupRpc.Stub {
 		groupService = groupservice.NewStubGroupService()
 	} else {
-		groupService = groupservice.NewGroupService(zrpc.MustNewClient(c.GroupRpc.RpcClientConf, clientOpts...))
+		groupService = groupservice.NewGroupService(rpcclient.MustNewClient(c.GroupRpc.RpcClientConf, clientOpts...))
 	}
 	if c.MsgRpc.Stub {
 		msgService = msgservice.NewStubMsgService()
 	} else {
-		msgService = msgservice.NewMsgService(zrpc.MustNewClient(c.MsgRpc.RpcClientConf, clientOpts...))
+		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(c.MsgRpc.RpcClientConf, clientOpts...))
 	}
 	if c.AuthRpc.Stub {
 		authService = authservice.NewStubAuthService()
 	} else {
-		authService = authservice.NewAuthService(zrpc.MustNewClient(c.AuthRpc.RpcClientConf, clientOpts...))
+		authService = authservice.NewAuthService(rpcclient.MustNewClient(c.AuthRpc.RpcClientConf, clientOpts...))
 	}
 	redisCli := sredis.MustNewRedis(c.Redis)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)

@@ -31,7 +31,7 @@ LocalCacheConf:
   Topic: relation-cache-topic
 
 Mongo:
-  Uri: mongodb://localhost:27017
+  Uri: mongodb://root:123456@127.0.0.1:27017/?authSource=admin
   Database: goim
 
 UserRpc:

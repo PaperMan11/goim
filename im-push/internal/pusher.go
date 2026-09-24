@@ -7,6 +7,7 @@ import (
 	offlnepush "github.com/PaperMan11/goim/im-push/internal/offlnepush"
 	queuex "github.com/PaperMan11/goim/pkg/queue"
 	kafkax "github.com/PaperMan11/goim/pkg/queue/kafka"
+	"github.com/PaperMan11/goim/pkg/rpcclient"
 	"github.com/PaperMan11/goim/pkg/rpcclient/groupservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msggatewayservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
@@ -64,19 +65,19 @@ func NewPusher(cfg *Config) (*Pusher, error) {
 	)
 
 	if !cfg.GatewayRpc.Stub {
-		msgGatewayService = msggatewayservice.NewMsgGatewayService(zrpc.MustNewClient(cfg.GatewayRpc.RpcClientConf, clientOpts...))
+		msgGatewayService = msggatewayservice.NewMsgGatewayService(rpcclient.MustNewClient(cfg.GatewayRpc.RpcClientConf, clientOpts...))
 	} else {
 		msgGatewayService = msggatewayservice.NewStubMsgGatewayService()
 	}
 
 	if !cfg.GroupRpc.Stub {
-		groupService = groupservice.NewGroupService(zrpc.MustNewClient(cfg.GroupRpc.RpcClientConf, clientOpts...))
+		groupService = groupservice.NewGroupService(rpcclient.MustNewClient(cfg.GroupRpc.RpcClientConf, clientOpts...))
 	} else {
 		groupService = groupservice.NewStubGroupService()
 	}
 
 	if !cfg.UserRpc.Stub {
-		userService = userservice.NewUserService(zrpc.MustNewClient(cfg.UserRpc.RpcClientConf, clientOpts...))
+		userService = userservice.NewUserService(rpcclient.MustNewClient(cfg.UserRpc.RpcClientConf, clientOpts...))
 	} else {
 		userService = userservice.NewStubUserService()
 	}
