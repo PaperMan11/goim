@@ -7,8 +7,6 @@ import (
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
-	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
-	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -71,29 +69,6 @@ func (l *Logic) requireValidUser(targetUserID string) error {
 		return errx.UserIDNotFoundError
 	}
 	return nil
-}
-
-func modelToUserInfo(user *model.User) *sdkws.UserInfo {
-	return &sdkws.UserInfo{
-		UserID:           user.UserID,
-		Nickname:         user.Nickname,
-		FaceURL:          user.FaceURL,
-		Ex:               user.Extra,
-		CreateTime:       user.CreatedAt.Unix(),
-		AppMangerLevel:   int32(user.AppManagerLevel),
-		GlobalRecvMsgOpt: int32(user.GlobalRecvMsgOpt),
-	}
-}
-
-func userInfoToModel(userInfo *sdkws.UserInfo) *model.User {
-	return &model.User{
-		UserID:           userInfo.GetUserID(),
-		Nickname:         userInfo.GetNickname(),
-		FaceURL:          userInfo.GetFaceURL(),
-		Extra:            userInfo.GetEx(),
-		AppManagerLevel:  int(userInfo.GetAppMangerLevel()),
-		GlobalRecvMsgOpt: int(userInfo.GetGlobalRecvMsgOpt()),
-	}
 }
 
 func boolToStatus(b bool) int32 {

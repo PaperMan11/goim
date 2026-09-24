@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/mconvert"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	pbconversation "github.com/PaperMan11/goim/pkg/protocol/conversation"
 	pbgroup "github.com/PaperMan11/goim/pkg/protocol/group"
@@ -43,7 +44,7 @@ func (l *Logic) GetConversation(ctx context.Context, req *pbconversation.GetConv
 		return nil, err
 	}
 
-	pbConv := modelToPbConversation(conv)
+	pbConv := mconvert.ModelToPbConversation(conv)
 	// 从 SeqUser 填充 min_seq/max_seq
 	l.fillConversationSeqs(ownerUserID, []*pbconversation.Conversation{pbConv})
 
@@ -71,7 +72,7 @@ func (l *Logic) GetAllConversations(ctx context.Context, req *pbconversation.Get
 
 	var pbConvs []*pbconversation.Conversation
 	for _, c := range convs {
-		pbConvs = append(pbConvs, modelToPbConversation(c))
+		pbConvs = append(pbConvs, mconvert.ModelToPbConversation(c))
 	}
 	// 从 SeqUser 批量填充 min_seq/max_seq
 	l.fillConversationSeqs(ownerUserID, pbConvs)
@@ -101,7 +102,7 @@ func (l *Logic) GetConversations(ctx context.Context, req *pbconversation.GetCon
 
 	var pbConvs []*pbconversation.Conversation
 	for _, c := range convs {
-		pbConvs = append(pbConvs, modelToPbConversation(c))
+		pbConvs = append(pbConvs, mconvert.ModelToPbConversation(c))
 	}
 	// 从 SeqUser 批量填充 min_seq/max_seq
 	l.fillConversationSeqs(ownerUserID, pbConvs)
@@ -131,7 +132,7 @@ func (l *Logic) GetConversationsByConversationID(ctx context.Context, req *pbcon
 	}
 
 	for _, conv := range convs {
-		pbConvs = append(pbConvs, modelToPbConversation(conv))
+		pbConvs = append(pbConvs, mconvert.ModelToPbConversation(conv))
 	}
 
 	return &pbconversation.GetConversationsByConversationIDResp{
@@ -234,7 +235,7 @@ func (l *Logic) GetOwnerConversation(ctx context.Context, req *pbconversation.Ge
 
 	var pbConvs []*pbconversation.Conversation
 	for _, c := range convs[start:end] {
-		pbConvs = append(pbConvs, modelToPbConversation(c))
+		pbConvs = append(pbConvs, mconvert.ModelToPbConversation(c))
 	}
 	// 从 SeqUser 批量填充 min_seq/max_seq
 	l.fillConversationSeqs(userID, pbConvs)
@@ -1279,14 +1280,14 @@ func (l *Logic) GetIncrementalConversation(ctx context.Context, req *pbconversat
 		}
 		for _, id := range c.InsertIDs {
 			if conv, ok := convMap[id]; ok {
-				pbConv := modelToPbConversation(conv)
+				pbConv := mconvert.ModelToPbConversation(conv)
 				fillPbSeq(pbConv)
 				resp.Insert = append(resp.Insert, pbConv)
 			}
 		}
 		for _, id := range c.UpdateIDs {
 			if conv, ok := convMap[id]; ok {
-				pbConv := modelToPbConversation(conv)
+				pbConv := mconvert.ModelToPbConversation(conv)
 				fillPbSeq(pbConv)
 				resp.Update = append(resp.Update, pbConv)
 			}
@@ -1305,7 +1306,7 @@ func (l *Logic) fullConversationsResp(ctx context.Context, userID string) (*pbco
 	}
 	inserts := make([]*pbconversation.Conversation, 0, len(convs))
 	for _, c := range convs {
-		inserts = append(inserts, modelToPbConversation(c))
+		inserts = append(inserts, mconvert.ModelToPbConversation(c))
 	}
 	// 从 SeqUser 批量填充 min_seq/max_seq
 	l.fillConversationSeqs(userID, inserts)

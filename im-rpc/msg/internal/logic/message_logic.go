@@ -10,6 +10,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
+	"github.com/PaperMan11/goim/pkg/mconvert"
 	"github.com/PaperMan11/goim/pkg/msgprocessor"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/protocol/conversation"
@@ -360,7 +361,7 @@ func (l *Logic) pullMessage(ctx context.Context, userID string, conversationID s
 		EndSeq: endSeq,
 	}
 	for _, dbMsg := range dbMsgs {
-		sdkMsg := l.ToSDKMsg(dbMsg.Msg)
+		sdkMsg := mconvert.ModelToPbMsgData(dbMsg.Msg)
 		pullMsgs.Msgs = append(pullMsgs.Msgs, sdkMsg)
 	}
 
@@ -537,7 +538,7 @@ func (l *Logic) GetMsgByConversationIDs(ctx context.Context, req *pbmsg.GetMsgBy
 			}
 
 			if dbMsg != nil {
-				sdkMsg := l.ToSDKMsg(dbMsg)
+				sdkMsg := mconvert.ModelToPbMsgData(dbMsg)
 				msgDatas[convID] = sdkMsg
 			}
 		} else {
@@ -547,7 +548,7 @@ func (l *Logic) GetMsgByConversationIDs(ctx context.Context, req *pbmsg.GetMsgBy
 				continue
 			}
 			if dbMsg != nil {
-				sdkMsg := l.ToSDKMsg(dbMsg.Msg)
+				sdkMsg := mconvert.ModelToPbMsgData(dbMsg.Msg)
 				msgDatas[convID] = sdkMsg
 			}
 		}
@@ -568,7 +569,7 @@ func (l *Logic) GetLastMessage(ctx context.Context, req *pbmsg.GetLastMessageReq
 			continue
 		}
 		if dbMsg != nil {
-			sdkMsg := l.ToSDKMsg(dbMsg)
+			sdkMsg := mconvert.ModelToPbMsgData(dbMsg)
 			msgDatas[convID] = sdkMsg
 		}
 	}
@@ -1006,7 +1007,7 @@ func (l *Logic) SearchMessage(ctx context.Context, req *pbmsg.SearchMessageReq) 
 	}
 
 	for _, msg := range msgs {
-		pbchatLog := modelToChatLog(msg)
+		pbchatLog := mconvert.ModelToPbChatLog(msg)
 		if msg.Msg.SenderNickname == "" {
 			pbchatLog.SenderNickname = sendNicknameMap[msg.Msg.SendID]
 		}
@@ -1144,7 +1145,7 @@ func (l *Logic) AddMsg(ctx context.Context, req *pbmsg.AddMsgReq) (*pbmsg.AddMsg
 		}
 	}
 
-	err = l.svcCtx.MsgModel.Insert(ctx, conversationID, sdkMsgToModelMsg(msg))
+	err = l.svcCtx.MsgModel.Insert(ctx, conversationID, mconvert.PbToModelMsgData(msg))
 	if err != nil {
 		l.Errorf("insert msg failed, err: %v, conversationID: %s", err, conversationID)
 		return nil, err
@@ -1218,7 +1219,7 @@ func (l *Logic) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddM
 
 	modelMsgs := make([]*model.MsgDataModel, 0, len(msgs))
 	for _, msg := range msgs {
-		modelMsgs = append(modelMsgs, sdkMsgToModelMsg(msg))
+		modelMsgs = append(modelMsgs, mconvert.PbToModelMsgData(msg))
 	}
 	err = l.svcCtx.MsgModel.BatchInsert(ctx, conversationID, modelMsgs)
 	if err != nil {

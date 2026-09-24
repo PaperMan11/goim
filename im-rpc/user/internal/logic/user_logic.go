@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/mconvert"
 	sdkws "github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
@@ -18,7 +19,7 @@ func (l *Logic) GetDesignateUsers(ctx context.Context, req *pbuser.GetDesignateU
 
 	var usersInfo []*sdkws.UserInfo
 	for _, user := range users {
-		usersInfo = append(usersInfo, modelToUserInfo(user))
+		usersInfo = append(usersInfo, mconvert.ModelToPbUserInfo(user))
 	}
 
 	return &pbuser.GetDesignateUsersResp{UsersInfo: usersInfo}, nil
@@ -34,7 +35,7 @@ func (l *Logic) UpdateUserInfo(ctx context.Context, req *pbuser.UpdateUserInfoRe
 		return nil, errx.ArgsError.Wrap("user info is nil")
 	}
 
-	user := userInfoToModel(userInfo)
+	user := mconvert.PbToModelUserInfo(userInfo)
 	err := l.svcCtx.UserModel.Update(ctx, user)
 	if err != nil {
 		return nil, err
@@ -112,7 +113,7 @@ func (l *Logic) GetPaginationUsers(ctx context.Context, req *pbuser.GetPaginatio
 
 	var usersInfo []*sdkws.UserInfo
 	for _, user := range users {
-		usersInfo = append(usersInfo, modelToUserInfo(user))
+		usersInfo = append(usersInfo, mconvert.ModelToPbUserInfo(user))
 	}
 
 	return &pbuser.GetPaginationUsersResp{Total: int32(total), Users: usersInfo}, nil
@@ -153,7 +154,7 @@ func (l *Logic) UserRegister(ctx context.Context, req *pbuser.UserRegisterReq) (
 	var users []*model.User
 	timeNow := timex.Now()
 	for _, userInfo := range req.GetUsers() {
-		user := userInfoToModel(userInfo)
+		user := mconvert.PbToModelUserInfo(userInfo)
 		user.CreatedAt = timeNow
 		user.UpdatedAt = timeNow
 		users = append(users, user)
@@ -194,7 +195,7 @@ func (l *Logic) SortQuery(ctx context.Context, req *pbuser.SortQueryReq) (*pbuse
 
 	var usersInfo []*sdkws.UserInfo
 	for _, user := range users {
-		usersInfo = append(usersInfo, modelToUserInfo(user))
+		usersInfo = append(usersInfo, mconvert.ModelToPbUserInfo(user))
 	}
 
 	return &pbuser.SortQueryResp{Users: usersInfo}, nil
