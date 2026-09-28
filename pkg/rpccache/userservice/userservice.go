@@ -22,10 +22,17 @@ type UserService struct {
 	localCache localcache.LocalCache
 }
 
-func NewUserServiceWrapperCache(userService userservice.UserService, cache localcache.LocalCache) UserServiceWrapperCache {
-	return &UserService{
-		UserService: userService,
-		localCache:  cache,
+func NewUserServiceWrapperCache(userService userservice.UserService, cache localcache.LocalCache, enableCache bool) UserServiceWrapperCache {
+	if !enableCache {
+		return &UserService{
+			UserService: userService,
+			localCache:  nil,
+		}
+	} else {
+		return &UserService{
+			UserService: userService,
+			localCache:  cache,
+		}
 	}
 }
 

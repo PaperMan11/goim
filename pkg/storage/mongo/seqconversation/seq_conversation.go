@@ -6,7 +6,9 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
@@ -28,10 +30,14 @@ type defaultSeqConversationModel struct {
 	mod *mon.Model
 }
 
-func NewSeqConversationModel(mod *mon.Model) SeqConversationModel {
-	return &defaultSeqConversationModel{
+func NewSeqConversationModel(mod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) SeqConversationModel {
+	m := &defaultSeqConversationModel{
 		mod: mod,
 	}
+	if !enableCache || rdb == nil {
+		return m
+	}
+	return NewCachedSeqConversationModel(m, rdb, barrier)
 }
 
 func (s *defaultSeqConversationModel) SetConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error {

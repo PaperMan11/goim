@@ -7,7 +7,9 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -37,8 +39,12 @@ type defaultVersionLogModel struct {
 	versionMod *mon.Model
 }
 
-func NewVersionLogModel(versionMod *mon.Model) VersionLogModel {
-	return &defaultVersionLogModel{versionMod: versionMod}
+func NewVersionLogModel(versionMod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) VersionLogModel {
+	m := &defaultVersionLogModel{versionMod: versionMod}
+	if !enableCache || rdb == nil {
+		return m
+	}
+	return NewCachedVersionLogModel(m, rdb, barrier)
 }
 
 func (m *defaultVersionLogModel) IncrVersionLog(ctx context.Context, did, eid string, state int32) (*model.VersionLog, error) {

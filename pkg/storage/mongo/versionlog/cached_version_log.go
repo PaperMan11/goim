@@ -9,7 +9,6 @@ import (
 	"github.com/PaperMan11/goim/pkg/utils/randx"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	goredis "github.com/redis/go-redis/v9"
-	"github.com/zeromicro/go-zero/core/stores/mon"
 	"github.com/zeromicro/go-zero/core/syncx"
 )
 
@@ -27,11 +26,6 @@ func NewCachedVersionLogModel(inner VersionLogModel, rdb goredis.UniversalClient
 		redis:           rdb,
 		barrier:         barrier,
 	}
-}
-
-// NewCachedVersionLogModelFromMongo 便捷构造：用默认 mongo 实现作为内层。
-func NewCachedVersionLogModelFromMongo(versionMod *mon.Model, rdb goredis.UniversalClient, barrier syncx.SingleFlight) VersionLogModel {
-	return NewCachedVersionLogModel(NewVersionLogModel(versionMod), rdb, barrier)
 }
 
 func (m *cachedVersionLogModel) jitterTTL(baseSeconds int) int {

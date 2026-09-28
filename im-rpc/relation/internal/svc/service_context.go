@@ -50,16 +50,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	friendMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriend)
 	blackMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionBlack)
-	friendInnerModel := friendModel.NewFriendModel(friendMongo, blackMongo)
-	friendCacheModel := friendModel.NewCachedFriendModel(friendInnerModel, redisCli, singleFlight)
-
-	versionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupVersion)
-	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, singleFlight)
+	friendVersionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriendVersion)
+	friendCacheModel := friendModel.NewFriendModel(friendMongo, blackMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	versionLogModel := versionLogModel.NewVersionLogModel(friendVersionMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	friendReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriendRequest)
 	groupReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupRequest)
-	reqInnerModel := requestModel.NewRequestModel(friendReqMongo, groupReqMongo)
-	reqCacheModel := requestModel.NewCachedRequestModel(reqInnerModel, redisCli, singleFlight)
+	reqCacheModel := requestModel.NewRequestModel(friendReqMongo, groupReqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	sc := &ServiceContext{
 		Config:          c,
@@ -95,7 +92,7 @@ func (sc *ServiceContext) initRpcClient() {
 	} else {
 		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
 	}
-	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
+	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache, sc.Config.UserRpc.EnableCache)
 
 	sc.AuthVerifier = authverify.NewAuthVerify(sc.UserService)
 	sc.NotificationSender = notification.NewNotificationSender(msgService, sc.UserService, sc.RequestModel, sc.FriendModel)

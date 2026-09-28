@@ -36,6 +36,7 @@ UserRpc:
       - 127.0.0.1:2379
     Key: user.rpc
   Stub: false
+  EnableCache: false
 
 MsgGatewayRpc:
   Etcd:
@@ -43,6 +44,7 @@ MsgGatewayRpc:
       - 127.0.0.1:2379
     Key: msggateway.rpc
   Stub: false
+  EnableCache: false
 
 LoginStrategy:
   # 多端登录策略

@@ -74,7 +74,7 @@ func startHubServer(c *internal.MsgGatewayConfig, wsServer internal.WsServer) (h
 
 	redisCli := sredis.MustNewRedis(c.Redis.RedisConf)
 	localCache := localcache.MustNewLocalCache(c.HubServerConf.LocalCacheConf, redisCli)
-	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache)
+	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache, c.UserRpc.EnableCache)
 
 	authverifier := authverify.NewAuthVerify(userServiceWrapperCache)
 	hubServer = internal.NewHubServer(wsServer, authverifier, &c.HubServerConf)

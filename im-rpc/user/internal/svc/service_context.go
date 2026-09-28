@@ -50,12 +50,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	statusMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserStatus)
 	cmdMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserCommand)
 	clientConfigMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionUserClientConfig)
-	userInnerModel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo, clientConfigMongo, singleFlight)
-	userCachedModel := userModel.NewCachedUserModel(userInnerModel, redisCli, singleFlight)
+
+	usermodel := userModel.NewUserModel(userMongo, statusMongo, cmdMongo, clientConfigMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	sc := &ServiceContext{
 		Config:       c,
-		UserModel:    userCachedModel,
+		UserModel:    usermodel,
 		LocalCache:   localCache,
 		RedisCli:     redisCli,
 		SingleFlight: singleFlight,
@@ -86,7 +86,7 @@ func (sc *ServiceContext) initRpcClient() {
 		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
 	}
 
-	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
+	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache, sc.Config.UserRpc.EnableCache)
 
 	// auth verifier
 	sc.AuthVerifier = authverify.NewAuthVerify(sc.UserService)

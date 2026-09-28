@@ -9,7 +9,9 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/convert"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -59,10 +61,14 @@ type defaultMsgModel struct {
 	mod *mon.Model
 }
 
-func NewMsgModel(mod *mon.Model) MsgModel {
-	return &defaultMsgModel{
+func NewMsgModel(mod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) MsgModel {
+	m := &defaultMsgModel{
 		mod: mod,
 	}
+	if !enableCache || rdb == nil {
+		return m
+	}
+	return NewCachedMsgModel(m, rdb, barrier)
 }
 
 // docIDPrefix 返回 conversationID 的 DocID 前缀正则匹配

@@ -6,7 +6,9 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
@@ -40,11 +42,15 @@ type defaultFriendModel struct {
 	blackMod  *mon.Model
 }
 
-func NewFriendModel(friendMod, blackMod *mon.Model) FriendModel {
-	return &defaultFriendModel{
+func NewFriendModel(friendMod, blackMod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) FriendModel {
+	m := &defaultFriendModel{
 		friendMod: friendMod,
 		blackMod:  blackMod,
 	}
+	if !enableCache || rdb == nil {
+		return m
+	}
+	return NewCachedFriendModel(m, rdb, barrier)
 }
 
 func (m *defaultFriendModel) InsertFriend(ctx context.Context, friend *model.Friend) error {

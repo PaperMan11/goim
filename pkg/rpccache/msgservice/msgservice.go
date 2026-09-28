@@ -20,10 +20,17 @@ type MsgService struct {
 	localCache localcache.LocalCache
 }
 
-func NewMsgServiceWrapperCache(msgService msgservice.MsgService, cache localcache.LocalCache) MsgServiceWrapperCache {
-	return &MsgService{
-		MsgService: msgService,
-		localCache: cache,
+func NewMsgServiceWrapperCache(msgService msgservice.MsgService, cache localcache.LocalCache, enableCache bool) MsgServiceWrapperCache {
+	if !enableCache {
+		return &MsgService{
+			MsgService: msgService,
+			localCache: nil,
+		}
+	} else {
+		return &MsgService{
+			MsgService: msgService,
+			localCache: cache,
+		}
 	}
 }
 

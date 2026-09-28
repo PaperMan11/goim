@@ -6,7 +6,9 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -41,11 +43,15 @@ type defaultRequestModel struct {
 	groupReqMod  *mon.Model
 }
 
-func NewRequestModel(friendReqMod, groupReqMod *mon.Model) RequestModel {
-	return &defaultRequestModel{
+func NewRequestModel(friendReqMod, groupReqMod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) RequestModel {
+	m := &defaultRequestModel{
 		friendReqMod: friendReqMod,
 		groupReqMod:  groupReqMod,
 	}
+	if !enableCache || rdb == nil {
+		return m
+	}
+	return NewCachedRequestModel(m, rdb, barrier)
 }
 
 func (m *defaultRequestModel) InsertFriendRequest(ctx context.Context, req *model.FriendRequest) error {

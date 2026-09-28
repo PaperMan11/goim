@@ -20,10 +20,17 @@ type ConversationService struct {
 	localCache localcache.LocalCache
 }
 
-func NewConversationServiceWrapperCache(conversationService conversationservice.ConversationService, cache localcache.LocalCache) ConversationServiceWrapperCache {
-	return &ConversationService{
-		ConversationService: conversationService,
-		localCache:          cache,
+func NewConversationServiceWrapperCache(conversationService conversationservice.ConversationService, cache localcache.LocalCache, enableCache bool) ConversationServiceWrapperCache {
+	if !enableCache {
+		return &ConversationService{
+			ConversationService: conversationService,
+			localCache:          nil,
+		}
+	} else {
+		return &ConversationService{
+			ConversationService: conversationService,
+			localCache:          cache,
+		}
 	}
 }
 

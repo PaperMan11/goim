@@ -7,6 +7,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -68,7 +69,7 @@ type defaultUserModel struct {
 	barrier         syncx.SingleFlight
 }
 
-func NewUserModel(userMod, statusMod, cmdMod, clientConfigMod *mon.Model, barrier syncx.SingleFlight) UserModel {
+func NewUserModel(userMod, statusMod, cmdMod, clientConfigMod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) UserModel {
 	m := &defaultUserModel{
 		userMod:         userMod,
 		statusMod:       statusMod,
@@ -78,7 +79,10 @@ func NewUserModel(userMod, statusMod, cmdMod, clientConfigMod *mon.Model, barrie
 	}
 	_ = m.ensureUserStatusIndexes(context.Background())
 	_ = m.ensureClientConfigIndexes(context.Background())
-	return m
+	if !enableCache || rdb == nil {
+		return m
+	}
+	return NewCachedUserModel(m, rdb, barrier)
 }
 
 // =====================================================

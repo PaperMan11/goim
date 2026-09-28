@@ -6,7 +6,9 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -45,11 +47,15 @@ type defaultConversationModel struct {
 	latestMod *mon.Model
 }
 
-func NewConversationModel(convMod, latestMod *mon.Model) ConversationModel {
-	return &defaultConversationModel{
+func NewConversationModel(convMod, latestMod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) ConversationModel {
+	m := &defaultConversationModel{
 		convMod:   convMod,
 		latestMod: latestMod,
 	}
+	if !enableCache || rdb == nil {
+		return m
+	}
+	return NewCachedConversationModel(m, rdb, barrier)
 }
 
 func (m *defaultConversationModel) InsertConversation(ctx context.Context, convs []*model.Conversation) error {

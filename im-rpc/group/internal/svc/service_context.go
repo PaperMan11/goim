@@ -52,16 +52,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	groupMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroup)
 	memberMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupMember)
-	groupInnerModel := groupModel.NewGroupModel(groupMongo, memberMongo)
-	groupCacheModel := groupModel.NewCachedGroupModel(groupInnerModel, redisCli, singleFlight)
-
-	versionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupVersion)
-	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, singleFlight)
+	groupVersionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupVersion)
+	groupCacheModel := groupModel.NewGroupModel(groupMongo, memberMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	versionLogModel := versionLogModel.NewVersionLogModel(groupVersionMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	friendReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriendRequest)
 	groupReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupRequest)
-	reqInnerModel := requestModel.NewRequestModel(friendReqMongo, groupReqMongo)
-	reqCacheModel := requestModel.NewCachedRequestModel(reqInnerModel, redisCli, singleFlight)
+	reqCacheModel := requestModel.NewRequestModel(friendReqMongo, groupReqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	sc := &ServiceContext{
 		Config:          c,
@@ -98,8 +95,8 @@ func (sc *ServiceContext) initRpcClient() {
 		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
 	}
 
-	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
-	sc.MsgService = msgServiceCache.NewMsgServiceWrapperCache(msgService, sc.LocalCache)
+	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache, sc.Config.UserRpc.EnableCache)
+	sc.MsgService = msgServiceCache.NewMsgServiceWrapperCache(msgService, sc.LocalCache, sc.Config.MsgRpc.EnableCache)
 	sc.AuthVerifier = authverify.NewAuthVerify(sc.UserService)
 	// notification dispatcher
 	sc.NotificationSender = notification.NewNotificationSender(msgService, userService, sc.RequestModel, sc.GroupModel, sc.VersionLogModel)

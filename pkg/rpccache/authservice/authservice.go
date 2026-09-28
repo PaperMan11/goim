@@ -19,10 +19,17 @@ type AuthService struct {
 	localCache localcache.LocalCache
 }
 
-func NewAuthServiceWrapperCache(authService authservice.AuthService, cache localcache.LocalCache) AuthServiceWrapperCache {
-	return &AuthService{
-		AuthService: authService,
-		localCache:  cache,
+func NewAuthServiceWrapperCache(authService authservice.AuthService, cache localcache.LocalCache, enableCache bool) AuthServiceWrapperCache {
+	if !enableCache {
+		return &AuthService{
+			AuthService: authService,
+			localCache:  nil,
+		}
+	} else {
+		return &AuthService{
+			AuthService: authService,
+			localCache:  cache,
+		}
 	}
 }
 

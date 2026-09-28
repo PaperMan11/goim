@@ -54,6 +54,7 @@ AuthRpc:
       - 192.168.241.128:2379
     Key: auth.rpc
   Stub: false
+  EnableCache: false
 
 UserRpc:
   Etcd:
@@ -61,6 +62,7 @@ UserRpc:
       - 192.168.241.128:2379
     Key: user.rpc
   Stub: false
+  EnableCache: false
 
 MsgRpc:
   Etcd:
@@ -68,6 +70,7 @@ MsgRpc:
       - 192.168.241.128:2379
     Key: msg.rpc
   Stub: false
+  EnableCache: false
 
 PushRpc:
   Etcd:
@@ -75,3 +78,4 @@ PushRpc:
       - 192.168.241.128:2379
     Key: push.rpc
   Stub: false
+  EnableCache: false

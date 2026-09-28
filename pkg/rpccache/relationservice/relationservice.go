@@ -18,10 +18,17 @@ type RelationService struct {
 	localCache localcache.LocalCache
 }
 
-func NewRelationServiceWrapperCache(relationService relationservice.RelationService, cache localcache.LocalCache) RelationServiceWrapperCache {
-	return &RelationService{
-		RelationService: relationService,
-		localCache:      cache,
+func NewRelationServiceWrapperCache(relationService relationservice.RelationService, cache localcache.LocalCache, enableCache bool) RelationServiceWrapperCache {
+	if !enableCache {
+		return &RelationService{
+			RelationService: relationService,
+			localCache:      nil,
+		}
+	} else {
+		return &RelationService{
+			RelationService: relationService,
+			localCache:      cache,
+		}
 	}
 }
 

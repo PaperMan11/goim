@@ -34,6 +34,7 @@ AuthRpc:
       - 127.0.0.1:2379
     Key: auth.rpc
   Stub: false
+  EnableCache: false
 
 UserRpc:
   Etcd:
@@ -41,6 +42,7 @@ UserRpc:
       - 127.0.0.1:2379
     Key: user.rpc
   Stub: false
+  EnableCache: false
 
 MsgRpc:
   Etcd:
@@ -48,6 +50,7 @@ MsgRpc:
       - 127.0.0.1:2379
     Key: msg.rpc
   Stub: false
+  EnableCache: false
 
 PushRpc:
   Etcd:
@@ -55,6 +58,7 @@ PushRpc:
       - 127.0.0.1:2379
     Key: push.rpc
   Stub: false
+  EnableCache: false
 
 GatewayRpc:
   Etcd:
@@ -62,6 +66,7 @@ GatewayRpc:
       - 127.0.0.1:2379
     Key: msggateway.rpc
   Stub: false
+  EnableCache: false
 
 GroupRpc:
   Etcd:
@@ -69,6 +74,7 @@ GroupRpc:
       - 127.0.0.1:2379
     Key: group.rpc
   Stub: false
+  EnableCache: false
 
 ConversationRpc:
   Etcd:
@@ -76,3 +82,4 @@ ConversationRpc:
       - 127.0.0.1:2379
     Key: conversation.rpc
   Stub: false
+  EnableCache: false

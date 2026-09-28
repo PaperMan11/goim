@@ -26,6 +26,7 @@ ConvRpc:
       - 127.0.0.1:2379
     Key: conversation.rpc
   Stub: false
+  EnableCache: false
 
 MsgRpc:
   Etcd:
@@ -33,3 +34,4 @@ MsgRpc:
       - 127.0.0.1:2379
     Key: msg.rpc
   Stub: false
+  EnableCache: false

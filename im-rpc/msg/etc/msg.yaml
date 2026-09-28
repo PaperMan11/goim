@@ -33,6 +33,7 @@ LocalCacheConf:
 Mongo:
   Uri: mongodb://root:123456@127.0.0.1:27017/?authSource=admin
   Database: goim
+  EnableCache: false
 
 MsgTransferProducer:
   Brokers:
@@ -55,6 +56,7 @@ UserRpc:
       - 127.0.0.1:2379
     Key: user.rpc
   Stub: false
+  EnableCache: false
 
 ConvRpc:
   Etcd:
@@ -62,6 +64,7 @@ ConvRpc:
       - 127.0.0.1:2379
     Key: conversation.rpc
   Stub: false
+  EnableCache: false
 
 RelationRpc:
   Etcd:
@@ -69,6 +72,7 @@ RelationRpc:
       - 127.0.0.1:2379
     Key: relation.rpc
   Stub: false
+  EnableCache: false
 
 GroupRpc:
   Etcd:
@@ -76,6 +80,7 @@ GroupRpc:
       - 127.0.0.1:2379
     Key: group.rpc
   Stub: false
+  EnableCache: false
 
 MsgRpc:
   Etcd:
@@ -83,3 +88,4 @@ MsgRpc:
       - 127.0.0.1:2379
     Key: msg.rpc
   Stub: false
+  EnableCache: false

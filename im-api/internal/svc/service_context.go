@@ -95,12 +95,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()
 
-	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache)
-	convServiceWrapperCache = convServiceCache.NewConversationServiceWrapperCache(convService, localCache)
-	relationServiceWrapperCache = relationServiceCache.NewRelationServiceWrapperCache(relationService, localCache)
-	groupServiceWrapperCache = groupServiceCache.NewGroupServiceWrapperCache(groupService, localCache)
-	msgServiceWrapperCache = msgServiceCache.NewMsgServiceWrapperCache(msgService, localCache)
-	authServiceWrapperCache = authserviceCache.NewAuthServiceWrapperCache(authService, localCache)
+	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache, c.UserRpc.EnableCache)
+	convServiceWrapperCache = convServiceCache.NewConversationServiceWrapperCache(convService, localCache, c.ConvRpc.EnableCache)
+	relationServiceWrapperCache = relationServiceCache.NewRelationServiceWrapperCache(relationService, localCache, c.RelationRpc.EnableCache)
+	groupServiceWrapperCache = groupServiceCache.NewGroupServiceWrapperCache(groupService, localCache, c.GroupRpc.EnableCache)
+	msgServiceWrapperCache = msgServiceCache.NewMsgServiceWrapperCache(msgService, localCache, c.MsgRpc.EnableCache)
+	authServiceWrapperCache = authserviceCache.NewAuthServiceWrapperCache(authService, localCache, c.AuthRpc.EnableCache)
 	// authVerifier := authverify.NewAuthVerify(userServiceWrapperCache)
 
 	return &ServiceContext{

@@ -50,7 +50,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		userServiceWrapperCache userServiceCache.UserServiceWrapperCache
 	)
 	userService = userservice.NewUserService(userClient)
-	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache)
+	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache, c.UserRpc.EnableCache)
 
 	return &ServiceContext{
 		Config:            c,

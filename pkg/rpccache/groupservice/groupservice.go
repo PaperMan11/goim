@@ -23,10 +23,17 @@ type GroupService struct {
 	localCache localcache.LocalCache
 }
 
-func NewGroupServiceWrapperCache(groupService groupservice.GroupService, cache localcache.LocalCache) GroupServiceWrapperCache {
-	return &GroupService{
-		GroupService: groupService,
-		localCache:   cache,
+func NewGroupServiceWrapperCache(groupService groupservice.GroupService, cache localcache.LocalCache, enableCache bool) GroupServiceWrapperCache {
+	if !enableCache {
+		return &GroupService{
+			GroupService: groupService,
+			localCache:   nil,
+		}
+	} else {
+		return &GroupService{
+			GroupService: groupService,
+			localCache:   cache,
+		}
 	}
 }
 

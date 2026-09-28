@@ -58,27 +58,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	convMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionConversation)
 	latestMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionConversationLatestMsg)
-	convInnerModel := conversationModel.NewConversationModel(convMongo, latestMongo)
-	convCacheModel := conversationModel.NewCachedConversationModel(convInnerModel, redisCli, singleFlight)
+	convCacheModel := conversationModel.NewConversationModel(convMongo, latestMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
-	versionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupVersion)
-	versionLogModel := versionLogModel.NewCachedVersionLogModelFromMongo(versionMongo, redisCli, singleFlight)
+	versionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionConversationVersion)
+	versionLogModel := versionLogModel.NewVersionLogModel(versionMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	// seq 表：全局会话级 + 用户级（含 read_seq）
 	seqConvMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqConversation)
-	seqConvInner := seqConversationModel.NewSeqConversationModel(seqConvMongo)
-	seqConvCache := seqConversationModel.NewCachedSeqConversationModel(seqConvInner, redisCli, singleFlight)
+	seqConvCacheModel := seqConversationModel.NewSeqConversationModel(seqConvMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	seqUserMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqUser)
-	seqUserInner := seqUserModel.NewSeqUserModel(seqUserMongo)
-	seqUserCache := seqUserModel.NewCachedSeqUserModel(seqUserInner, redisCli, singleFlight)
+	seqUserCacheModel := seqUserModel.NewSeqUserModel(seqUserMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	sc := &ServiceContext{
 		Config:               c,
 		ConversationModel:    convCacheModel,
 		VersionLogModel:      versionLogModel,
-		SeqUserModel:         seqUserCache,
-		SeqConversationModel: seqConvCache,
+		SeqUserModel:         seqUserCacheModel,
+		SeqConversationModel: seqConvCacheModel,
 		LocalCache:           localCache,
 		RedisCli:             redisCli,
 		SingleFlight:         singleFlight,
@@ -114,9 +111,9 @@ func (sc *ServiceContext) initRpcClient() {
 	} else {
 		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(sc.Config.MsgRpc.RpcClientConf, clientOpts...))
 	}
-	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache)
-	sc.GroupService = groupServiceCache.NewGroupServiceWrapperCache(groupService, sc.LocalCache)
-	sc.MsgService = msgServiceCache.NewMsgServiceWrapperCache(msgService, sc.LocalCache)
+	sc.UserService = userServiceCache.NewUserServiceWrapperCache(userService, sc.LocalCache, sc.Config.UserRpc.EnableCache)
+	sc.GroupService = groupServiceCache.NewGroupServiceWrapperCache(groupService, sc.LocalCache, sc.Config.GroupRpc.EnableCache)
+	sc.MsgService = msgServiceCache.NewMsgServiceWrapperCache(msgService, sc.LocalCache, sc.Config.MsgRpc.EnableCache)
 
 	sc.AuthVerifier = authverify.NewAuthVerify(sc.UserService)
 	sc.NotificationSender = notification.NewNotificationSender(sc.MsgService, sc.UserService)

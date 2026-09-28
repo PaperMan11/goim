@@ -72,12 +72,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	msgMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionMessage)
 	convSeqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqConversation)
 	userSeqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqUser)
-	msgInnerModel := msgModel.NewMsgModel(msgMongo)
-	seqUserInnerModel := seqUserModel.NewSeqUserModel(userSeqMongo)
-	seqConversationInnerModel := seqConversationModel.NewSeqConversationModel(convSeqMongo)
-	msgModel := msgModel.NewCachedMsgModel(msgInnerModel, redisCli, singleFlight)
-	seqUserModel := seqUserModel.NewCachedSeqUserModel(seqUserInnerModel, redisCli, singleFlight)
-	seqConversationModel := seqConversationModel.NewCachedSeqConversationModel(seqConversationInnerModel, redisCli, singleFlight)
+	msgModel := msgModel.NewMsgModel(msgMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	seqUserModel := seqUserModel.NewSeqUserModel(userSeqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	seqConversationModel := seqConversationModel.NewSeqConversationModel(convSeqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	clientOpts := []zrpc.ClientOption{
 		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
@@ -124,11 +121,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		msgService = msgservice.NewMsgService(rpcclient.MustNewClient(c.MsgRpc.RpcClientConf, clientOpts...))
 	}
 
-	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache)
+	userServiceWrapperCache = userServiceCache.NewUserServiceWrapperCache(userService, localCache, c.UserRpc.EnableCache)
 	authVerifier := authverify.NewAuthVerify(userServiceWrapperCache)
-	convServiceWrapperCache = convServiceCache.NewConversationServiceWrapperCache(convService, localCache)
-	relationServiceWrapperCache = relationServiceCache.NewRelationServiceWrapperCache(relationService, localCache)
-	groupServiceWrapperCache = groupServiceCache.NewGroupServiceWrapperCache(groupService, localCache)
+	convServiceWrapperCache = convServiceCache.NewConversationServiceWrapperCache(convService, localCache, c.ConvRpc.EnableCache)
+	relationServiceWrapperCache = relationServiceCache.NewRelationServiceWrapperCache(relationService, localCache, c.RelationRpc.EnableCache)
+	groupServiceWrapperCache = groupServiceCache.NewGroupServiceWrapperCache(groupService, localCache, c.GroupRpc.EnableCache)
 
 	// msg transfer producer
 	msgTransferProducer := kafkax.MustNewProducer(c.MsgTransferProducer)

@@ -6,7 +6,9 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -31,10 +33,14 @@ type defaultSeqUserModel struct {
 	mod *mon.Model
 }
 
-func NewSeqUserModel(mod *mon.Model) SeqUserModel {
-	return &defaultSeqUserModel{
+func NewSeqUserModel(mod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) SeqUserModel {
+	m := &defaultSeqUserModel{
 		mod: mod,
 	}
+	if !enableCache || rdb == nil {
+		return m
+	}
+	return NewCachedSeqUserModel(m, rdb, barrier)
 }
 
 func (s *defaultSeqUserModel) UpsertUserSeq(ctx context.Context, userID, conversationID string, minSeq, maxSeq, readSeq int64) error {
