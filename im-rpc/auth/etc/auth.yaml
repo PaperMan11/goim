@@ -11,7 +11,7 @@ Log:
   Stat: false # go-zero 版本 >= 1.5.0 才支持
   Mode: file
   Encoding: plain
-  Path: logs/auth-rpc
+  Path: /var/log/goim/auth-rpc
   Level: debug
 
 Prometheus:
