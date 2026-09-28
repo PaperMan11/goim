@@ -17,6 +17,7 @@ func InitRoutes(svc *svc.ServiceContext) *gin.Engine {
 	r := gin.New()
 	r.Use(middlewares.Logger(), middlewares.Recovery())
 	r.Use(middlewares.Cors())
+	r.Use(middlewares.ParseOperationID, middlewares.Auth(svc))
 	baseRoute := r.Group("/api/v1")
 
 	auth.InitRoutes(baseRoute, svc)

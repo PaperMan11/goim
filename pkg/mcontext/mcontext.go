@@ -4,42 +4,43 @@ import (
 	"context"
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
+	"github.com/PaperMan11/goim/pkg/utils/convert"
 )
 
 func GetOpUserIDFromContext(ctx context.Context) string {
-	return ctx.Value(constant.OpUserID).(string)
+	return convert.ToString(ctx.Value(constant.OpUserID))
 }
 
 func GetOpUserPlatformFromContext(ctx context.Context) string {
-	return ctx.Value(constant.OpUserPlatform).(string)
+	return convert.ToString(ctx.Value(constant.OpUserPlatform))
 }
 
 func GetConnIDFromContext(ctx context.Context) string {
-	return ctx.Value(constant.ConnID).(string)
+	return convert.ToString(ctx.Value(constant.ConnID))
 }
 
 func GetTokenFromContext(ctx context.Context) string {
-	return ctx.Value(constant.Token).(string)
+	return convert.ToString(ctx.Value(constant.Token))
 }
 
 func GetTriggerIDFromContext(ctx context.Context) string {
-	return ctx.Value(constant.TriggerID).(string)
+	return convert.ToString(ctx.Value(constant.TriggerID))
 }
 
 func GetClientIPFromContext(ctx context.Context) string {
-	return ctx.Value(constant.ClientIP).(string)
+	return convert.ToString(ctx.Value(constant.ClientIP))
 }
 
 func GetOperationIDFromContext(ctx context.Context) string {
-	return ctx.Value(constant.OperationID).(string)
+	return convert.ToString(ctx.Value(constant.OperationID))
 }
 
 func GetRpcCustomHeaderFromContext(ctx context.Context) []string {
-	return ctx.Value(constant.RpcCustomHeader).([]string)
+	return convert.ToStringSlice(ctx.Value(constant.RpcCustomHeader))
 }
 
 func GetCheckKeyFromContext(ctx context.Context) string {
-	return ctx.Value(constant.CheckKey).(string)
+	return convert.ToString(ctx.Value(constant.CheckKey))
 }
 
 // ------------------------------------------------------------------------------------

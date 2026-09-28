@@ -33,9 +33,9 @@ func (l *GetAdminTokenLogic) GetAdminToken(req *auth.GetAdminTokenReq) (*auth.Ge
 		return nil, err
 	}
 
-	if err := requireUserIsValid(l.ctx, l.svcCtx, l, req.UserID); err != nil {
-		return nil, err
-	}
+	// if err := requireUserIsValid(l.ctx, l.svcCtx, l, req.UserID); err != nil {
+	// 	return nil, err
+	// }
 
 	// generate admin token
 	adminTokenInfo, err := l.generateAdminToken(l.ctx, req.UserID)

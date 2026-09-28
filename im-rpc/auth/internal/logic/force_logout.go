@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/PaperMan11/goim/im-rpc/auth/internal/svc"
+	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/protocol/auth"
 	pbmsggateway "github.com/PaperMan11/goim/pkg/protocol/msggateway"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -24,7 +25,7 @@ func NewForceLogoutLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Force
 }
 
 func (l *ForceLogoutLogic) ForceLogout(req *auth.ForceLogoutReq) (*auth.ForceLogoutResp, error) {
-	if err := requireUserIsAdmin(l.ctx, l.svcCtx, l, req.UserID); err != nil {
+	if err := requireUserIsAdmin(l.ctx, l.svcCtx, l, mcontext.GetOpUserIDFromContext(l.ctx)); err != nil {
 		return nil, err
 	}
 

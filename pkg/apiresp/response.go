@@ -42,6 +42,6 @@ func Error(w http.ResponseWriter, err error) {
 	errInfo := errx.ParseError(err)
 	httpx.OkJson(w, &Body{
 		Code: errInfo.Code,
-		Msg:  errInfo.Message,
+		Msg:  errInfo.Error(),
 	})
 }

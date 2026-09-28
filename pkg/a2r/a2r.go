@@ -16,7 +16,7 @@ func Call[A, B any](c *gin.Context, rpc func(ctx context.Context, req A, opts ..
 		return
 	}
 
-	resp, err := rpc(c.Request.Context(), req)
+	resp, err := rpc(c, req)
 	if err != nil {
 		writeErr(c, err)
 		return
