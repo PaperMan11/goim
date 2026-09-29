@@ -90,7 +90,7 @@ func (l *Logic) ProcessUserCommandGet(ctx context.Context, req *pbuser.ProcessUs
 
 	cmds, err := l.svcCtx.UserModel.GetUserCommands(ctx, req.GetUserID(), req.GetType())
 	if err != nil {
-		l.Errorf("GetUserCommands err: %v", err)
+		l.Errorf("GetUserCommands failed, userID: %s, type: %d, err: %v", req.GetUserID(), req.GetType(), err)
 		return nil, err
 	}
 
@@ -105,7 +105,9 @@ func (l *Logic) ProcessUserCommandGet(ctx context.Context, req *pbuser.ProcessUs
 		})
 	}
 
-	return &pbuser.ProcessUserCommandGetResp{}, nil
+	return &pbuser.ProcessUserCommandGetResp{
+		CommandResp: commands,
+	}, nil
 }
 
 func (l *Logic) ProcessUserCommandGetAll(ctx context.Context, req *pbuser.ProcessUserCommandGetAllReq) (*pbuser.ProcessUserCommandGetAllResp, error) {

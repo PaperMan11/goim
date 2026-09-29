@@ -30,28 +30,28 @@ func (l *Logic) AddNotificationAccount(ctx context.Context, req *pbuser.AddNotif
 		userID = "notification_" + randomPart
 	} else {
 		userID = req.GetUserID()
-		_, err := l.svcCtx.UserModel.FindByID(ctx, userID)
+		exists, err := l.svcCtx.UserModel.CheckExists(ctx, []string{userID})
 		if err != nil {
-			if err == userModel.ErrUserNotFound {
-				return nil, errx.ArgsError.Wrap("user not found")
-			}
 			l.Errorf("find user failed, userID: %s, err: %v", userID, err)
 			return nil, err
 		}
-		err = l.svcCtx.UserModel.UpdateEx(ctx, userID, map[string]any{
-			"app_manager_level": req.GetAppMangerLevel(),
-			"updated_at":        timex.Now(),
-		})
-		if err != nil {
-			l.Errorf("update user permission failed, userID: %s, err: %v", userID, err)
-			return nil, err
+
+		if exists[userID] {
+			err = l.svcCtx.UserModel.UpdateEx(ctx, userID, map[string]any{
+				"app_manager_level": req.GetAppMangerLevel(),
+				"updated_at":        timex.Now(),
+			})
+			if err != nil {
+				l.Errorf("update user permission failed, userID: %s, err: %v", userID, err)
+				return nil, err
+			}
+			return &pbuser.AddNotificationAccountResp{
+				UserID:         userID,
+				FaceURL:        req.GetFaceURL(),
+				NickName:       req.GetNickName(),
+				AppMangerLevel: req.GetAppMangerLevel(),
+			}, nil
 		}
-		return &pbuser.AddNotificationAccountResp{
-			UserID:         userID,
-			FaceURL:        req.GetFaceURL(),
-			NickName:       req.GetNickName(),
-			AppMangerLevel: req.GetAppMangerLevel(),
-		}, nil
 	}
 
 	now := timex.Now()

@@ -35,8 +35,29 @@ func (l *Logic) UpdateUserInfo(ctx context.Context, req *pbuser.UpdateUserInfoRe
 		return nil, errx.ArgsError.Wrap("user info is nil")
 	}
 
-	user := mconvert.PbToModelUserInfo(userInfo)
-	err := l.svcCtx.UserModel.Update(ctx, user)
+	user, err := l.svcCtx.UserModel.FindByID(ctx, userInfo.GetUserID())
+	if err != nil {
+		l.Errorf("find user by ID failed, userID: %s, err: %v", userInfo.GetUserID(), err)
+		return nil, errx.UserIDNotFoundError
+	}
+
+	if userInfo.Nickname != user.Nickname {
+		user.Nickname = userInfo.Nickname
+	}
+	if userInfo.FaceURL != user.FaceURL {
+		user.FaceURL = userInfo.FaceURL
+	}
+	if userInfo.Ex != user.Extra {
+		user.Extra = userInfo.Ex
+	}
+	if userInfo.AppMangerLevel != int32(user.AppManagerLevel) {
+		user.AppManagerLevel = int(userInfo.AppMangerLevel)
+	}
+	if userInfo.GlobalRecvMsgOpt != int32(user.GlobalRecvMsgOpt) {
+		user.GlobalRecvMsgOpt = int(userInfo.GlobalRecvMsgOpt)
+	}
+
+	err = l.svcCtx.UserModel.Update(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +123,9 @@ func (l *Logic) GetPaginationUsers(ctx context.Context, req *pbuser.GetPaginatio
 	size := int64(20)
 	if pagination != nil {
 		page = int64(pagination.GetPageNumber())
+		if page <= 0 {
+			page = 1
+		}
 		size = int64(pagination.GetShowNumber())
 	}
 

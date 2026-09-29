@@ -31,7 +31,7 @@ func NewLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Logic {
 
 func (l *Logic) requireSelfOrAdmin(targetUserID string) error {
 	opUserID := mcontext.GetOpUserIDFromContext(l.ctx)
-	ok, err := l.svcCtx.AuthVerifier.CheckAccess(l.ctx, targetUserID)
+	ok, err := l.svcCtx.AuthVerifier.CheckAccess(l.ctx, targetUserID, opUserID)
 	if err != nil {
 		l.Errorf("check access failed, opUserID=%s targetUserID=%s err=%v", opUserID, targetUserID, err)
 		return errx.InternalError.WrapWithError(err)

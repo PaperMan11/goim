@@ -80,7 +80,7 @@ func (h *HubServer) requireAdmin(ctx context.Context) error {
 // requireSelfOrAdmin 校验：操作人必须是 targetUserID 本人，或是 IM 管理员。
 func (h *HubServer) requireSelfOrAdmin(ctx context.Context, targetUserID string) error {
 	opUserID := mcontext.GetOpUserIDFromContext(ctx)
-	ok, err := h.authVerifier.CheckAccess(ctx, targetUserID)
+	ok, err := h.authVerifier.CheckAccess(ctx, targetUserID, opUserID)
 	if err != nil {
 		logc.Errorf(ctx, "check access failed, opUserID=%s targetUserID=%s err=%v", opUserID, targetUserID, err)
 		return errx.InternalError.WrapWithError(err)
