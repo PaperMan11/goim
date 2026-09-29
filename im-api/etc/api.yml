@@ -27,6 +27,7 @@ LocalCacheConf:
 Mongo:
   Uri: mongodb://root:123456@127.0.0.1:27017/?authSource=admin
   Database: goim
+  EnableCache: false
 
 AuthRpc:
   Etcd:
