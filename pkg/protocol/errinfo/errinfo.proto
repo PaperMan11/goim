@@ -11,3 +11,10 @@ message ErrorInfo {
   string cause = 4;
   repeated string warp = 5;
 }
+
+// ErrDetail 携带跨 gRPC 传输的业务错误码与错误信息，
+// 由服务端通过 status.WithDetails 附加，客户端解析后还原为 errx.ErrInfo。
+message ErrDetail {
+  uint32 code = 1;
+  string message = 2;
+}

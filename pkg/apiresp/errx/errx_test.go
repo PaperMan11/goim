@@ -4,6 +4,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestErrInfo_Wrap_Chain(t *testing.T) {
@@ -59,4 +62,69 @@ func TestErrInfo_Error_ChainFormat(t *testing.T) {
 	errorStr := chainErr.Error()
 	t.Log(errorStr)
 	t.Log(errors.As(chainErr, &baseErr))
+}
+
+func TestParseError_PlainGRPCError_StripsPrefix(t *testing.T) {
+	// 模拟 RPC 返回的普通错误：errors.New("group request not found")
+	rpcErr := status.Error(codes.Unknown, "group request not found")
+
+	errInfo := ParseError(rpcErr)
+	if errInfo.Code != ErrCodeInternalError {
+		t.Errorf("expected code %d, got %d", ErrCodeInternalError, errInfo.Code)
+	}
+	if errInfo.Error() != "group request not found" {
+		t.Errorf("expected clean desc, got %q", errInfo.Error())
+	}
+	if strings.Contains(errInfo.Error(), "rpc error") {
+		t.Errorf("message must not contain rpc error prefix, got %q", errInfo.Error())
+	}
+}
+
+func TestParseError_ErrxRoundTripThroughGRPC(t *testing.T) {
+	// 服务端逻辑返回的自定义 errx（含 Wrap 上下文）
+	serverErr := ArgsError.Wrap("userID and groupID are required")
+
+	// gRPC 核心通过 GRPCStatus() 转成 status error 发给客户端，
+	// 等价于 grpc server 内部调用 status.FromError(serverErr)
+	rpcErr := serverErr.GRPCStatus().Err()
+
+	errInfo := ParseError(rpcErr)
+	if errInfo.Code != ErrCodeArgsError {
+		t.Errorf("expected code %d, got %d", ErrCodeArgsError, errInfo.Code)
+	}
+	if !strings.Contains(errInfo.Error(), "input parameter error") ||
+		!strings.Contains(errInfo.Error(), "userID and groupID are required") {
+		t.Errorf("expected full chain message, got %q", errInfo.Error())
+	}
+	if strings.Contains(errInfo.Error(), "rpc error") {
+		t.Errorf("message must not contain rpc error prefix, got %q", errInfo.Error())
+	}
+}
+
+func TestParseError_DirectErrInfo(t *testing.T) {
+	errInfo := ParseError(TokenNotExistError)
+	if errInfo != TokenNotExistError {
+		t.Error("expected the original *ErrInfo to be returned")
+	}
+}
+
+func TestWrapWithError_GRPCError_StripsPrefix(t *testing.T) {
+	rpcErr := status.Error(codes.Unavailable, `connection error: desc = "transport: dial refused"`)
+	errInfo := TokenNotValidYetError.WrapWithError(rpcErr)
+
+	if !strings.HasPrefix(errInfo.Error(), "token is not valid yet") {
+		t.Errorf("expected base message first, got %q", errInfo.Error())
+	}
+	if strings.Contains(errInfo.Error(), "rpc error: code") {
+		t.Errorf("wrapped message must not contain rpc prefix, got %q", errInfo.Error())
+	}
+	if !strings.Contains(errInfo.Error(), "dial refused") {
+		t.Errorf("expected grpc desc to be kept, got %q", errInfo.Error())
+	}
+}
+
+func TestParseError_Nil(t *testing.T) {
+	if errInfo := ParseError(nil); errInfo != nil {
+		t.Errorf("expected nil, got %v", errInfo)
+	}
 }

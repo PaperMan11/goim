@@ -97,6 +97,60 @@ func (x *ErrorInfo) GetWarp() []string {
 	return nil
 }
 
+// ErrDetail 携带跨 gRPC 传输的业务错误码与错误信息，
+// 由服务端通过 status.WithDetails 附加，客户端解析后还原为 errx.ErrInfo。
+type ErrDetail struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          uint32                 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ErrDetail) Reset() {
+	*x = ErrDetail{}
+	mi := &file_errinfo_errinfo_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ErrDetail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ErrDetail) ProtoMessage() {}
+
+func (x *ErrDetail) ProtoReflect() protoreflect.Message {
+	mi := &file_errinfo_errinfo_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ErrDetail.ProtoReflect.Descriptor instead.
+func (*ErrDetail) Descriptor() ([]byte, []int) {
+	return file_errinfo_errinfo_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ErrDetail) GetCode() uint32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ErrDetail) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_errinfo_errinfo_proto protoreflect.FileDescriptor
 
 const file_errinfo_errinfo_proto_rawDesc = "" +
@@ -107,7 +161,10 @@ const file_errinfo_errinfo_proto_rawDesc = "" +
 	"\x04line\x18\x02 \x01(\rR\x04line\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
 	"\x05cause\x18\x04 \x01(\tR\x05cause\x12\x12\n" +
-	"\x04warp\x18\x05 \x03(\tR\x04warpB1Z/github.com/PaperMan11/goim/pkg/protocol/errinfob\x06proto3"
+	"\x04warp\x18\x05 \x03(\tR\x04warp\"9\n" +
+	"\tErrDetail\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\rR\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessageB1Z/github.com/PaperMan11/goim/pkg/protocol/errinfob\x06proto3"
 
 var (
 	file_errinfo_errinfo_proto_rawDescOnce sync.Once
@@ -121,9 +178,10 @@ func file_errinfo_errinfo_proto_rawDescGZIP() []byte {
 	return file_errinfo_errinfo_proto_rawDescData
 }
 
-var file_errinfo_errinfo_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_errinfo_errinfo_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_errinfo_errinfo_proto_goTypes = []any{
 	(*ErrorInfo)(nil), // 0: openim.errinfo.ErrorInfo
+	(*ErrDetail)(nil), // 1: openim.errinfo.ErrDetail
 }
 var file_errinfo_errinfo_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -144,7 +202,7 @@ func file_errinfo_errinfo_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_errinfo_errinfo_proto_rawDesc), len(file_errinfo_errinfo_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
