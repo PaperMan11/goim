@@ -7,6 +7,7 @@ import (
 	"github.com/PaperMan11/goim/im-rpc/auth/internal/svc"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
+	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/protocol/auth"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/token"
@@ -31,7 +32,8 @@ func NewGetUserTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetU
 }
 
 func (l *GetUserTokenLogic) GetUserToken(req *auth.GetUserTokenReq) (*auth.GetUserTokenResp, error) {
-	if err := requireUserIsAdmin(l.ctx, l.svcCtx, l, req.UserID); err != nil {
+	opUserID := mcontext.GetOpUserIDFromContext(l.ctx)
+	if err := requireUserIsAdmin(l.ctx, l.svcCtx, l, opUserID); err != nil {
 		return nil, err
 	}
 

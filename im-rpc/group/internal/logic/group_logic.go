@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
@@ -16,6 +17,7 @@ import (
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	groupModel "github.com/PaperMan11/goim/pkg/storage/mongo/group"
+	reqModel "github.com/PaperMan11/goim/pkg/storage/mongo/request"
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/PaperMan11/goim/pkg/utils/hash"
@@ -24,37 +26,64 @@ import (
 
 // ==================== 群组管理 ====================
 
+func (l *Logic) checkGroupExists(ctx context.Context, groupID string) (bool, error) {
+	exists, err := l.svcCtx.GroupModel.CheckGroupExists(ctx, []string{groupID})
+	if err != nil {
+		l.Errorf("check group exists failed, groupID: %s, err: %v", groupID, err)
+		return false, err
+	}
+	return exists[groupID], nil
+}
+
 func (l *Logic) CreateGroup(ctx context.Context, req *pbgroup.CreateGroupReq) (*pbgroup.CreateGroupResp, error) {
+	if err := l.requireSelfOrAdmin(req.OwnerUserID); err != nil {
+		return nil, err
+	}
+
 	groupInfo := req.GetGroupInfo()
 	if groupInfo == nil {
 		return nil, errx.ArgsError.Wrap("group info is required")
 	}
-	if groupInfo.GetGroupType() != constant.WorkingGroup {
-		return nil, errx.ArgsError.Wrap("group type must be working group")
+	// if groupInfo.GetGroupType() != constant.WorkingGroup {
+	// 	return nil, errx.ArgsError.Wrap("group type must be working group")
+	// }
+
+	groupID := groupInfo.GetGroupID()
+	if groupID == "" {
+		groupID = l.generateGroupID()
+	}
+	exists, err := l.checkGroupExists(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		l.Errorf("groupID %s already exists", groupID)
+		return nil, errx.ArgsError.Wrap("groupID already exists")
 	}
 
 	memberUserIDs := req.GetMemberUserIDs()
 	adminUserIDs := req.GetAdminUserIDs()
 	ownerUserID := req.GetOwnerUserID()
-
 	now := timex.Now()
 	group := &model.Group{
-		GroupID:           groupInfo.GetGroupID(),
-		GroupName:         groupInfo.GetGroupName(),
-		Notification:      groupInfo.GetNotification(),
-		Introduction:      groupInfo.GetIntroduction(),
-		FaceURL:           groupInfo.GetFaceURL(),
-		OwnerUserID:       ownerUserID,
-		MemberCount:       len(memberUserIDs) + 1,
-		Extra:             groupInfo.GetEx(),
-		Status:            int(groupInfo.GetStatus()),
-		GroupType:         int(groupInfo.GetGroupType()),
-		NeedVerification:  int(groupInfo.GetNeedVerification()),
-		LookMemberInfo:    int(groupInfo.GetLookMemberInfo()),
-		ApplyMemberFriend: int(groupInfo.GetApplyMemberFriend()),
-		CreatorUserID:     ownerUserID,
-		CreateTime:        now,
-		UpdatedAt:         now,
+		GroupID:                groupID,
+		GroupName:              groupInfo.GetGroupName(),
+		Notification:           groupInfo.GetNotification(),
+		Introduction:           groupInfo.GetIntroduction(),
+		FaceURL:                groupInfo.GetFaceURL(),
+		OwnerUserID:            ownerUserID,
+		MemberCount:            len(memberUserIDs),
+		Extra:                  groupInfo.GetEx(),
+		Status:                 int(groupInfo.GetStatus()),
+		GroupType:              int(groupInfo.GetGroupType()),
+		NeedVerification:       int(groupInfo.GetNeedVerification()),
+		LookMemberInfo:         int(groupInfo.GetLookMemberInfo()),
+		ApplyMemberFriend:      int(groupInfo.GetApplyMemberFriend()),
+		CreatorUserID:          ownerUserID,
+		CreateTime:             now,
+		UpdatedAt:              now,
+		NotificationUpdateTime: now,
+		NotificationUserID:     ownerUserID,
 	}
 
 	if err := l.svcCtx.GroupModel.InsertGroup(ctx, group); err != nil {
@@ -67,13 +96,8 @@ func (l *Logic) CreateGroup(ctx context.Context, req *pbgroup.CreateGroupReq) (*
 		roleLevel := constant.GroupOrdinaryUsers
 		if userID == ownerUserID {
 			roleLevel = constant.GroupOwner
-		} else {
-			for _, adminID := range adminUserIDs {
-				if userID == adminID {
-					roleLevel = constant.GroupAdmin
-					break
-				}
-			}
+		} else if slices.Contains(adminUserIDs, userID) {
+			roleLevel = constant.GroupAdmin
 		}
 		members = append(members, &model.GroupMember{
 			GroupID:        group.GroupID,
@@ -145,6 +169,11 @@ func (l *Logic) SetGroupInfo(ctx context.Context, req *pbgroup.SetGroupInfoReq) 
 		return nil, err
 	}
 
+	_, _, err = l.requireGroupAdmin(ctx, group.GroupID)
+	if err != nil {
+		return nil, err
+	}
+
 	now := timex.Now()
 	group.GroupName = groupInfo.GetGroupName()
 	group.FaceURL = groupInfo.GetFaceURL()
@@ -180,6 +209,17 @@ func (l *Logic) SetGroupInfoEx(ctx context.Context, req *pbgroup.SetGroupInfoExR
 	groupID := req.GetGroupID()
 	if groupID == "" {
 		return nil, errx.ArgsError.Wrap("groupID is required")
+	}
+
+	group, err := l.svcCtx.GroupModel.FindGroup(ctx, groupID)
+	if err != nil {
+		l.Errorf("find group failed, groupID: %s, err: %v", groupID, err)
+		return nil, err
+	}
+
+	_, _, err = l.requireGroupAdmin(ctx, group.GroupID)
+	if err != nil {
+		return nil, err
 	}
 
 	updates := make(map[string]any)
@@ -489,30 +529,50 @@ func (l *Logic) JoinGroup(ctx context.Context, req *pbgroup.JoinGroupReq) (*pbgr
 		groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, memberID, model.VersionStateInsert)
 		if err != nil {
 			l.Errorf("incr version log for member insert failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
+			return nil, err
 		}
 		_, err = l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(memberID), groupID, model.VersionStateInsert)
 		if err != nil {
 			l.Errorf("incr version log for member insert failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
+			return nil, err
 		}
 		// send notification
 		l.svcCtx.NotificationSender.MemberEnterNotification(ctx, group, member, uint64(groupVersionLog.Version), groupVersionLog.ID.String())
 	} else {
-		req := &model.GroupRequest{
-			UserID:     memberID,
-			ReqMsg:     req.ReqMessage,
-			GroupID:    req.GroupID,
-			JoinSource: int(req.GetJoinSource()),
-			ReqTime:    time.Now(),
-			HandleTime: now,
-			Extra:      req.GetEx(),
-		}
-		err = l.svcCtx.RequestModel.InsertGroupRequest(ctx, req)
+		var isInsert bool
+		applyReq, err := l.svcCtx.RequestModel.FindGroupRequest(ctx, memberID, groupID)
 		if err != nil {
-			l.Errorf("insert group request failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
-			return nil, err
+			if errors.Is(err, reqModel.ErrGroupRequestNotFound) {
+				isInsert = true
+			} else {
+				l.Errorf("find group request failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
+				return nil, err
+			}
+		}
+		if isInsert {
+			request := &model.GroupRequest{
+				UserID:     memberID,
+				ReqMsg:     req.ReqMessage,
+				GroupID:    req.GroupID,
+				JoinSource: int(req.GetJoinSource()),
+				ReqTime:    timex.Now(),
+				HandleTime: now,
+				Extra:      req.GetEx(),
+			}
+			err = l.svcCtx.RequestModel.InsertGroupRequest(ctx, request)
+			if err != nil {
+				l.Errorf("insert group request failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
+				return nil, err
+			}
+		} else {
+			applyReq.ReqTime = now
+			if err := l.svcCtx.RequestModel.UpsertGroupRequest(ctx, applyReq); err != nil {
+				l.Errorf("upsert group request failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
+				return nil, err
+			}
 		}
 		// send notification
-		l.svcCtx.NotificationSender.ApplyJoinGroupNotification(ctx, group, joinUser, req)
+		l.svcCtx.NotificationSender.ApplyJoinGroupNotification(ctx, group, joinUser, applyReq)
 	}
 
 	return &pbgroup.JoinGroupResp{}, nil
@@ -565,9 +625,9 @@ func (l *Logic) QuitGroup(ctx context.Context, req *pbgroup.QuitGroupReq) (*pbgr
 
 func (l *Logic) InviteUserToGroup(ctx context.Context, req *pbgroup.InviteUserToGroupReq) (*pbgroup.InviteUserToGroupResp, error) {
 	groupID := req.GetGroupID()
-	invitedUserIDs := req.GetInvitedUserIDs()
+	iUserIDs := req.GetInvitedUserIDs()
 
-	if groupID == "" || len(invitedUserIDs) == 0 {
+	if groupID == "" || len(iUserIDs) == 0 {
 		return nil, errx.ArgsError.Wrap("groupID and invitedUserIDs are required")
 	}
 
@@ -579,6 +639,17 @@ func (l *Logic) InviteUserToGroup(ctx context.Context, req *pbgroup.InviteUserTo
 	group, err := l.requireGroupNotDismissed(ctx, groupID)
 	if err != nil {
 		return nil, err
+	}
+
+	// check user is valid
+	usersResp, err := l.svcCtx.UserService.GetDesignateUsers(ctx, &pbuser.GetDesignateUsersReq{UserIDs: iUserIDs})
+	if err != nil {
+		l.Errorf("get users failed, err: %v", err)
+		return nil, err
+	}
+	invitedUserIDs := make([]string, 0, len(usersResp.GetUsersInfo()))
+	for _, user := range usersResp.GetUsersInfo() {
+		invitedUserIDs = append(invitedUserIDs, user.UserID)
 	}
 
 	inviterUser, err := l.svcCtx.GroupModel.FindMember(ctx, groupID, opUserID)
@@ -681,9 +752,9 @@ func (l *Logic) InviteUserToGroup(ctx context.Context, req *pbgroup.InviteUserTo
 
 func (l *Logic) KickGroupMember(ctx context.Context, req *pbgroup.KickGroupMemberReq) (*pbgroup.KickGroupMemberResp, error) {
 	groupID := req.GetGroupID()
-	kickedUserIDs := req.GetKickedUserIDs()
+	userIDs := req.GetKickedUserIDs()
 
-	if groupID == "" || len(kickedUserIDs) == 0 {
+	if groupID == "" || len(userIDs) == 0 {
 		return nil, errx.ArgsError.Wrap("groupID and kickedUserIDs are required")
 	}
 	group, err := l.requireGroupNotDismissed(ctx, groupID)
@@ -696,7 +767,15 @@ func (l *Logic) KickGroupMember(ctx context.Context, req *pbgroup.KickGroupMembe
 		return nil, err
 	}
 
-	var kickedMembers []*model.GroupMember
+	var kickedUserIDs []string
+	kickedMembers, err := l.svcCtx.GroupModel.FindMembersByIDs(ctx, groupID, userIDs)
+	if err != nil {
+		l.Errorf("find members failed, groupID: %s, kickedUserIDs: %v, err: %v", groupID, userIDs, err)
+		return nil, err
+	}
+	for _, member := range kickedMembers {
+		kickedUserIDs = append(kickedUserIDs, member.UserID)
+	}
 	switch roleLevel {
 	case constant.GroupOwner:
 		for _, userID := range kickedUserIDs {
@@ -706,16 +785,16 @@ func (l *Logic) KickGroupMember(ctx context.Context, req *pbgroup.KickGroupMembe
 		}
 	case constant.GroupAdmin:
 		// 检测是否有成员是群主或群管理员
-		kickedMembers, err = l.svcCtx.GroupModel.FindMembersByIDs(ctx, groupID, kickedUserIDs)
-		if err != nil {
-			l.Errorf("find members failed, groupID: %s, kickedUserIDs: %v, err: %v", groupID, kickedUserIDs, err)
-			return nil, err
-		}
 		for _, member := range kickedMembers {
 			if member.RoleLevel == constant.GroupOwner || member.RoleLevel == constant.GroupAdmin {
 				return nil, errx.ArgsError.Wrap("owner or admin cannot be kicked")
 			}
 		}
+	}
+
+	kickedUserIDs = make([]string, 0, len(kickedMembers))
+	for _, member := range kickedMembers {
+		kickedUserIDs = append(kickedUserIDs, member.UserID)
 	}
 
 	if err := l.svcCtx.GroupModel.DeleteMembers(ctx, groupID, kickedUserIDs); err != nil {
@@ -755,11 +834,15 @@ func (l *Logic) TransferGroupOwner(ctx context.Context, req *pbgroup.TransferGro
 		return nil, errx.ArgsError.Wrap("groupID, oldOwnerUserID and newOwnerUserID are required")
 	}
 
+	isSuperAdmin := false
 	opUserID, _, err := l.requireGroupOwner(ctx, groupID)
 	if err != nil {
-		return nil, err
+		isSuperAdmin = l.isSuperAdmin(opUserID)
+		if !isSuperAdmin {
+			return nil, err
+		}
 	}
-	if opUserID != oldOwnerUserID {
+	if opUserID != oldOwnerUserID && !isSuperAdmin {
 		return nil, errx.NoPermissionError
 	}
 
@@ -1027,16 +1110,18 @@ func (l *Logic) SetGroupMemberInfo(ctx context.Context, req *pbgroup.SetGroupMem
 		}
 	}
 
+	// 是否是超级管理员
+	isSuperAdmin := l.requireAdmin() == nil
 	for _, member := range members {
 		opUser, ok := groupMemberCache[member.GetGroupID()+"-"+opUserID]
-		if !ok {
+		if !ok && !isSuperAdmin {
 			continue
 		}
 		groupMember, ok := groupMemberCache[member.GetGroupID()+"-"+member.GetUserID()]
 		if !ok {
 			continue
 		}
-		if !l.requireGroupPermission(ctx, opUser, groupMember) {
+		if !isSuperAdmin && !l.requireGroupPermission(ctx, opUser, groupMember) {
 			continue
 		}
 		group, ok := groupCache[member.GetGroupID()]
@@ -1078,12 +1163,14 @@ func (l *Logic) SetGroupMemberInfo(ctx context.Context, req *pbgroup.SetGroupMem
 			}
 
 			// send notification
-			if member.RoleLevel != nil && member.RoleLevel.GetValue() == constant.GroupAdmin {
-				l.svcCtx.NotificationSender.SetGroupAdminNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
-			} else {
-				l.svcCtx.NotificationSender.SetToOrdinaryUserNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
+			if opUser != nil {
+				if member.RoleLevel != nil && member.RoleLevel.GetValue() == constant.GroupAdmin {
+					l.svcCtx.NotificationSender.SetGroupAdminNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
+				} else {
+					l.svcCtx.NotificationSender.SetToOrdinaryUserNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
+				}
+				l.svcCtx.NotificationSender.UpdateGroupMemberInfoNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
 			}
-			l.svcCtx.NotificationSender.UpdateGroupMemberInfoNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
 		}
 	}
 
@@ -1255,12 +1342,13 @@ func (l *Logic) GroupApplicationResponse(ctx context.Context, req *pbgroup.Group
 	}
 
 	opUserID, _, err := l.requireGroupAdmin(ctx, groupID)
-	if err != nil {
+	isSuperAdmin := l.isSuperAdmin(opUserID)
+	if err != nil && !isSuperAdmin {
 		return nil, err
 	}
 
 	opUser, err := l.svcCtx.GroupModel.FindMember(ctx, groupID, opUserID)
-	if err != nil {
+	if err != nil && !isSuperAdmin {
 		l.Errorf("find member failed, groupID: %s, userID: %s, err: %v", groupID, opUserID, err)
 		return nil, err
 	}
@@ -1309,9 +1397,14 @@ func (l *Logic) GroupApplicationResponse(ctx context.Context, req *pbgroup.Group
 			l.Errorf("incr version log for member insert failed, groupID: %s, userID: %s, err: %v", groupID, fromUserID, err)
 			return nil, err
 		}
-		l.svcCtx.NotificationSender.AcceptGroupApplicationNotification(ctx, group, opUser, fromUserID, req.GetHandledMsg())
+
+		if opUser != nil {
+			l.svcCtx.NotificationSender.AcceptGroupApplicationNotification(ctx, group, opUser, fromUserID, req.GetHandledMsg())
+		}
 	} else {
-		l.svcCtx.NotificationSender.RejectGroupApplicationNotification(ctx, group, opUser, fromUserID, req.GetHandledMsg())
+		if opUser != nil {
+			l.svcCtx.NotificationSender.RejectGroupApplicationNotification(ctx, group, opUser, fromUserID, req.GetHandledMsg())
+		}
 	}
 
 	return &pbgroup.GroupApplicationResponseResp{}, nil
@@ -1404,10 +1497,10 @@ func (l *Logic) GetUserReqApplicationList(ctx context.Context, req *pbgroup.GetU
 	page := int64(pagination.GetPageNumber())
 	size := int64(pagination.GetShowNumber())
 
-	userID := mcontext.GetOpUserIDFromContext(l.ctx)
-	requests, total, err := l.svcCtx.RequestModel.FindGroupRequestsByUser(ctx, userID, page, size)
+	userID := req.GetUserID()
+	requests, total, err := l.svcCtx.RequestModel.FindGroupRequestsByUserAndGroup(ctx, userID, req.GetGroupIDs(), page, size)
 	if err != nil {
-		l.Errorf("find group requests by user failed, userID: %s, err: %v", userID, err)
+		l.Errorf("find group requests by user and group failed, userID: %s, err: %v", userID, err)
 		return nil, err
 	}
 
@@ -1428,7 +1521,7 @@ func (l *Logic) GetGroupUsersReqApplicationList(ctx context.Context, req *pbgrou
 		return nil, errx.ArgsError.Wrap("groupID is required")
 	}
 
-	_, _, err := l.requireGroupAdmin(ctx, groupID)
+	err := l.requireGroupAdminOrAdmin(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -1447,7 +1540,7 @@ func (l *Logic) GetGroupUsersReqApplicationList(ctx context.Context, req *pbgrou
 		}
 		total = int64(len(groupRequests))
 	} else {
-		requests, t, err := l.svcCtx.RequestModel.FindGroupRequestsByGroup(ctx, groupID, 0, 0)
+		requests, t, err := l.svcCtx.RequestModel.FindGroupRequestsByGroup(ctx, groupID, 1, 200)
 		if err != nil {
 			l.Errorf("find group requests by group failed, groupID: %s, err: %v", groupID, err)
 			return nil, err
@@ -1467,6 +1560,10 @@ func (l *Logic) GetGroupUsersReqApplicationList(ctx context.Context, req *pbgrou
 func (l *Logic) GetSpecifiedUserGroupRequestInfo(ctx context.Context, req *pbgroup.GetSpecifiedUserGroupRequestInfoReq) (*pbgroup.GetSpecifiedUserGroupRequestInfoResp, error) {
 	userID := req.GetUserID()
 	groupID := req.GetGroupID()
+	err := l.requireGroupAdminOrAdmin(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
 
 	if userID == "" || groupID == "" {
 		return nil, errx.ArgsError.Wrap("userID and groupID are required")
@@ -1490,9 +1587,9 @@ func (l *Logic) GetGroupMemberRoleLevel(ctx context.Context, req *pbgroup.GetGro
 	if len(req.GetRoleLevels()) == 0 {
 		return nil, errx.ArgsError.Wrap("roleLevels is required")
 	}
-	_, _, err := l.requireGroupRole(ctx, req.GetGroupID(), constant.GroupAdmin)
+	err := l.requireGroupAdminOrAdmin(ctx, req.GetGroupID())
 	if err != nil {
-		return nil, errx.NoPermissionError.Wrap("not admin")
+		return nil, err
 	}
 
 	groupMember, err := l.svcCtx.GroupModel.FindMembersByRoleLevels(ctx, req.GetGroupID(), req.GetRoleLevels())
@@ -1626,7 +1723,9 @@ func (l *Logic) GetIncrementalGroupMember(ctx context.Context, req *pbgroup.GetI
 	// 群组成员才能获取增量变更
 	_, _, err = l.requireGroupRole(ctx, groupID, constant.GroupOrdinaryUsers)
 	if err != nil {
-		return nil, err
+		if err = l.requireAdmin(); err != nil {
+			return nil, err
+		}
 	}
 
 	// FindChangeLog：全有或全无（limit=0 不限条数，文档不存在自动初始化并返回空 Logs）
@@ -1646,7 +1745,7 @@ func (l *Logic) GetIncrementalGroupMember(ctx context.Context, req *pbgroup.GetI
 
 	resp := &pbgroup.GetIncrementalGroupMemberResp{
 		Version:   uint64(verLog.Version),
-		VersionID: groupID,
+		VersionID: verLog.ID.Hex(),
 		Full:      false,
 		Delete:    c.DeleteIDs,
 	}
@@ -1704,12 +1803,13 @@ func (l *Logic) fullGroupMemberResp(ctx context.Context, groupID string) (*pbgro
 		inserts = append(inserts, mconvert.ModelToPbGroupMemberInfo(m))
 	}
 	var curVersion uint64
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, groupID); err2 == nil && verLog != nil {
+	verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, groupID)
+	if err2 == nil && verLog != nil {
 		curVersion = uint64(verLog.Version)
 	}
 	return &pbgroup.GetIncrementalGroupMemberResp{
 		Version:   curVersion,
-		VersionID: groupID,
+		VersionID: verLog.ID.Hex(),
 		Full:      true,
 		Insert:    inserts,
 		// 全量同步：SortVersion = 当前 version，客户端后续据此判断是否还需重新排序
@@ -1763,7 +1863,7 @@ func (l *Logic) GetIncrementalJoinGroup(ctx context.Context, req *pbgroup.GetInc
 
 	resp := &pbgroup.GetIncrementalJoinGroupResp{
 		Version:   uint64(verLog.Version),
-		VersionID: userID,
+		VersionID: verLog.ID.Hex(),
 		Full:      false,
 		Delete:    c.DeleteIDs,
 	}
@@ -1819,12 +1919,13 @@ func (l *Logic) fullJoinGroupResp(ctx context.Context, userID string) (*pbgroup.
 		}
 	}
 	var curVersion uint64
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.JoinGroupDID(userID)); err2 == nil && verLog != nil {
+	verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.JoinGroupDID(userID))
+	if err2 == nil && verLog != nil {
 		curVersion = uint64(verLog.Version)
 	}
 	return &pbgroup.GetIncrementalJoinGroupResp{
 		Version:   curVersion,
-		VersionID: userID,
+		VersionID: verLog.ID.Hex(),
 		Full:      true,
 		Insert:    inserts,
 	}, nil

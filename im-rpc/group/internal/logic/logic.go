@@ -2,12 +2,15 @@ package logic
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/PaperMan11/goim/im-rpc/group/internal/svc"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
+	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -57,6 +60,19 @@ func (l *Logic) requireAdmin() error {
 	return nil
 }
 
+func (l *Logic) isSuperAdmin(userID string) bool {
+	ok, err := l.svcCtx.AuthVerifier.IsIMAdmin(l.ctx, userID)
+	if err != nil {
+		l.Errorf("check admin failed, userID=%s err=%v", userID, err)
+		return false
+	}
+	if !ok {
+		l.Errorf("not admin, userID=%s", userID)
+		return false
+	}
+	return true
+}
+
 func (l *Logic) requireValidUser(targetUserID string) error {
 	ok, err := l.svcCtx.AuthVerifier.IsValidUser(l.ctx, targetUserID)
 	if err != nil {
@@ -85,7 +101,7 @@ func (l *Logic) requireGroupRole(ctx context.Context, groupID string, minRoleLev
 	roleLevel, err := l.svcCtx.GroupModel.GetMemberRole(ctx, groupID, opUserID)
 	if err != nil {
 		l.Errorf("get member role failed, groupID=%s userID=%s err=%v", groupID, opUserID, err)
-		return opUserID, 0, err
+		return opUserID, 0, errx.NoPermissionError
 	}
 	if roleLevel < minRoleLevel {
 		l.Errorf("insufficient permission, opUserID=%s roleLevel=%d required=%d", opUserID, roleLevel, minRoleLevel)
@@ -100,6 +116,14 @@ func (l *Logic) requireGroupOwner(ctx context.Context, groupID string) (string, 
 
 func (l *Logic) requireGroupAdmin(ctx context.Context, groupID string) (string, int, error) {
 	return l.requireGroupRole(ctx, groupID, constant.GroupAdmin)
+}
+
+func (l *Logic) requireGroupAdminOrAdmin(ctx context.Context, groupID string) error {
+	err := l.requireAdmin()
+	if err != nil {
+		_, _, err = l.requireGroupRole(ctx, groupID, constant.GroupAdmin)
+	}
+	return err
 }
 
 // 检查群是否已解散
@@ -118,6 +142,9 @@ func (l *Logic) requireGroupNotDismissed(ctx context.Context, groupID string) (*
 
 // 检测是否有权限
 func (l *Logic) requireGroupPermission(ctx context.Context, admin, user *model.GroupMember) bool {
+	if admin.UserID == user.UserID {
+		return true
+	}
 	switch admin.RoleLevel {
 	case constant.GroupOwner:
 		return admin.UserID != user.UserID
@@ -128,4 +155,9 @@ func (l *Logic) requireGroupPermission(ctx context.Context, admin, user *model.G
 	default:
 		return false
 	}
+}
+
+// 生成随机groupID
+func (l *Logic) generateGroupID() string {
+	return fmt.Sprintf("group-%d-%s", timex.Now().UnixMilli(), uuid.New().String())
 }

@@ -29,7 +29,6 @@ func ParseError(err error) *ErrInfo {
 		return nil
 	}
 
-	// 进程内直接返回的 *ErrInfo（如 API 层中间件、本地 Wrap），保持原样
 	var errInfo *ErrInfo
 	if errors.As(err, &errInfo) {
 		return errInfo

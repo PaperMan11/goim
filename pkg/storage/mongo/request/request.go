@@ -33,6 +33,7 @@ type RequestModel interface {
 	HandleGroupRequest(ctx context.Context, userID, groupID, handleUserID string, handleResult int, handleMsg string) error
 	FindGroupRequest(ctx context.Context, userID, groupID string) (*model.GroupRequest, error)
 	FindGroupRequestsByUser(ctx context.Context, userID string, page, size int64) ([]*model.GroupRequest, int64, error)
+	FindGroupRequestsByUserAndGroup(ctx context.Context, userID string, groupIDs []string, page, size int64) ([]*model.GroupRequest, int64, error)
 	FindGroupRequestsByGroup(ctx context.Context, groupID string, page, size int64) ([]*model.GroupRequest, int64, error)
 	CountGroupRequests(ctx context.Context, groupIDs []string, handleResults []int) (int64, error)
 	DeleteGroupRequest(ctx context.Context, userID, groupID string) error
@@ -204,6 +205,25 @@ func (m *defaultRequestModel) FindGroupRequestsByUser(ctx context.Context, userI
 	return requests, total, nil
 }
 
+func (m *defaultRequestModel) FindGroupRequestsByUserAndGroup(ctx context.Context, userID string, groupIDs []string, page, size int64) ([]*model.GroupRequest, int64, error) {
+	filter := bson.M{"user_id": userID}
+	if len(groupIDs) > 0 {
+		filter["group_id"] = bson.M{"$in": groupIDs}
+	}
+	total, err := m.groupReqMod.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var requests []*model.GroupRequest
+	opts := options.Find().SetSkip((page - 1) * size).SetLimit(size).SetSort(bson.M{"req_time": -1})
+	err = m.groupReqMod.Find(ctx, &requests, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	return requests, total, nil
+}
+
 func (m *defaultRequestModel) FindGroupRequestsByGroup(ctx context.Context, groupID string, page, size int64) ([]*model.GroupRequest, int64, error) {
 	filter := bson.M{"group_id": groupID}
 	total, err := m.groupReqMod.Collection.CountDocuments(ctx, filter)
@@ -225,6 +245,10 @@ func (m *defaultRequestModel) FindGroupRequestsByGroup(ctx context.Context, grou
 }
 
 func (m *defaultRequestModel) CountGroupRequests(ctx context.Context, groupIDs []string, handleResults []int) (int64, error) {
+	if len(groupIDs) == 0 {
+		return 0, nil
+	}
+
 	filter := bson.M{}
 	if len(groupIDs) > 0 {
 		filter["group_id"] = bson.M{"$in": groupIDs}
