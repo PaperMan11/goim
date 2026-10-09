@@ -29,6 +29,7 @@ func NewNotificationSender(
 }
 
 func (s *NotificationSender) sendNotification(ctx context.Context, fromUserID, toUserID string, contentType int32, notification proto.Message) error {
+	//return nil // 测试用
 	return s.MsgDispatcher.SendNotification(ctx, fromUserID, toUserID, "", contentType, msgdispatcher.SessionTypeMap[contentType], notification)
 }
 

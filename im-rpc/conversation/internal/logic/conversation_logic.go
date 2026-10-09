@@ -288,8 +288,15 @@ func (l *Logic) GetSortedConversationList(ctx context.Context, req *pbconversati
 	}
 
 	// 收集需要查询会话详情的 ID
-	idsAtPage := make([]string, 0, end-start)
+	idsAtPage := make([]string, end-start)
 	copy(idsAtPage, filterIDs[start:end])
+	if len(idsAtPage) == 0 {
+		return &pbconversation.GetSortedConversationListResp{
+			ConversationTotal: total,
+			UnreadTotal:       0,
+			ConversationElems: []*pbconversation.ConversationElem{},
+		}, nil
+	}
 	convs, err := l.svcCtx.ConversationModel.FindConversationsByIDs(ctx, userID, idsAtPage)
 	if err != nil {
 		l.Errorf("find conversations by ids failed, userID: %s, err: %v", userID, err)
@@ -338,11 +345,12 @@ func (l *Logic) GetSortedConversationList(ctx context.Context, req *pbconversati
 		conversationID := c.ConversationID
 		elem, ok := convElems[conversationID]
 		if !ok {
-			convElems[conversationID] = &pbconversation.ConversationElem{
+			elem = &pbconversation.ConversationElem{
 				ConversationID: conversationID,
 				IsPinned:       c.IsPinned,
 				MsgInfo:        nil,
 			}
+			convElems[conversationID] = elem
 		}
 		elem.IsPinned = c.IsPinned
 		elem.RecvMsgOpt = c.RecvMsgOpt
@@ -1246,7 +1254,7 @@ func (l *Logic) GetIncrementalConversation(ctx context.Context, req *pbconversat
 
 	resp := &pbconversation.GetIncrementalConversationResp{
 		Version:   uint64(verLog.Version),
-		VersionID: userID,
+		VersionID: verLog.ID.Hex(),
 		Full:      false,
 		Delete:    c.DeleteIDs,
 	}
@@ -1311,12 +1319,13 @@ func (l *Logic) fullConversationsResp(ctx context.Context, userID string) (*pbco
 	// 从 SeqUser 批量填充 min_seq/max_seq
 	l.fillConversationSeqs(userID, inserts)
 	var curVersion uint64
-	if verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.ConversationDID(userID)); err2 == nil && verLog != nil {
+	verLog, err2 := l.svcCtx.VersionLogModel.GetVersionLog(ctx, model.ConversationDID(userID))
+	if err2 == nil && verLog != nil {
 		curVersion = uint64(verLog.Version)
 	}
 	return &pbconversation.GetIncrementalConversationResp{
 		Version:   curVersion,
-		VersionID: userID,
+		VersionID: verLog.ID.Hex(),
 		Full:      true,
 		Insert:    inserts,
 	}, nil

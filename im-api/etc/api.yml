@@ -85,7 +85,7 @@ GroupRpc:
   Stub: false
   EnableCache: false
 
-ConversationRpc:
+ConvRpc:
   Etcd:
     Hosts:
       - 127.0.0.1:2379

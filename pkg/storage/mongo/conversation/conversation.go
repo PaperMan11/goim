@@ -78,15 +78,21 @@ func (m *defaultConversationModel) UpsertConversation(ctx context.Context, conv 
 }
 
 func (m *defaultConversationModel) FindConversationIDsByOwner(ctx context.Context, ownerUserID string) ([]string, error) {
-	var ids []string
+	type tempItem struct {
+		ConversationID string `bson:"conversation_id"`
+	}
+	var (
+		ids   []string
+		items []tempItem
+	)
+
 	findOpts := options.Find().SetProjection(bson.M{"conversation_id": 1}).SetSort(bson.M{"_id": 1})
-	cursor, err := m.convMod.Collection.Find(ctx, bson.M{"owner_user_id": ownerUserID}, findOpts)
+	err := m.convMod.Find(ctx, &items, bson.M{"owner_user_id": ownerUserID}, findOpts)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
-	if err := cursor.All(ctx, &ids); err != nil {
-		return nil, err
+	for _, item := range items {
+		ids = append(ids, item.ConversationID)
 	}
 	return ids, nil
 }
@@ -140,15 +146,20 @@ func (m *defaultConversationModel) FindConversationsByOwner(ctx context.Context,
 }
 
 func (m *defaultConversationModel) FindPinnedConversationIDs(ctx context.Context, ownerUserID string) ([]string, error) {
-	var ids []string
-	cursor, err := m.convMod.Collection.Find(ctx, bson.M{"owner_user_id": ownerUserID, "is_pinned": true},
+	type tempItem struct {
+		ConversationID string `bson:"conversation_id"`
+	}
+	var (
+		ids   []string
+		items []tempItem
+	)
+	err := m.convMod.Find(ctx, &items, bson.M{"owner_user_id": ownerUserID, "is_pinned": true},
 		options.Find().SetProjection(bson.M{"_id": 0, "conversation_id": 1}))
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
-	if err := cursor.All(ctx, &ids); err != nil {
-		return nil, err
+	for _, item := range items {
+		ids = append(ids, item.ConversationID)
 	}
 	return ids, nil
 }
