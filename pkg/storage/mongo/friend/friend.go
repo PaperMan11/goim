@@ -34,6 +34,7 @@ type FriendModel interface {
 	DeleteBlack(ctx context.Context, owner, blackUserID string) error
 	FindBlack(ctx context.Context, owner, blackUserID string) (*model.Black, error)
 	FindBlacksByOwner(ctx context.Context, owner string) ([]*model.Black, error)
+	FindBlacksByIDs(ctx context.Context, owner string, blackIDs []string) ([]*model.Black, error)
 	IsBlack(ctx context.Context, owner, targetUserID string) (bool, error)
 }
 
@@ -186,6 +187,19 @@ func (m *defaultFriendModel) FindBlack(ctx context.Context, owner, blackUserID s
 func (m *defaultFriendModel) FindBlacksByOwner(ctx context.Context, owner string) ([]*model.Black, error) {
 	var blacks []*model.Black
 	cursor, err := m.blackMod.Collection.Find(ctx, bson.M{"owner_user_id": owner})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	if err := cursor.All(ctx, &blacks); err != nil {
+		return nil, err
+	}
+	return blacks, nil
+}
+
+func (m *defaultFriendModel) FindBlacksByIDs(ctx context.Context, owner string, blackIDs []string) ([]*model.Black, error) {
+	var blacks []*model.Black
+	cursor, err := m.blackMod.Collection.Find(ctx, bson.M{"owner_user_id": owner, "black_user_id": bson.M{"$in": blackIDs}})
 	if err != nil {
 		return nil, err
 	}

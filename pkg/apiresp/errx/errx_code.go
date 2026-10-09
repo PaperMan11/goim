@@ -66,6 +66,7 @@ const (
 	ErrCodeRelationshipAlreadyError = 1304 // Already in a friend relationship
 	ErrCodeFriendRequestHandled     = 1305 // Friend request has already been handled
 	ErrCodeBlackByPeer              = 1306 // Black by the peer
+	ErrCodeBlackNotFound            = 1307 // Black record does not exist
 
 	// Message error codes.
 	ErrCodeMessageHasReadDisable = 1401

@@ -34,9 +34,10 @@ type ServiceContext struct {
 
 	NotificationSender *notification.NotificationSender
 	// mongo models
-	FriendModel     friendModel.FriendModel
-	VersionLogModel versionLogModel.VersionLogModel
-	RequestModel    requestModel.RequestModel
+	FriendModel           friendModel.FriendModel
+	FriendVersionLogModel versionLogModel.VersionLogModel
+	BlackVersionLogModel  versionLogModel.VersionLogModel
+	RequestModel          requestModel.RequestModel
 
 	// rpc clients
 	UserService userServiceCache.UserServiceWrapperCache
@@ -51,21 +52,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	friendMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriend)
 	blackMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionBlack)
 	friendVersionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriendVersion)
+	blackVersionMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionBlackVersion)
 	friendCacheModel := friendModel.NewFriendModel(friendMongo, blackMongo, singleFlight, redisCli, c.Mongo.EnableCache)
-	versionLogModel := versionLogModel.NewVersionLogModel(friendVersionMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	friendVersionLogModel := versionLogModel.NewVersionLogModel(friendVersionMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	blackVersionLogModel := versionLogModel.NewVersionLogModel(blackVersionMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	friendReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionFriendRequest)
 	groupReqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionGroupRequest)
 	reqCacheModel := requestModel.NewRequestModel(friendReqMongo, groupReqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	sc := &ServiceContext{
-		Config:          c,
-		FriendModel:     friendCacheModel,
-		VersionLogModel: versionLogModel,
-		RequestModel:    reqCacheModel,
-		LocalCache:      localCache,
-		RedisCli:        redisCli,
-		SingleFlight:    singleFlight,
+		Config:                c,
+		FriendModel:           friendCacheModel,
+		FriendVersionLogModel: friendVersionLogModel,
+		BlackVersionLogModel:  blackVersionLogModel,
+		RequestModel:          reqCacheModel,
+		LocalCache:            localCache,
+		RedisCli:              redisCli,
+		SingleFlight:          singleFlight,
 	}
 	sc.initRpcClient()
 	return sc

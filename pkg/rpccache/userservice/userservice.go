@@ -80,6 +80,9 @@ func (s *UserService) GetUserInfo(ctx context.Context, userID string) (*sdkws.Us
 		if err != nil {
 			return nil, err
 		}
+		if len(userInfo.UsersInfo) == 0 {
+			return nil, errors.New("user not found")
+		}
 		return userInfo.UsersInfo[0], nil
 	}
 

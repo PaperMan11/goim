@@ -66,6 +66,7 @@ var (
 	RelationshipAlreadyError = NewErrInfo(ErrCodeRelationshipAlreadyError, "already in a friend relationship")
 	FriendRequestHandled     = NewErrInfo(ErrCodeFriendRequestHandled, "friend request has already been handled")
 	BlackByPeer              = NewErrInfo(ErrCodeBlackByPeer, "black by the peer")
+	BlackNotFound            = NewErrInfo(ErrCodeBlackNotFound, "black record does not exist")
 
 	// Message error codes.
 	MessageHasReadDisable = NewErrInfo(ErrCodeMessageHasReadDisable, "message has been read")

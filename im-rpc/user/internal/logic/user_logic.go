@@ -96,9 +96,9 @@ func (l *Logic) UpdateUserInfoEx(ctx context.Context, req *pbuser.UpdateUserInfo
 }
 
 func (l *Logic) AccountCheck(ctx context.Context, req *pbuser.AccountCheckReq) (*pbuser.AccountCheckResp, error) {
-	if err := l.requireAdmin(); err != nil {
-		return nil, err
-	}
+	// if err := l.requireAdmin(); err != nil {
+	// 	return nil, err
+	// }
 
 	results, err := l.svcCtx.UserModel.CheckExists(ctx, req.GetCheckUserIDs())
 	if err != nil {

@@ -45,6 +45,14 @@ UserRpc:
   Stub: false
   EnableCache: false
 
+RelationRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: relation.rpc
+  Stub: false
+  EnableCache: false
+
 MsgRpc:
   Etcd:
     Hosts:
