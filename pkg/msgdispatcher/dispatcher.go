@@ -107,14 +107,14 @@ func (d *defaultMsgDispatcher) SendMsg(ctx context.Context, msgData *sdkws.MsgDa
 	return d.msgService.SendMsg(ctx, req)
 }
 
-func (d *defaultMsgDispatcher) buildNotificationContent(m proto.Message) ([]byte, error) {
+func (d *defaultMsgDispatcher) buildNotificationContent(m proto.Message) (string, error) {
 	n := sdkws.NotificationElem{Detail: jsonutilStructToJsonString(m)}
 	content, err := json.Marshal(&n)
 	if err != nil {
 		logx.Error("json.Marshal failed", "msg", jsonutilStructToJsonString(m), "err", err)
-		return nil, err
+		return "", err
 	}
-	return content, nil
+	return string(content), nil
 }
 
 func (d *defaultMsgDispatcher) buildNotificationOpt(opts []NotificationOptions) *notificationOpt {
@@ -125,7 +125,7 @@ func (d *defaultMsgDispatcher) buildNotificationOpt(opts []NotificationOptions) 
 	return opt
 }
 
-func (d *defaultMsgDispatcher) buildBaseMsg(sendID, recvID, groupID string, contentType, sessionType int32, content []byte) *sdkws.MsgData {
+func (d *defaultMsgDispatcher) buildBaseMsg(sendID, recvID, groupID string, contentType, sessionType int32, content string) *sdkws.MsgData {
 	msg := sdkws.MsgData{
 		SendID:      sendID,
 		RecvID:      recvID,

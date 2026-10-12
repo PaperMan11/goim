@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	goredis "github.com/redis/go-redis/v9"
@@ -46,7 +48,12 @@ func (s *defaultSeqConversationModel) SetConversationMaxSeq(ctx context.Context,
 			"max_seq":    maxSeq,
 			"updated_at": timex.Now(),
 		},
-	})
+		"$setOnInsert": bson.M{
+			"conversation_id": conversationID,
+			"min_seq":         1,
+			"created_at":      timex.Now(),
+		},
+	}, options.UpdateOne().SetUpsert(true))
 	return err
 }
 
@@ -56,7 +63,12 @@ func (s *defaultSeqConversationModel) SetConversationMinSeq(ctx context.Context,
 			"min_seq":    minSeq,
 			"updated_at": timex.Now(),
 		},
-	})
+		"$setOnInsert": bson.M{
+			"conversation_id": conversationID,
+			"max_seq":         1,
+			"created_at":      timex.Now(),
+		},
+	}, options.UpdateOne().SetUpsert(true))
 	return err
 }
 
@@ -64,6 +76,9 @@ func (s *defaultSeqConversationModel) GetConversationMaxSeq(ctx context.Context,
 	var seq model.SeqConversation
 	err := s.mod.FindOne(ctx, &seq, bson.M{"conversation_id": conversationID})
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return 0, ErrSeqConversationNotFound
+		}
 		return 0, err
 	}
 	return seq.MaxSeq, nil

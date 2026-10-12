@@ -135,6 +135,13 @@ func validateConfig(cfg *Config) error {
 }
 
 func (mt *MsgTransfer) Start() {
+	// batcher 必须先于 consumer 启动，否则消息 Push 时无 worker 消费
+	mt.batcher.Start(func(msg *sdkws.MsgData) string {
+		return msgprocessor.GetConversationIDByMsg(msg)
+	}, mt.batchHandleMsg)
+
+	mt.webhookManager.Start()
+
 	if err := mt.msgTransferConsumer.Start(); err != nil {
 		logx.Errorf("Failed to start msg transfer consumer: %v", err)
 		return
@@ -144,11 +151,6 @@ func (mt *MsgTransfer) Start() {
 		logx.Errorf("Failed to start msg persistent consumer: %v", err)
 		return
 	}
-
-	mt.webhookManager.Start()
-	mt.batcher.Start(func(msg *sdkws.MsgData) string {
-		return msgprocessor.GetConversationIDByMsg(msg)
-	}, mt.batchHandleMsg)
 
 	logx.Infof("MsgTransfer Started, consumer topic: %s, persistent producer topic: %s, push producer topic: %s",
 		mt.msgTransferConsumer.Name(), mt.msgPersistentProducer.Name(), mt.msgPushProducer.Name())

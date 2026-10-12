@@ -20,7 +20,7 @@ func ModelToPbMsgData(msg *model.MsgDataModel) *sdkws.MsgData {
 		SessionType:      msg.SessionType,
 		MsgFrom:          msg.MsgFrom,
 		ContentType:      msg.ContentType,
-		Content:          []byte(msg.Content),
+		Content:          msg.Content,
 		Seq:              msg.Seq,
 		SendTime:         msg.SendTime,
 		CreateTime:       msg.CreateTime,

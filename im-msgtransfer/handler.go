@@ -35,8 +35,7 @@ func (mt *MsgTransfer) consumePersistentMsgs(ctx context.Context, msg queuex.Mes
 		return err
 	}
 
-	logc.Infof(ctx, "received msg data to mongo by mq, lastSeq: %d, conversationID: %s, msgData: %v",
-		msgData.LastSeq, msgData.ConversationID, msgData.MsgData)
+	logc.Infof(ctx, "received msg data to mongo by mq, conversationID: %s, msgCount: %d", msgData.ConversationID, len(msgData.MsgData))
 
 	if _, err := mt.msgService.AddMsgs(ctx, &pbmsg.AddMsgsReq{
 		ConversationID: msgData.ConversationID,
@@ -107,7 +106,7 @@ func (mt *MsgTransfer) classifyMsgType(_ context.Context, msgs []*sdkws.MsgData)
 					msgprocessor.WithOfflinePush(msgOpts.IsOfflinePush()),
 					msgprocessor.WithUnreadCount(msgOpts.IsUnreadCount()),
 				)
-				storeNotifyMsg = append(storeNotifyMsg, cloneMsg)
+				//storeNotifyMsg = append(storeNotifyMsg, cloneMsg)
 
 				msg.Options = msgprocessor.WithOptions(msg.Options,
 					msgprocessor.WithOfflinePush(false),
@@ -132,7 +131,7 @@ func (mt *MsgTransfer) handleReadReceipt(ctx context.Context, msgs []*sdkws.MsgD
 		}
 
 		var elem sdkws.NotificationElem
-		if err := proto.Unmarshal(msg.Content, &elem); err != nil {
+		if err := proto.Unmarshal([]byte(msg.Content), &elem); err != nil {
 			logc.Errorf(ctx, "failed to unmarshal read receipt elem, err: %v", err)
 			continue
 		}

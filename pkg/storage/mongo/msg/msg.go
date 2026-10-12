@@ -19,6 +19,7 @@ import (
 
 var (
 	ErrMsgNotFound = errors.New("message not found")
+	ErrInvalidSeq  = errors.New("msg seq must be positive")
 )
 
 type MsgModel interface {
@@ -208,6 +209,9 @@ func (m *defaultMsgModel) BatchInsert(ctx context.Context, conversationID string
 	// docID -> map[msgIndex]MsgInfoModel（同桶同索引下后来者覆盖前者，seq 全局唯一时不会出现冲突）
 	grouped := make(map[string]map[int64]*model.MsgInfoModel)
 	for _, msg := range msgs {
+		if msg.Seq < 0 {
+			return fmt.Errorf("conversationID %s, clientMsgID %s: %w, got %d", conversationID, msg.ClientMsgID, ErrInvalidSeq, msg.Seq)
+		}
 		docID := docHelper.GetDocID(conversationID, msg.Seq)
 		msgIndex := docHelper.GetMsgIndex(msg.Seq)
 		if _, ok := grouped[docID]; !ok {

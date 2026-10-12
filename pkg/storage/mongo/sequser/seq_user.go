@@ -90,8 +90,7 @@ func (s *defaultSeqUserModel) SetUserMaxSeq(ctx context.Context, userID, convers
 		"$setOnInsert": bson.M{
 			"user_id":         userID,
 			"conversation_id": conversationID,
-			"min_seq":         0,
-			"max_seq":         0,
+			"min_seq":         1,
 			"read_seq":        0,
 		},
 	}
@@ -108,8 +107,7 @@ func (s *defaultSeqUserModel) SetUserMinSeq(ctx context.Context, userID, convers
 		"$setOnInsert": bson.M{
 			"user_id":         userID,
 			"conversation_id": conversationID,
-			"min_seq":         0,
-			"max_seq":         0,
+			"max_seq":         1,
 			"read_seq":        0,
 		},
 	}

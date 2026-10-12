@@ -1,6 +1,9 @@
 package svc
 
 import (
+	"context"
+	"errors"
+
 	"github.com/PaperMan11/goim/im-rpc/msg/internal/config"
 	"github.com/PaperMan11/goim/pkg/authverify"
 	_ "github.com/PaperMan11/goim/pkg/lb/iphash"
@@ -131,7 +134,15 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	msgTransferProducer := kafkax.MustNewProducer(c.MsgTransferProducer)
 
 	// seq allocator
-	seqAllocator := allocator.MustNewRedisSeqAllocator(redisCli, allocator.WithGetMaxSeqFn(newSeqConversationModel.GetConversationMaxSeq))
+	seqAllocator := allocator.MustNewRedisSeqAllocator(redisCli, allocator.WithGetMaxSeqFn(func(ctx context.Context, conversationID string) (int64, error) {
+		seqStart, err := newSeqConversationModel.GetConversationMaxSeq(ctx, conversationID)
+		if errors.Is(err, seqConversationModel.ErrSeqConversationNotFound) {
+			return 0, nil
+		} else if err != nil {
+			return 0, err
+		}
+		return seqStart, nil
+	}))
 
 	// notification dispatcher
 	notificationSender := msgdispatcher.NewMsgDispatcher(msgService)

@@ -1043,9 +1043,9 @@ func (l *Logic) CreateSingleChatConversations(ctx context.Context, req *pbconver
 		convType = int32(constant.SingleChatType)
 	}
 
-	if err := l.requireAdmin(); err != nil {
-		return nil, err
-	}
+	//if err := l.requireAdmin(); err != nil {
+	//	return nil, err
+	//}
 
 	now := timex.Now()
 	// 双向创建会话
@@ -1091,9 +1091,9 @@ func (l *Logic) CreateGroupChatConversations(ctx context.Context, req *pbconvers
 		return nil, errx.ArgsError.Wrap("userIDs and groupID are required")
 	}
 
-	if err := l.requireAdmin(); err != nil {
-		return nil, err
-	}
+	//if err := l.requireAdmin(); err != nil {
+	//	return nil, err
+	//}
 
 	now := timex.Now()
 	// 群聊会话 conversation_id 通常是 groupID 或派生 ID；这里用 groupID 作为 conversation_id
@@ -1178,9 +1178,9 @@ func (l *Logic) DeleteConversations(ctx context.Context, req *pbconversation.Del
 
 // ClearUserConversationMsg 清理用户会话消息（仅占位，实际由 msg 模块处理）。
 func (l *Logic) ClearUserConversationMsg(ctx context.Context, req *pbconversation.ClearUserConversationMsgReq) (*pbconversation.ClearUserConversationMsgResp, error) {
-	if err := l.requireAdmin(); err != nil {
-		return nil, err
-	}
+	//if err := l.requireAdmin(); err != nil {
+	//	return nil, err
+	//}
 	// 占位实现：实际清理逻辑由 msg 模块负责
 	return &pbconversation.ClearUserConversationMsgResp{}, nil
 }

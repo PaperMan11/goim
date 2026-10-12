@@ -281,12 +281,11 @@ func buildPushTitleAndContent(msg *sdkws.MsgData) (title, content string) {
 
 // extractTextContent 从 Text 消息的 JSON content 中提取文本
 // 兼容 sdkws 中 TextElem 结构（msg.content = {"text":"Hello world","atUsers":[]}）
-func extractTextContent(content []byte) string {
+func extractTextContent(content string) string {
 	if len(content) == 0 {
 		return ""
 	}
-	// 简单提取 "text" 字段值，避免引入 sdkws.TextElem 循环依赖
-	str := string(content)
+	str := content
 	if idx := strings.Index(str, `"text"`); idx >= 0 {
 		// 找到冒号后的字符串值
 		rest := str[idx+len(`"text"`):]

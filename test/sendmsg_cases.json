@@ -1,6 +1,6 @@
-{
-  "_comment": "GoIM SendMsg 各类型消息测试用例。content 字段为 protobuf bytes，JSON 序列化时需 base64 编码；其解码后的业务 JSON 结构标注在每个用例的 _contentShape 中。sessionType: 1=单聊, 2=群聊。contentType 见 pkg/protocol/constant/content_type.go。msgFrom: 100=用户消息, 200=系统消息。",
-  "_usage": "grpcurl -plaintext -d @ <host:port> openim.msg.msg/SendMsg < single_text.json",
+﻿{
+  "_comment": "GoIM SendMsg 各类型消息测试用例。content 字段已改为 string（sdkws.proto MsgData.content），HTTP API 直接传 JSON 文本即可，无需 base64 编码。sessionType: 1=单聊, 2=群聊。contentType 见 pkg/protocol/constant/content_type.go。msgFrom: 100=用户消息, 200=系统消息。",
+  "_usage": "grpcurl -plaintext -d '{\"msgData\":{...}}' <host:port> openim.msg.msg/SendMsg",
 
   "single_text": {
     "msgData": {
@@ -15,7 +15,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 101,
-      "content": "eyJ0ZXh0IjoiSGVsbG8sIOS4lueVjCIsImF0VXNlcnMiOltdfQ==",
+      "content": "{\"text\":\"Hello, 世界\",\"atUsers\":[]}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -36,7 +36,7 @@
       },
       "offlinePushInfo": {
         "title": "Alice",
-        "desc": "Hello, 你好",
+        "desc": "Hello, 世界",
         "ex": "",
         "iOSPushSound": "default",
         "iOSBadgeCount": true,
@@ -45,8 +45,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"text\":\"Hello, 你好\",\"atUsers\":[]}"
+    }
   },
 
   "group_text": {
@@ -58,10 +57,10 @@
       "senderPlatformID": 1,
       "senderNickname": "Alice",
       "senderFaceURL": "https://cdn.example.com/u/001.png",
-      "sessionType": 2,
+      "sessionType": 3,
       "msgFrom": 100,
       "contentType": 101,
-      "content": "eyJ0ZXh0Ijoi5ZSu5a6J5q2k6aG6IOiwg+WNoCIsImF0VXNlcnMiOltdfQ==",
+      "content": "{\"text\":\"早上好大家 项目组\",\"atUsers\":[]}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -91,8 +90,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"text\":\"早上好大家 项目组\",\"atUsers\":[]}"
+    }
   },
 
   "group_at": {
@@ -104,10 +102,10 @@
       "senderPlatformID": 1,
       "senderNickname": "Alice",
       "senderFaceURL": "https://cdn.example.com/u/001.png",
-      "sessionType": 2,
+      "sessionType": 3,
       "msgFrom": 100,
       "contentType": 106,
-      "content": "eyJ0ZXh0IjoiQHVzZXJfMDAyIOiri+ezuywg8J+MjCIsImF0VXNlcnMiOlt7ImF0VVNlcklEIjoidXNlcl8wMDIiLCJzdWJUb3AiOiJ1c2VyXzAwMiJ9XX0=",
+      "content": "{\"text\":\"@user_002 加油吧, 🌃\",\"atUsers\":[{\"atUserID\":\"user_002\",\"subTop\":\"user_002\"}]}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -137,8 +135,7 @@
       "atUserIDList": ["user_002"],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"text\":\"@user_002 加油吧, 🌃\",\"atUsers\":[{\"atUserID\":\"user_002\",\"subTop\":\"user_002\"}]}"
+    }
   },
 
   "group_at_all": {
@@ -150,10 +147,10 @@
       "senderPlatformID": 1,
       "senderNickname": "Alice",
       "senderFaceURL": "https://cdn.example.com/u/001.png",
-      "sessionType": 2,
+      "sessionType": 3,
       "msgFrom": 100,
       "contentType": 106,
-      "content": "eyJ0ZXh0IjoiQEFsbFRhZyDor7flh4fphY3nqIvlu7ror7fms6jph4zoioLlj4LmlbDmJzIsImF0VXNlcnMiOlt7ImF0VVNlcklEIjoiQXRhbGxUYWciLCJzdWJUb3AiOiJBdEFsbFRhZyJ9XX0=",
+      "content": "{\"text\":\"@AtAllTag 本周技术分享改到周五下午\",\"atUsers\":[{\"atUserID\":\"AtAllTag\",\"subTop\":\"AtAllTag\"}]}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -183,8 +180,7 @@
       "atUserIDList": ["AtAllTag"],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"text\":\"@AtAllTag 本周技术分享改到周五下午\",\"atUsers\":[{\"atUserID\":\"AtAllTag\",\"subTop\":\"AtAllTag\"}]}"
+    }
   },
 
   "picture": {
@@ -199,7 +195,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 102,
-      "content": "eyJvcmlnUGljdHVyZUVsZW0iOnsidXJsIjoiaHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vaW1nLz9wPTEiLCJ3aWR0aCI6MTkyMCwiaGVpZ2h0IjoxMDgwLCJmaWxlU2l6ZSI6NTAwMDAwfSwiYmlnUGljdHVyZUVsZW0iOnsidXJsIjoiaHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vaW1nLz9wPTEtYmlnIiwid2lkdGgiOjM4NDAsImhlaWdodCI6MjE2MH0sInNuYWBTaG9ydEVsZW0iOnsidXJsIjoiaHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vaW1nLz9wPTETEIXNo9yaHQiLCJ3aWR0aCI6MzAwLCJoZWlnaHQiOjMwMH19",
+      "content": "{\"origPictureElem\":{\"url\":\"https://cdn.example.com/img/p=1\",\"width\":1920,\"height\":1080,\"fileSize\":500000},\"bigPictureElem\":{\"url\":\"https://cdn.example.com/img/p=1-big\",\"width\":3840,\"height\":2160},\"snapShotElem\":{\"url\":\"https://cdn.example.com/img/p=1-thumb\",\"width\":300,\"height\":300}}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -229,8 +225,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"origPictureElem\":{\"url\":\"...p=1\",\"width\":1920,\"height\":1080,\"fileSize\":500000},\"bigPictureElem\":{\"url\":\"...p=1-big\",\"width\":3840,\"height\":2160},\"snapShotElem\":{\"url\":\"...p=1-thumb\",\"width\":300,\"height\":300}}"
+    }
   },
 
   "voice": {
@@ -245,7 +240,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 103,
-      "content": "eyJ1cmwiOiJodHRwczovL2Nkbi5leGFtcGxlLmNvbS92b2ljZS8/dj0xIiwiZHVyYXRpb24iOjM4NDAsImJhc2VJbmZvIjp7InVybCI6Imh0dHBzOi8vY2RuLmV4YW1wbGUuY29tL3ZvaWNlLz92PTEtYmFzZSIsImR1cmF0aW9uIjozODQwLCJzaXplIjo2MDAwMH19",
+      "content": "{\"url\":\"https://cdn.example.com/voice/v=1\",\"duration\":3840,\"baseInfo\":{\"url\":\"https://cdn.example.com/voice/v=1-base\",\"duration\":3840,\"size\":60000}}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -275,8 +270,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"url\":\"...v=1\",\"duration\":3840,\"baseInfo\":{\"url\":\"...v=1-base\",\"duration\":3840,\"size\":60000}}"
+    }
   },
 
   "video": {
@@ -291,7 +285,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 104,
-      "content": "eyJ2aWRlb1BhdGgiOiJodHRwczovL2Nkbi5leGFtcGxlLmNvbS92aWRlby8/dj0xIiwidmlkZW9VVUwiOiJodHRwczovL2Nkbi5leGFtcGxlLmNvbS92aWRlby8/dj0xLW91dCIsInNub3BzaG90VVJMIjoiaHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vdmlkZW8vP3Y9MS1zbmFwIiwiZHVyYXRpb24iOjE1MDAwLCJiYXNlSW5mbyI6eyJ1cmwiOiJodHRwczovL2Nkbi5leGFtcGxlLmNvbS92aWRlby8/dj0xLWJhc2UiLCJkdXJhdGlvbiI6MTUwMDAsInNpemUiOjIwMDAwMDB9fQ==",
+      "content": "{\"videoPath\":\"https://cdn.example.com/video/v=1\",\"videoURL\":\"https://cdn.example.com/video/v=1-out\",\"snapshotURL\":\"https://cdn.example.com/video/v=1-snap\",\"duration\":15000,\"baseInfo\":{\"url\":\"https://cdn.example.com/video/v=1-base\",\"duration\":15000,\"size\":2000000}}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -321,8 +315,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"videoPath\":\"...v=1\",\"videoURL\":\"...v=1-out\",\"snapshotURL\":\"...v=1-snap\",\"duration\":15000,\"baseInfo\":{\"url\":\"...v=1-base\",\"duration\":15000,\"size\":2000000}}"
+    }
   },
 
   "file": {
@@ -337,7 +330,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 105,
-      "content": "eyJmaWxlUGF0aCI6Imh0dHBzOi8vY2RuLmV4YW1wbGUuY29tL2ZpbGUvP2Y9MSIsImZpbGVOYW1lIjoiZGVzaWduLnBkZiIsImZpbGVTaXplIjo1MDAwMDAsImJhc2VJbmZvIjp7InVybCI6Imh0dHBzOi8vY2RuLmV4YW1wbGUuY29tL2ZpbGUvP2Y9MS1iYXNlIiwic2l6ZSI6NTAwMDAwfX0=",
+      "content": "{\"filePath\":\"https://cdn.example.com/file/f=1\",\"fileName\":\"design.pdf\",\"fileSize\":500000,\"baseInfo\":{\"url\":\"https://cdn.example.com/file/f=1-base\",\"size\":500000}}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -367,8 +360,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"filePath\":\"...f=1\",\"fileName\":\"design.pdf\",\"fileSize\":500000,\"baseInfo\":{\"url\":\"...f=1-base\",\"size\":500000}}"
+    }
   },
 
   "card": {
@@ -383,7 +375,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 108,
-      "content": "eyJ1c2VySUQiOiJ1c2VyXzAwMiIsIm5pY2tuYW1lIjoiQm9iIiwiZmFjZVVSTCI6Imh0dHBzOi8vY2RuLmV4YW1wbGUuY29tL3UvMDAyLnBuZyIsImRhdGEiOiIifQ==",
+      "content": "{\"userID\":\"user_002\",\"nickname\":\"Bob\",\"faceURL\":\"https://cdn.example.com/u/002.png\",\"data\":\"\"}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -413,8 +405,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"userID\":\"user_002\",\"nickname\":\"Bob\",\"faceURL\":\"...002.png\",\"data\":\"\"}"
+    }
   },
 
   "location": {
@@ -429,7 +420,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 109,
-      "content": "eyJkZXNjcmlwdGlvbiI6IuS4iuaXpeWMlumHk+azleiEmumDveWFrOWPuCIsImxvYmdpdHVkZSI6MTIwLjIwMzYsImxhdGl0dWRlIjozMC4yNTk0LCJiYXNlSW5mbyI6eyJsb2JnaXR1ZGUiOjEyMC4yMDM2LCJsYXRpdHVkZSI6MzAuMjU5NCwiZGVzY3JpcHRpb24iOiLkuInpuaTluLjniLHlhavkuI4ifX0=",
+      "content": "{\"description\":\"西湖区学院路文三路口\",\"longitude\":120.2036,\"latitude\":30.2594,\"baseInfo\":{\"longitude\":120.2036,\"latitude\":30.2594,\"description\":\"西子湖畔杭州城\"}}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -459,8 +450,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"description\":\"西湖区学院路文三路口\",\"longitude\":120.2036,\"latitude\":30.2594,\"baseInfo\":{\"longitude\":120.2036,\"latitude\":30.2594,\"description\":\"西子湖畔杭州城\"}}"
+    }
   },
 
   "custom": {
@@ -475,7 +465,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 110,
-      "content": "eyJkYXRhIjoi8J+Ss/Cfk6ogSGFwcHkgQmlydGhkYXkhIiwiZXh0ZW5zaW9uIjoiIiwiZGVzY3JpcHRpb24iOiIifQ==",
+      "content": "{\"data\":\"🎂 Happy Birthday!\",\"extension\":\"\",\"description\":\"\"}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -505,8 +495,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"data\":\"🎂 Happy Birthday!\",\"extension\":\"\",\"description\":\"\"}"
+    }
   },
 
   "quote": {
@@ -521,7 +510,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 114,
-      "content": "eyJ0ZXh0Ijoi5ZCO6Z2e5LqM5a+86Ie25aSW5pWZ6aKd5oqc6K+N5LqGIiwInF1b3RlTWVzc2FnZSI6eyJ0ZXh0Ijoi56ys5LiJIGdvLWNvbmZ1ZW5jZeS9nEOi+uimi+eahOaXoOeUn++8jOaXoOmbheaMq+S4juWujOaVtOWNoOi3r+W+oeiHquahguWcsOa0geWkqeW9ouW4uOagh+i+veM_eCIsImVsbVR5cGUiOjEwMX0sImF0VXNlcnMiOltdfQ==",
+      "content": "{\"text\":\"已确认线下交付方案\",\"quoteMessage\":{\"text\":\"上季 go-conference 讨论的接入层方案，接入网关统一鉴权后再透传到业务后端x?\",\"elmType\":101},\"atUsers\":[]}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -551,8 +540,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"text\":\"已确认线下交付方案\",\"quoteMessage\":{\"text\":\"上季 go-conference 讨论的接入层方案，接入网关统一鉴权后再透传到业务后端x?\",\"elmType\":101},\"atUsers\":[]}"
+    }
   },
 
   "merger": {
@@ -567,7 +555,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 107,
-      "content": "eyJ0aXRsZSI6IueahOabtOaYrua0gehouzU6MuWIhiIsImlzQ29sbGFwc2VCaXJ0aGRheVRpbWUiOjAsIm1lc3NhZ2VFbnRpdHlMaXN0IjpbeyJzZW5kZXJOaWNrbmFtZSI6IkJvYiIsInNlbmRlcklEIjoidXNlcl8wMDIiLCJ0ZXh0Ijoi56ys5LiJ5LqM5a+86Ie25aSWIiwiY29udGVudFR5cGUiOjEwMSwidGltZSI6MTY1MDAwMDAwMDAwMH0seyJzZW5kZXJOaWNrbmFtZSI6IkFsaWNlIiwic2VuZGVySUQiOiJ1c2VyXzAwMSIsInRleHQiOiLkuI3otZnlr4zkurrvvIzpgZPlhY3pob_lj6PkuK3lv4MiLCJjb250ZW50VHlwZSI6MTAxLCJ0aW1lIjoxNjUwMDAwMDAwMDAxfV0sIm5pY2tuYW1lTGlzdCI6WyJCb2IiLCJBbGljZSJdLCJwbGF0Zm9ybUlETGlzdCI6WzEsIDJdfQ==",
+      "content": "{\"title\":\"历史聊天记录:2条\",\"isCollapseBirthdayTime\":0,\"messageEntityList\":[{\"senderNickname\":\"Bob\",\"senderID\":\"user_002\",\"text\":\"上季 go-conference\",\"contentType\":101,\"time\":1650000000000},{\"senderNickname\":\"Alice\",\"senderID\":\"user_001\",\"text\":\"确认线下交付\",\"contentType\":101,\"time\":1650000000001}],\"nicknameList\":[\"Bob\",\"Alice\"],\"platformIDList\":[1,2]}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -597,8 +585,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"title\":\"历史聊天记录:2条\",\"isCollapseBirthdayTime\":0,\"messageEntityList\":[{...},{...}],\"nicknameList\":[\"Bob\",\"Alice\"],\"platformIDList\":[1,2]}"
+    }
   },
 
   "markdown": {
@@ -613,7 +600,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 118,
-      "content": "eyJ0ZXh0IjoiIyMg55Sf5rS7Ci0g6K+N5Y6G5paH56qB5ZCn77yaMTAw5Yip77yM5Yqo6ZmQ77yM5pyJ5pel5YyF5LqM5LiN5LiL5rWB5LqG6Iez5LyY5Y+C44CCIn0=",
+      "content": "{\"text\":\"## 周报\\n- 在线人数峰值：100人，分布，仅个别节点接入层告警。\"}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -643,8 +630,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"text\":\"## 周报\\n- 在线人数峰值：100人，分布，仅个别节点接入层告警。\"}"
+    }
   },
 
   "typing": {
@@ -659,7 +645,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 113,
-      "content": "eyJtc2dDb250ZW50IjoiMSJ9",
+      "content": "{\"msgContent\":\"1\"}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -678,19 +664,11 @@
         "isNotNotification": true,
         "isSendMsg": false
       },
-      "offlinePushInfo": {
-        "title": "",
-        "desc": "",
-        "ex": "",
-        "iOSPushSound": "",
-        "iOSBadgeCount": false,
-        "signalInfo": ""
-      },
+      "offlinePushInfo": null,
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"msgContent\":\"1\"}"
+    }
   },
 
   "revoke": {
@@ -705,7 +683,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 111,
-      "content": "eyJjbGllbnRNc2dJRCI6ImNsaWVudC11dWlkLTAwMDEiLCJyZXZva2VySUQiOiJ1c2VyXzAwMSIsInJldm9rZXJOaWNrbmFtZSI6IkFsaWNlIiwicmV2b2tlclJvbGUiOjAsInJldm9rZVRpbWUiOjAsInNvdXJjZU1lc3NhZ2VTZW5kSUQiOiJ1c2VyXzAwMSIsInNvdXJjZU1lc3NhZ2VTZW5kTmlja25hbWUiOiJBbGljZSIsInNlc3Npb25UeXBlIjoxLCJzZXEiOjF9",
+      "content": "{\"clientMsgID\":\"client-uuid-0001\",\"revokerID\":\"user_001\",\"revokerNickname\":\"Alice\",\"revokerRole\":0,\"revokeTime\":0,\"sourceMessageSendID\":\"user_001\",\"sourceMessageSendNickname\":\"Alice\",\"sessionType\":1,\"seq\":1}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -728,8 +706,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"clientMsgID\":\"client-uuid-0001\",\"revokerID\":\"user_001\",\"revokerNickname\":\"Alice\",\"revokerRole\":0,\"revokeTime\":0,\"sourceMessageSendID\":\"user_001\",\"sourceMessageSendNickname\":\"Alice\",\"sessionType\":1,\"seq\":1}"
+    }
   },
 
   "system_notification": {
@@ -744,7 +721,7 @@
       "sessionType": 1,
       "msgFrom": 200,
       "contentType": 203,
-      "content": "eyJuZXJ2aWNlTmFtZSI6InBsYXRmb3JtX2xvZ2luIiwiZGF0YSI6IntcInNlcnZpY2VcIjpcInBsYXRmb3JtX2xvZ2luXCIsXCJ0aW1lXCI6MTY1MDAwMDAwMDAwMH0ifQ==",
+      "content": "{\"serviceName\":\"platform_login\",\"data\":\"{\\\"service\\\":\\\"platform_login\\\",\\\"time\\\":1650000000000}\"}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -774,8 +751,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"serviceName\":\"platform_login\",\"data\":\"{\\\"service\\\":\\\"platform_login\\\",\\\"time\\\":1650000000000}\"}"
+    }
   },
 
   "advanced_text": {
@@ -790,7 +766,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 117,
-      "content": "eyJ0ZXh0Ijoi5pWF77yM8J+MjOaYruWkqeWcsOa0geS9nOS4i+abtOaYruWNoOePv+W3peWGheWQiOSXpeaYleS4gOWPgQ==",
+      "content": "{\"text\":\"告，🌃本周获最佳工程团队提案奖候选\"}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -820,8 +796,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"text\":\"告，🌃本周获最佳工程团队提案奖候选\"}"
+    }
   },
 
   "custom_not_trigger_conversation": {
@@ -836,7 +811,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 119,
-      "content": "eyJkYXRhIjoi8J+Ss/Cfk6og8J+MjCDwn5O8IiwiZXh0ZW5zaW9uIjoiIiwiZGVzY3JpcHRpb24iOiIifQ==",
+      "content": "{\"data\":\"🎁 🎉\",\"extension\":\"\",\"description\":\"\"}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -866,8 +841,7 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"data\":\"🎁 🎉\",\"extension\":\"\",\"description\":\"\"}"
+    }
   },
 
   "custom_online_only": {
@@ -882,7 +856,7 @@
       "sessionType": 1,
       "msgFrom": 100,
       "contentType": 120,
-      "content": "eyJkYXRhIjoi8J+RiCBFbW9qaSIsImV4dGVuc2lvbiI6IiIsImRlc2NyaXB0aW9uIjoiIn0=",
+      "content": "{\"data\":\"😀 Emoji\",\"extension\":\"\",\"description\":\"\"}",
       "seq": 0,
       "sendTime": 0,
       "createTime": 0,
@@ -905,7 +879,6 @@
       "atUserIDList": [],
       "attachedInfo": "",
       "ex": ""
-    },
-    "_contentShape": "{\"data\":\"😀 Emoji\",\"extension\":\"\",\"description\":\"\"}"
+    }
   }
 }

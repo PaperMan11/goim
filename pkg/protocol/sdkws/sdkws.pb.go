@@ -1595,7 +1595,7 @@ type MsgData struct {
 	SessionType      int32                  `protobuf:"varint,9,opt,name=sessionType,proto3" json:"sessionType,omitempty"`                                                                    // 会话类型(1-单聊, 2-群聊)
 	MsgFrom          int32                  `protobuf:"varint,10,opt,name=msgFrom,proto3" json:"msgFrom,omitempty"`                                                                           // 消息来源(100-用户消息, 200-系统消息)
 	ContentType      int32                  `protobuf:"varint,11,opt,name=contentType,proto3" json:"contentType,omitempty"`                                                                   // 消息内容类型
-	Content          []byte                 `protobuf:"bytes,12,opt,name=content,proto3" json:"content,omitempty"`                                                                            // 消息内容(二进制)
+	Content          string                 `protobuf:"bytes,12,opt,name=content,proto3" json:"content,omitempty"`                                                                            // 消息内容(文本/JSON，protobuf JSON 序列化天然支持；内部 gRPC 二进制传输兼容原 bytes 类型)
 	Seq              int64                  `protobuf:"varint,14,opt,name=seq,proto3" json:"seq,omitempty"`                                                                                   // 消息序列号
 	SendTime         int64                  `protobuf:"varint,15,opt,name=sendTime,proto3" json:"sendTime,omitempty"`                                                                         // 发送时间戳
 	CreateTime       int64                  `protobuf:"varint,16,opt,name=createTime,proto3" json:"createTime,omitempty"`                                                                     // 创建时间戳
@@ -1717,11 +1717,11 @@ func (x *MsgData) GetContentType() int32 {
 	return 0
 }
 
-func (x *MsgData) GetContent() []byte {
+func (x *MsgData) GetContent() string {
 	if x != nil {
 		return x.Content
 	}
-	return nil
+	return ""
 }
 
 func (x *MsgData) GetSeq() int64 {
@@ -5841,7 +5841,7 @@ const file_sdkws_sdkws_proto_rawDesc = "" +
 	"\amsgFrom\x18\n" +
 	" \x01(\x05R\amsgFrom\x12 \n" +
 	"\vcontentType\x18\v \x01(\x05R\vcontentType\x12\x18\n" +
-	"\acontent\x18\f \x01(\fR\acontent\x12\x10\n" +
+	"\acontent\x18\f \x01(\tR\acontent\x12\x10\n" +
 	"\x03seq\x18\x0e \x01(\x03R\x03seq\x12\x1a\n" +
 	"\bsendTime\x18\x0f \x01(\x03R\bsendTime\x12\x1e\n" +
 	"\n" +
