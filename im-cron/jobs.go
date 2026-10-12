@@ -3,7 +3,6 @@ package imcron
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/mcontext"
@@ -25,9 +24,9 @@ func (s *CronServer) DeleteMessage() {
 	logx.Infof("DeleteMessage start, delTime: %v, deleteCount: %d, deleteLimit: %d", delTime, deleteCount, deleteLimit)
 
 	count := 0
-	operationID := fmt.Sprintf("cron_delete_message_%d_%d", os.Getpid(), now.UnixMilli())
+	operationID := mcontext.NewOperationID("cron_delete_message")
 	for i := range deleteCount {
-		ctx := mcontext.SetOperationIDInContext(context.Background(), fmt.Sprintf("%s_%d", operationID, i))
+		ctx := mcontext.SetOperationIDInContext(context.Background(), fmt.Sprintf("%s:%d", operationID, i))
 		resp, err := s.msgService.DestructMsgs(ctx, &pbmsg.DestructMsgsReq{
 			Timestamp: delTime.UnixMilli(),
 			Limit:     deleteLimit,
@@ -51,9 +50,9 @@ func (s *CronServer) ClearUserMessage() {
 	logx.Infof("ClearUserMessage start, delTime: %v, deleteCount: %d, deleteLimit: %d", delTime, deleteCount, deleteLimit)
 
 	count := 0
-	operationID := fmt.Sprintf("cron_clear_user_message_%d_%d", os.Getpid(), now.UnixMilli())
+	operationID := mcontext.NewOperationID("cron_clear_user_message")
 	for i := range deleteCount {
-		ctx := mcontext.SetOperationIDInContext(context.Background(), fmt.Sprintf("%s_%d", operationID, i))
+		ctx := mcontext.SetOperationIDInContext(context.Background(), fmt.Sprintf("%s:%d", operationID, i))
 		resp, err := s.convService.ClearUserConversationMsg(ctx, &pbconv.ClearUserConversationMsgReq{
 			Timestamp: delTime.UnixMilli(),
 			Limit:     deleteLimit,

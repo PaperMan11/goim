@@ -10,7 +10,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/storage/token"
 	"github.com/PaperMan11/goim/pkg/utils/jwtx"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
-	"github.com/google/uuid"
+	"github.com/PaperMan11/goim/pkg/utils/uuidx"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -56,7 +56,7 @@ func (l *GetAdminTokenLogic) GetAdminToken(req *auth.GetAdminTokenReq) (*auth.Ge
 }
 
 func (l *GetAdminTokenLogic) generateAdminToken(_ context.Context, userID string) (*token.TokenInfo, error) {
-	tokenUUID := uuid.New().String()
+	tokenUUID := uuidx.New()
 	expireAt := timex.Unix() + l.svcCtx.Config.JwtAuth.AccessExpire
 
 	jwtToken, err := jwtx.GenerateAdminToken(

@@ -320,5 +320,5 @@ type DeliveryRepository interface {
 ## 依赖
 
 - Go 1.16+
-- github.com/google/uuid
+- github.com/PaperMan11/goim/pkg/utils/uuidx
 - github.com/zeromicro/go-zero

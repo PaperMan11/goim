@@ -9,7 +9,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/metrics"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
-	"github.com/google/uuid"
+	"github.com/PaperMan11/goim/pkg/utils/uuidx"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -128,7 +128,7 @@ func (d *Dispatcher) deliverEvent(ctx context.Context, event *WebhookEvent, conf
 	// 创建投递记录
 	nowTime := timex.Now()
 	record := &DeliveryRecord{
-		ID:           uuid.New().String(),
+		ID:           uuidx.New(),
 		EventID:      event.EventID,
 		EventType:    event.EventType,
 		EventPayload: string(eventPayload),
@@ -237,7 +237,7 @@ func (d *Dispatcher) Dispatch(event *WebhookEvent) error {
 
 	// 设置事件ID
 	if event.EventID == "" {
-		event.EventID = uuid.New().String()
+		event.EventID = uuidx.New()
 	}
 
 	// 设置时间戳
@@ -261,7 +261,7 @@ func (d *Dispatcher) DispatchSync(ctx context.Context, event *WebhookEvent) erro
 
 	// 设置事件ID
 	if event.EventID == "" {
-		event.EventID = uuid.New().String()
+		event.EventID = uuidx.New()
 	}
 
 	// 设置时间戳

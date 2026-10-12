@@ -10,7 +10,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
-	"github.com/google/uuid"
+	"github.com/PaperMan11/goim/pkg/utils/uuidx"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -159,5 +159,5 @@ func (l *Logic) requireGroupPermission(ctx context.Context, admin, user *model.G
 
 // 生成随机groupID
 func (l *Logic) generateGroupID() string {
-	return fmt.Sprintf("group-%d-%s", timex.Now().UnixMilli(), uuid.New().String())
+	return fmt.Sprintf("group-%d-%s", timex.Now().UnixMilli(), uuidx.New())
 }

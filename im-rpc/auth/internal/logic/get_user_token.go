@@ -13,7 +13,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/storage/token"
 	"github.com/PaperMan11/goim/pkg/utils/jwtx"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
-	"github.com/google/uuid"
+	"github.com/PaperMan11/goim/pkg/utils/uuidx"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -85,7 +85,7 @@ func (l *GetUserTokenLogic) GetUserToken(req *auth.GetUserTokenReq) (*auth.GetUs
 }
 
 func (l *GetUserTokenLogic) generateToken(_ context.Context, userID string, platformID int32) (*token.TokenInfo, error) {
-	tokenUUID := uuid.New().String()
+	tokenUUID := uuidx.New()
 	expireAt := timex.Unix() + l.svcCtx.Config.JwtAuth.AccessExpire
 
 	jwtToken, err := jwtx.GenerateAccessToken(

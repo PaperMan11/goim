@@ -72,9 +72,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	msgMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionMessage)
 	convSeqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqConversation)
 	userSeqMongo := mon.MustNewModel(c.Mongo.Uri, c.Mongo.Database, model.CollectionSeqUser)
-	msgModel := msgModel.NewMsgModel(msgMongo, singleFlight, redisCli, c.Mongo.EnableCache)
-	seqUserModel := seqUserModel.NewSeqUserModel(userSeqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
-	seqConversationModel := seqConversationModel.NewSeqConversationModel(convSeqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	newMsgModel := msgModel.NewMsgModel(msgMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	newSeqUserModel := seqUserModel.NewSeqUserModel(userSeqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
+	newSeqConversationModel := seqConversationModel.NewSeqConversationModel(convSeqMongo, singleFlight, redisCli, c.Mongo.EnableCache)
 
 	clientOpts := []zrpc.ClientOption{
 		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
@@ -131,7 +131,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	msgTransferProducer := kafkax.MustNewProducer(c.MsgTransferProducer)
 
 	// seq allocator
-	seqAllocator := allocator.MustNewRedisSeqAllocator(redisCli, allocator.WithGetMaxSeqFn(seqConversationModel.GetConversationMaxSeq))
+	seqAllocator := allocator.MustNewRedisSeqAllocator(redisCli, allocator.WithGetMaxSeqFn(newSeqConversationModel.GetConversationMaxSeq))
 
 	// notification dispatcher
 	notificationSender := msgdispatcher.NewMsgDispatcher(msgService)
@@ -143,9 +143,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		SingleFlight:         singleFlight,
 		AuthVerifier:         authVerifier,
 		MsgTransferProducer:  msgTransferProducer,
-		MsgModel:             msgModel,
-		SeqUserModel:         seqUserModel,
-		SeqConversationModel: seqConversationModel,
+		MsgModel:             newMsgModel,
+		SeqUserModel:         newSeqUserModel,
+		SeqConversationModel: newSeqConversationModel,
 		SeqAllocator:         seqAllocator,
 		NotificationSender:   notificationSender,
 

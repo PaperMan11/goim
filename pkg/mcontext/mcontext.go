@@ -5,7 +5,14 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/utils/convert"
+	"github.com/PaperMan11/goim/pkg/utils/uuidx"
 )
+
+// NewOperationID 生成内部服务的 operationID，格式为 "<source>:<uuid>"。
+// source 标识来源（如 "cron_delete_message"、"transfer"），uuid 保证全局唯一。
+func NewOperationID(source string) string {
+	return source + ":" + uuidx.New()
+}
 
 func GetOpUserIDFromContext(ctx context.Context) string {
 	return convert.ToString(ctx.Value(constant.OpUserID))

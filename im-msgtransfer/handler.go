@@ -3,6 +3,7 @@ package immsgtransfer
 import (
 	"context"
 
+	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/msgprocessor"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	pbmsg "github.com/PaperMan11/goim/pkg/protocol/msg"
@@ -12,7 +13,22 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// withOperationID 确保 ctx 携带 operationID（server 拦截器硬性要求），
+// 并在指定 opUserID 时注入，使下游 requireSelfOrAdmin 自然通过。
+// msgtransfer 消费的消息已在上游完成鉴权，此处仅继承用户身份做异步后续操作。
+func withOperationID(ctx context.Context, opUserID string) context.Context {
+	if mcontext.GetOperationIDFromContext(ctx) == "" {
+		ctx = mcontext.SetOperationIDInContext(ctx, mcontext.NewOperationID("transfer"))
+	}
+	if opUserID != "" {
+		ctx = mcontext.SetOpUserIDInContext(ctx, opUserID)
+	}
+	return ctx
+}
+
 func (mt *MsgTransfer) consumePersistentMsgs(ctx context.Context, msg queuex.Message) error {
+	ctx = withOperationID(ctx, "")
+
 	var msgData pbmsg.MsgDataToMongoByMQ
 	if err := proto.Unmarshal(msg.Value(), &msgData); err != nil {
 		logc.Errorf(ctx, "failed to unmarshal msg data, err: %v", err)
@@ -51,7 +67,7 @@ func (mt *MsgTransfer) consumeMsg(ctx context.Context, msg queuex.Message) error
 }
 
 func (mt *MsgTransfer) batchHandleMsg(conversationID string, msgs []*sdkws.MsgData) {
-	ctx := context.Background()
+	ctx := withOperationID(context.Background(), "")
 	mt.handleReadReceipt(ctx, msgs)
 	storeMsg, notStoreMsg, storeNotifyMsg, notStoreNotifyMsg := mt.classifyMsgType(ctx, msgs)
 
@@ -149,7 +165,9 @@ func (mt *MsgTransfer) handleReadReceipt(ctx context.Context, msgs []*sdkws.MsgD
 
 	for conversationID, hasReadSeqMap := range convUserHasReadSeq {
 		for userID, hasReadSeq := range hasReadSeqMap {
-			mt.msgService.SetConversationHasReadSeq(ctx, &pbmsg.SetConversationHasReadSeqReq{
+			// 已读回执由该用户发出，继承其身份使下游 requireSelfOrAdmin 自然通过
+			callCtx := withOperationID(ctx, userID)
+			mt.msgService.SetConversationHasReadSeq(callCtx, &pbmsg.SetConversationHasReadSeqReq{
 				ConversationID: conversationID,
 				HasReadSeq:     hasReadSeq,
 				UserID:         userID,
