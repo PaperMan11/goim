@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -1096,8 +1097,7 @@ func (l *Logic) CreateGroupChatConversations(ctx context.Context, req *pbconvers
 	//}
 
 	now := timex.Now()
-	// 群聊会话 conversation_id 通常是 groupID 或派生 ID；这里用 groupID 作为 conversation_id
-	conversationID := groupID
+	conversationID := fmt.Sprintf("g_%s", groupID)
 	convs := make([]*model.Conversation, 0, len(userIDs))
 	for _, uid := range userIDs {
 		convs = append(convs, &model.Conversation{
