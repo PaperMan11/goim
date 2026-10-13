@@ -3,7 +3,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"time"
 
@@ -1088,8 +1087,9 @@ func (l *Logic) CreateSingleChatConversations(ctx context.Context, req *pbconver
 func (l *Logic) CreateGroupChatConversations(ctx context.Context, req *pbconversation.CreateGroupChatConversationsReq) (*pbconversation.CreateGroupChatConversationsResp, error) {
 	userIDs := req.GetUserIDs()
 	groupID := req.GetGroupID()
-	if len(userIDs) == 0 || groupID == "" {
-		return nil, errx.ArgsError.Wrap("userIDs and groupID are required")
+	conversationID := req.GetConversationID()
+	if len(userIDs) == 0 || groupID == "" || conversationID == "" {
+		return nil, errx.ArgsError.Wrap("userIDs, groupID and conversationID are required")
 	}
 
 	//if err := l.requireAdmin(); err != nil {
@@ -1097,7 +1097,6 @@ func (l *Logic) CreateGroupChatConversations(ctx context.Context, req *pbconvers
 	//}
 
 	now := timex.Now()
-	conversationID := fmt.Sprintf("g_%s", groupID)
 	convs := make([]*model.Conversation, 0, len(userIDs))
 	for _, uid := range userIDs {
 		convs = append(convs, &model.Conversation{

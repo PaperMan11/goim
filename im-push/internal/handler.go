@@ -344,7 +344,7 @@ func (p *Pusher) consumeOfflinePushMsg(ctx context.Context, msg queuex.Message) 
 
 func (p *Pusher) toOfflinePushTopic(ctx context.Context, userIDs []string, msg *sdkws.MsgData) error {
 	pushMsg := pbpush.PushMsgReq{
-		ConversationID: msgprocessor.GetConversationIDByMsg(msg),
+		ConversationID: msgprocessor.GetChatConversationIDByMsg(msg),
 		MsgData:        msg,
 		UserIDs:        userIDs,
 	}

@@ -160,6 +160,7 @@ message CreateSingleChatConversationsResp {}
 message CreateGroupChatConversationsReq {
   repeated string userIDs = 1;  // 用户ID列表
   string groupID = 2;           // 群组ID
+  string conversationID = 3;    // 会话ID
 }
 
 // 创建群聊会话响应

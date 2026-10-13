@@ -34,6 +34,7 @@ func GetNotificationConversationIDByMsg(msg *sdkws.MsgData) string {
 	return ""
 }
 
+// 数据库中存储的会话ID
 func GetChatConversationIDByMsg(msg *sdkws.MsgData) string {
 	switch msg.SessionType {
 	case constant.SingleChatType:
@@ -48,6 +49,7 @@ func GetChatConversationIDByMsg(msg *sdkws.MsgData) string {
 	return ""
 }
 
+// 只用于业务逻辑判断消息类型（非数据库会话ID）
 func GetConversationIDByMsg(msg *sdkws.MsgData) string {
 	options := Options(msg.Options)
 	switch msg.SessionType {

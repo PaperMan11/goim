@@ -1294,11 +1294,12 @@ func (*CreateSingleChatConversationsResp) Descriptor() ([]byte, []int) {
 
 // 创建群聊会话请求
 type CreateGroupChatConversationsReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserIDs       []string               `protobuf:"bytes,1,rep,name=userIDs,proto3" json:"userIDs,omitempty"` // 用户ID列表
-	GroupID       string                 `protobuf:"bytes,2,opt,name=groupID,proto3" json:"groupID,omitempty"` // 群组ID
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	UserIDs        []string               `protobuf:"bytes,1,rep,name=userIDs,proto3" json:"userIDs,omitempty"`               // 用户ID列表
+	GroupID        string                 `protobuf:"bytes,2,opt,name=groupID,proto3" json:"groupID,omitempty"`               // 群组ID
+	ConversationID string                 `protobuf:"bytes,3,opt,name=conversationID,proto3" json:"conversationID,omitempty"` // 会话ID
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateGroupChatConversationsReq) Reset() {
@@ -1341,6 +1342,13 @@ func (x *CreateGroupChatConversationsReq) GetUserIDs() []string {
 func (x *CreateGroupChatConversationsReq) GetGroupID() string {
 	if x != nil {
 		return x.GroupID
+	}
+	return ""
+}
+
+func (x *CreateGroupChatConversationsReq) GetConversationID() string {
+	if x != nil {
+		return x.ConversationID
 	}
 	return ""
 }
@@ -3344,10 +3352,11 @@ const file_conversation_conversation_proto_rawDesc = "" +
 	"\x06sendID\x18\x02 \x01(\tR\x06sendID\x12&\n" +
 	"\x0econversationID\x18\x03 \x01(\tR\x0econversationID\x12*\n" +
 	"\x10conversationType\x18\x04 \x01(\x05R\x10conversationType\"#\n" +
-	"!CreateSingleChatConversationsResp\"U\n" +
+	"!CreateSingleChatConversationsResp\"}\n" +
 	"\x1fCreateGroupChatConversationsReq\x12\x18\n" +
 	"\auserIDs\x18\x01 \x03(\tR\auserIDs\x12\x18\n" +
-	"\agroupID\x18\x02 \x01(\tR\agroupID\"\"\n" +
+	"\agroupID\x18\x02 \x01(\tR\agroupID\x12&\n" +
+	"\x0econversationID\x18\x03 \x01(\tR\x0econversationID\"\"\n" +
 	" CreateGroupChatConversationsResp\"|\n" +
 	"\x18SetConversationMaxSeqReq\x12&\n" +
 	"\x0econversationID\x18\x01 \x01(\tR\x0econversationID\x12 \n" +

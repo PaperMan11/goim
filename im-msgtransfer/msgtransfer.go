@@ -137,7 +137,7 @@ func validateConfig(cfg *Config) error {
 func (mt *MsgTransfer) Start() {
 	// batcher 必须先于 consumer 启动，否则消息 Push 时无 worker 消费
 	mt.batcher.Start(func(msg *sdkws.MsgData) string {
-		return msgprocessor.GetConversationIDByMsg(msg)
+		return msgprocessor.GetChatConversationIDByMsg(msg)
 	}, mt.batchHandleMsg)
 
 	mt.webhookManager.Start()

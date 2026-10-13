@@ -78,7 +78,7 @@ func (l *Logic) sendSingleChatMsg(ctx context.Context, msgData *sdkws.MsgData) e
 		return err
 	}
 
-	conversationID := msgprocessor.GetConversationIDByMsg(msgData)
+	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
 	isAllowed, err := l.isRecvMsgAllowed(ctx, msgData.RecvID, conversationID, msgData)
 	if err != nil {
 		return err
@@ -1132,8 +1132,9 @@ func (l *Logic) AddMsg(ctx context.Context, req *pbmsg.AddMsgReq) (*pbmsg.AddMsg
 			}
 			memberUserIDs := groupInfoResp.GetUserIDs()
 			_, err = l.svcCtx.ConvService.CreateGroupChatConversations(ctx, &conversation.CreateGroupChatConversationsReq{
-				GroupID: msg.GroupID,
-				UserIDs: memberUserIDs,
+				GroupID:        msg.GroupID,
+				UserIDs:        memberUserIDs,
+				ConversationID: conversationID,
 			})
 			if err != nil {
 				l.Errorf("create group chat conversations failed, err: %v, groupID: %s", err, msg.GroupID)
@@ -1204,8 +1205,9 @@ func (l *Logic) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddM
 			}
 			memberUserIDs := groupInfoResp.GetUserIDs()
 			_, err = l.svcCtx.ConvService.CreateGroupChatConversations(ctx, &conversation.CreateGroupChatConversationsReq{
-				GroupID: msgs[0].GroupID,
-				UserIDs: memberUserIDs,
+				GroupID:        msgs[0].GroupID,
+				UserIDs:        memberUserIDs,
+				ConversationID: conversationID,
 			})
 			if err != nil {
 				l.Errorf("create group chat conversations failed, err: %v, groupID: %s", err, msgs[0].GroupID)
