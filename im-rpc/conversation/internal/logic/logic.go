@@ -7,6 +7,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
 	pbreconversation "github.com/PaperMan11/goim/pkg/protocol/conversation"
+	sequser "github.com/PaperMan11/goim/pkg/storage/mongo/sequser"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -60,8 +61,9 @@ func (l *Logic) requireAdmin() error {
 	return nil
 }
 
-// fillConversationSeqs 批量从 SeqUser 表读取用户在各会话中的 min/max/read seq，
-// 填充到 pb Conversation 列表。未读数 = max_seq - read_seq。
+// fillConversationSeqs 批量从 SeqUser + SeqConversation 表读取用户在各会话中的可见 seq 区间，
+// 填充到 pb Conversation 列表。SeqUser.MinSeq/MaxSeq 为 0 表示无限制，回落到会话级 seq
+// （见 sequser.EffectiveMinSeq/EffectiveMaxSeq）。未读数 = effectiveMaxSeq - read_seq。
 func (l *Logic) fillConversationSeqs(ownerUserID string, pbConvs []*pbreconversation.Conversation) {
 	if len(pbConvs) == 0 {
 		return
@@ -70,26 +72,43 @@ func (l *Logic) fillConversationSeqs(ownerUserID string, pbConvs []*pbreconversa
 	for _, c := range pbConvs {
 		convIDs = append(convIDs, c.GetConversationID())
 	}
-	seqs, err := l.svcCtx.SeqUserModel.BatchGetUserSeqs(l.ctx, ownerUserID, convIDs)
+	userSeqs, err := l.svcCtx.SeqUserModel.BatchGetUserSeqs(l.ctx, ownerUserID, convIDs)
 	if err != nil {
 		l.Errorf("batch get user seqs failed, owner: %s, err: %v", ownerUserID, err)
 		return
 	}
+	convSeqs, err := l.svcCtx.SeqConversationModel.BatchGetConversationSeqs(l.ctx, convIDs)
+	if err != nil {
+		l.Errorf("batch get conversation seqs failed, owner: %s, err: %v", ownerUserID, err)
+		return
+	}
 	for _, c := range pbConvs {
-		if seq, ok := seqs[c.GetConversationID()]; ok && seq != nil {
-			c.MinSeq = seq.MinSeq
-			c.MaxSeq = seq.MaxSeq
+		convID := c.GetConversationID()
+		var userMin, userMax int64
+		if seq, ok := userSeqs[convID]; ok && seq != nil {
+			userMin, userMax = seq.MinSeq, seq.MaxSeq
 		}
+		var convMin, convMax int64
+		if cs, ok := convSeqs[convID]; ok && cs != nil {
+			convMin, convMax = cs.MinSeq, cs.MaxSeq
+		}
+		c.MinSeq = sequser.EffectiveMinSeq(userMin, convMin)
+		c.MaxSeq = sequser.EffectiveMaxSeq(userMax, convMax)
 	}
 }
 
-// getUserUnreadCount 从 SeqUser 表读取用户在某会话的未读数（max_seq - read_seq）。
+// getUserUnreadCount 未读数 = effectiveMaxSeq - read_seq。
+// effectiveMaxSeq：SeqUser.MaxSeq 为 0 时取会话级 maxSeq，被踢/退群冻结时取冻结值。
 func (l *Logic) getUserUnreadCount(ownerUserID, conversationID string) int64 {
 	seq, err := l.svcCtx.SeqUserModel.GetUserSeq(l.ctx, ownerUserID, conversationID)
 	if err != nil || seq == nil {
 		return 0
 	}
-	unread := seq.MaxSeq - seq.ReadSeq
+	convMax, err := l.svcCtx.SeqConversationModel.GetConversationMaxSeq(l.ctx, conversationID)
+	if err != nil {
+		convMax = 0
+	}
+	unread := sequser.EffectiveMaxSeq(seq.MaxSeq, convMax) - seq.ReadSeq
 	if unread < 0 {
 		return 0
 	}
@@ -107,11 +126,20 @@ func (l *Logic) batchGetUserUnreadCounts(ownerUserID string, convIDs []string) m
 		l.Errorf("batch get user seqs for unread failed, owner: %s, err: %v", ownerUserID, err)
 		return result
 	}
+	convSeqs, err := l.svcCtx.SeqConversationModel.BatchGetConversationSeqs(l.ctx, convIDs)
+	if err != nil {
+		l.Errorf("batch get conversation seqs for unread failed, owner: %s, err: %v", ownerUserID, err)
+		return result
+	}
 	for convID, seq := range seqs {
 		if seq == nil {
 			continue
 		}
-		unread := seq.MaxSeq - seq.ReadSeq
+		var convMax int64
+		if cs, ok := convSeqs[convID]; ok && cs != nil {
+			convMax = cs.MaxSeq
+		}
+		unread := sequser.EffectiveMaxSeq(seq.MaxSeq, convMax) - seq.ReadSeq
 		if unread < 0 {
 			unread = 0
 		}

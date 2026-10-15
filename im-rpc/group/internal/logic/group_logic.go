@@ -456,6 +456,50 @@ func (l *Logic) GetUserInGroupMembers(ctx context.Context, req *pbgroup.GetUserI
 
 // ==================== 成员操作 ====================
 
+// freezeConversationMaxSeq 冻结用户在群会话中的可见消息上界（退群/被踢时调用）。
+// 冻结后 pullMessage/未读数均以该值为上界（见 sequser.EffectiveMaxSeq）。
+// 失败只记日志不回滚：成员关系已变更，seq 边界允许少量偏差。
+func (l *Logic) freezeConversationMaxSeq(ctx context.Context, groupID string, userIDs []string) {
+	if len(userIDs) == 0 {
+		return
+	}
+	conversationID := msgprocessor.GetConversationIDBySessionType(constant.ReadGroupChatType, groupID)
+	maxSeqResp, err := l.svcCtx.MsgService.GetConversationMaxSeq(ctx, &pbmsg.GetConversationMaxSeqReq{
+		ConversationID: conversationID,
+	})
+	if err != nil {
+		l.Errorf("get conversation max seq failed, groupID: %s, err: %v", groupID, err)
+		return
+	}
+	if maxSeqResp.GetMaxSeq() <= 0 {
+		return
+	}
+	if _, err := l.svcCtx.MsgService.SetUserConversationMaxSeq(ctx, &pbmsg.SetUserConversationMaxSeqReq{
+		OwnerUserID:    userIDs,
+		ConversationID: conversationID,
+		MaxSeq:         maxSeqResp.GetMaxSeq(),
+	}); err != nil {
+		l.Errorf("freeze user conversation max seq failed, groupID: %s, userIDs: %v, err: %v", groupID, userIDs, err)
+	}
+}
+
+// resetConversationMaxSeq 解冻用户在群会话中的可见消息上界（入群/被邀请时调用），
+// MaxSeq 置 0 表示无限制，可见上界跟随会话增长（见 sequser.EffectiveMaxSeq）。
+// 重新入群必须调用，否则用户会被冻结在退群/被踢时的旧 seq 上。
+func (l *Logic) resetConversationMaxSeq(ctx context.Context, groupID string, userIDs []string) {
+	if len(userIDs) == 0 {
+		return
+	}
+	conversationID := msgprocessor.GetConversationIDBySessionType(constant.ReadGroupChatType, groupID)
+	if _, err := l.svcCtx.MsgService.SetUserConversationMaxSeq(ctx, &pbmsg.SetUserConversationMaxSeqReq{
+		OwnerUserID:    userIDs,
+		ConversationID: conversationID,
+		MaxSeq:         0,
+	}); err != nil {
+		l.Errorf("reset user conversation max seq failed, groupID: %s, userIDs: %v, err: %v", groupID, userIDs, err)
+	}
+}
+
 func (l *Logic) JoinGroup(ctx context.Context, req *pbgroup.JoinGroupReq) (*pbgroup.JoinGroupResp, error) {
 	groupID := req.GetGroupID()
 	if groupID == "" {
@@ -513,17 +557,8 @@ func (l *Logic) JoinGroup(ctx context.Context, req *pbgroup.JoinGroupReq) (*pbgr
 			return nil, err
 		}
 
-		// set conversation user seq
-		conversationID := msgprocessor.GetConversationIDBySessionType(constant.ReadGroupChatType, groupID)
-		_, err = l.svcCtx.MsgService.SetUserConversationMaxSeq(ctx, &pbmsg.SetUserConversationMaxSeqReq{
-			OwnerUserID:    []string{memberID},
-			ConversationID: conversationID,
-			MaxSeq:         0,
-		})
-		if err != nil {
-			l.Errorf("set user conversation max seq failed, groupID: %s, userID: %s, err: %v", groupID, memberID, err)
-			return nil, err
-		}
+		// 解冻可见消息上界（重新入群场景必须重置，否则被冻结在旧 seq）
+		l.resetConversationMaxSeq(ctx, groupID, []string{memberID})
 
 		// version
 		groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, memberID, model.VersionStateInsert)
@@ -609,6 +644,9 @@ func (l *Logic) QuitGroup(ctx context.Context, req *pbgroup.QuitGroupReq) (*pbgr
 		l.Errorf("incr member count failed, groupID: %s, err: %v", groupID, err)
 		return nil, err
 	}
+
+	// 退群后冻结可见消息上界，之后的消息对该用户不可见
+	l.freezeConversationMaxSeq(ctx, groupID, []string{userID})
 
 	groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, userID, model.VersionStateDelete)
 	if err != nil {
@@ -716,6 +754,10 @@ func (l *Logic) InviteUserToGroup(ctx context.Context, req *pbgroup.InviteUserTo
 		for _, member := range members {
 			userIDs = append(userIDs, member.UserID)
 		}
+
+		// 解冻可见消息上界（被邀请者可能曾退群/被踢，MaxSeq 处于冻结状态）
+		l.resetConversationMaxSeq(ctx, groupID, userIDs)
+
 		groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, groupID, userIDs, model.VersionStateInsert)
 		if err != nil {
 			l.Errorf("incr version log batch for member insert failed, groupID: %s, err: %v", groupID, err)
@@ -806,6 +848,9 @@ func (l *Logic) KickGroupMember(ctx context.Context, req *pbgroup.KickGroupMembe
 		l.Errorf("incr member count failed, groupID: %s, err: %v", groupID, err)
 		return nil, err
 	}
+
+	// 被踢后冻结可见消息上界，之后的消息对被踢者不可见
+	l.freezeConversationMaxSeq(ctx, groupID, kickedUserIDs)
 
 	if len(kickedUserIDs) > 0 {
 		groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, groupID, kickedUserIDs, model.VersionStateDelete)

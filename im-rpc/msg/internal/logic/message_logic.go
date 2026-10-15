@@ -23,6 +23,7 @@ import (
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	msgModel "github.com/PaperMan11/goim/pkg/storage/mongo/msg"
+	seqUserModel "github.com/PaperMan11/goim/pkg/storage/mongo/sequser"
 	"github.com/PaperMan11/goim/pkg/utils/convert"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"google.golang.org/protobuf/proto"
@@ -312,7 +313,15 @@ func (l *Logic) PullMessageBySeqs(ctx context.Context, req *sdkws.PullMessageByS
 
 func (l *Logic) pullMessage(ctx context.Context, userID string, conversationID string, seqStart, seqEnd int64, limit int, order sdkws.PullOrder) (pullMsg *sdkws.PullMsgs, isNotification bool, err error) {
 	seqUser, err := l.svcCtx.SeqUserModel.GetUserSeq(ctx, userID, conversationID)
-	if err != nil {
+	if errors.Is(err, seqUserModel.ErrSeqUserNotFound) {
+		seqUser = &model.SeqUser{
+			UserID:         userID,
+			ConversationID: conversationID,
+			MinSeq:         0,
+			MaxSeq:         0,
+			ReadSeq:        0,
+		}
+	} else if err != nil {
 		l.Errorf("get user seq failed, err: %v, userID: %s, conversationID: %s", err, userID, conversationID)
 		return nil, false, err
 	}
@@ -322,8 +331,8 @@ func (l *Logic) pullMessage(ctx context.Context, userID string, conversationID s
 		return nil, false, err
 	}
 	minSeq, maxSeq := seqConversation.MinSeq, seqConversation.MaxSeq
-	minSeq = max(max(minSeq, seqUser.MinSeq), seqStart)
-	maxSeq = min(min(maxSeq, seqUser.MaxSeq), seqEnd)
+	minSeq = max(seqUserModel.EffectiveMinSeq(seqUser.MinSeq, minSeq), seqStart)
+	maxSeq = min(seqUserModel.EffectiveMaxSeq(seqUser.MaxSeq, maxSeq), seqEnd)
 	if minSeq > maxSeq {
 		return &sdkws.PullMsgs{
 			IsEnd:  true,
@@ -1232,6 +1241,23 @@ func (l *Logic) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddM
 	err = l.svcCtx.SeqConversationModel.SetConversationMaxSeq(ctx, conversationID, seqEnd)
 	if err != nil {
 		l.Errorf("set conversation max seq failed, err: %v, conversationID: %s", err, conversationID)
+	}
+
+	// 发送者对自己发送的消息默认已读：按 sender 去重，ReadSeq 推进到各自在本批的最大 seq。
+	// 群聊批次可能含多个发送者，不能用整批 seqEnd（会把别人晚发的消息误判已读）。
+	senderReadSeq := make(map[string]int64)
+	for _, msg := range msgs {
+		if msg.MsgFrom != constant.UserMsgType {
+			continue
+		}
+		if msg.Seq > senderReadSeq[msg.SendID] {
+			senderReadSeq[msg.SendID] = msg.Seq
+		}
+	}
+	for senderID, readSeq := range senderReadSeq {
+		if err := l.svcCtx.SeqUserModel.SetUserReadSeq(ctx, senderID, conversationID, readSeq); err != nil {
+			l.Errorf("set sender read seq failed, err: %v, conversationID: %s, senderID: %s, readSeq: %d", err, conversationID, senderID, readSeq)
+		}
 	}
 	return &pbmsg.AddMsgsResp{
 		LastSeq: seqEnd,

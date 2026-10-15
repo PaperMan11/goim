@@ -30,15 +30,6 @@ func (m *cachedSeqUserModel) jitterTTL(baseSeconds int) int {
 	return randx.JitterInt(baseSeconds, ttlJitterRatioPct)
 }
 
-func (m *cachedSeqUserModel) UpsertUserSeq(ctx context.Context, userID, conversationID string, minSeq, maxSeq, readSeq int64) error {
-	err := m.SeqUserModel.UpsertUserSeq(ctx, userID, conversationID, minSeq, maxSeq, readSeq)
-	if err != nil {
-		return err
-	}
-	sredis.CacheDelDouble(ctx, m.redis, GetSeqUserKey(userID, conversationID))
-	return nil
-}
-
 func (m *cachedSeqUserModel) SetUserReadSeq(ctx context.Context, userID, conversationID string, readSeq int64) error {
 	err := m.SeqUserModel.SetUserReadSeq(ctx, userID, conversationID, readSeq)
 	if err != nil {

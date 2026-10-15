@@ -6,6 +6,7 @@ import (
 	pbconv "github.com/PaperMan11/goim/pkg/protocol/conversation"
 	pbmsg "github.com/PaperMan11/goim/pkg/protocol/msg"
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
+	"github.com/PaperMan11/goim/pkg/storage/mongo/sequser"
 )
 
 func (l *Logic) GetMaxSeq(ctx context.Context, req *sdkws.GetMaxSeqReq) (*sdkws.GetMaxSeqResp, error) {
@@ -107,9 +108,9 @@ func (l *Logic) GetConversationsHasReadAndMaxSeq(ctx context.Context, req *pbmsg
 	if err != nil {
 		return nil, err
 	}
-	readSeqs, err := l.svcCtx.SeqUserModel.BatchGetUserReadSeqs(ctx, userID, conversationIDs)
+	userSeqs, err := l.svcCtx.SeqUserModel.BatchGetUserSeqs(ctx, userID, conversationIDs)
 	if err != nil {
-		l.Errorf("batch user readed conversation req failed, userID: %s, err: %v", userID, err)
+		l.Errorf("batch get user seqs failed, userID: %s, err: %v", userID, err)
 		return nil, err
 	}
 
@@ -124,10 +125,22 @@ func (l *Logic) GetConversationsHasReadAndMaxSeq(ctx context.Context, req *pbmsg
 
 	seqs := make(map[string]*pbmsg.Seqs)
 	for _, convID := range req.ConversationIDs {
+		var convMax int64
+		var maxSeqTime int64
+		if cs, ok := seqConvs[convID]; ok && cs != nil {
+			convMax = cs.MaxSeq
+			maxSeqTime = cs.UpdatedAt.Unix()
+		}
+		var userMax, readSeq int64
+		if us, ok := userSeqs[convID]; ok && us != nil {
+			userMax = us.MaxSeq
+			readSeq = us.ReadSeq
+		}
 		seqs[convID] = &pbmsg.Seqs{
-			MaxSeq:     seqConvs[convID].MaxSeq,
-			MaxSeqTime: seqConvs[convID].UpdatedAt.Unix(),
-			HasReadSeq: readSeqs[convID],
+			// 用户被踢/退群后 MaxSeq 冻结，需封顶会话级 maxSeq
+			MaxSeq:     sequser.EffectiveMaxSeq(userMax, convMax),
+			MaxSeqTime: maxSeqTime,
+			HasReadSeq: readSeq,
 		}
 	}
 

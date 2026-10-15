@@ -18,6 +18,24 @@ var (
 	ErrSeqUserNotFound = errors.New("seq user not found")
 )
 
+// EffectiveMaxSeq 统一 "0 = 无限制" 语义：用户未设置 max_seq（默认 0）时，
+// 可见消息上界为会话级 convMaxSeq；被踢出/退群冻结时返回冻结值。
+// 所有计算用户可见上界/未读数的读路径必须使用此函数，禁止直接比较 SeqUser.MaxSeq。
+func EffectiveMaxSeq(userMaxSeq, convMaxSeq int64) int64 {
+	if userMaxSeq > 0 && userMaxSeq < convMaxSeq {
+		return userMaxSeq
+	}
+	return convMaxSeq
+}
+
+// EffectiveMinSeq 统一 min_seq 语义：用户级 min_seq（入群边界/清空记录）与会话级取较大者。
+func EffectiveMinSeq(userMinSeq, convMinSeq int64) int64 {
+	if userMinSeq > convMinSeq {
+		return userMinSeq
+	}
+	return convMinSeq
+}
+
 type SeqUserModel interface {
 	BatchGetUserReadSeqs(ctx context.Context, userID string, conversationIDs []string) (map[string]int64, error)
 	BatchGetUserSeqs(ctx context.Context, userID string, conversationIDs []string) (map[string]*model.SeqUser, error)
@@ -26,7 +44,6 @@ type SeqUserModel interface {
 	SetUserMaxSeq(ctx context.Context, userID string, conversationID string, maxSeq int64) error
 	SetUserMinSeq(ctx context.Context, userID string, conversationID string, minSeq int64) error
 	SetUserReadSeq(ctx context.Context, userID string, conversationID string, readSeq int64) error
-	UpsertUserSeq(ctx context.Context, userID string, conversationID string, minSeq int64, maxSeq, readSeq int64) error
 }
 
 type defaultSeqUserModel struct {
@@ -43,30 +60,13 @@ func NewSeqUserModel(mod *mon.Model, barrier syncx.SingleFlight, rdb goredis.Uni
 	return NewCachedSeqUserModel(m, rdb, barrier)
 }
 
-func (s *defaultSeqUserModel) UpsertUserSeq(ctx context.Context, userID, conversationID string, minSeq, maxSeq, readSeq int64) error {
-	update := bson.M{
-		"$set": bson.M{
-			"max_seq":    maxSeq,
-			"min_seq":    minSeq,
-			"read_seq":   readSeq,
-			"updated_at": timex.Now(),
-		},
-		"$setOnInsert": bson.M{
-			"user_id":         userID,
-			"conversation_id": conversationID,
-			"min_seq":         minSeq,
-			"max_seq":         maxSeq,
-			"read_seq":        readSeq,
-		},
-	}
-	_, err := s.mod.UpdateOne(ctx, bson.M{"user_id": userID, "conversation_id": conversationID}, update, options.UpdateOne().SetUpsert(true))
-	return err
-}
-
 func (s *defaultSeqUserModel) SetUserReadSeq(ctx context.Context, userID, conversationID string, readSeq int64) error {
 	update := bson.M{
+		// read_seq 单调递增：用 $max 防止 Kafka 乱序/重试时旧值覆盖新值
+		"$max": bson.M{
+			"read_seq": readSeq,
+		},
 		"$set": bson.M{
-			"read_seq":   readSeq,
 			"updated_at": timex.Now(),
 		},
 		"$setOnInsert": bson.M{
@@ -74,7 +74,6 @@ func (s *defaultSeqUserModel) SetUserReadSeq(ctx context.Context, userID, conver
 			"conversation_id": conversationID,
 			"min_seq":         0,
 			"max_seq":         0,
-			"read_seq":        0,
 		},
 	}
 	_, err := s.mod.UpdateOne(ctx, bson.M{"user_id": userID, "conversation_id": conversationID}, update, options.UpdateOne().SetUpsert(true))
@@ -90,7 +89,7 @@ func (s *defaultSeqUserModel) SetUserMaxSeq(ctx context.Context, userID, convers
 		"$setOnInsert": bson.M{
 			"user_id":         userID,
 			"conversation_id": conversationID,
-			"min_seq":         1,
+			"min_seq":         0,
 			"read_seq":        0,
 		},
 	}
@@ -100,14 +99,17 @@ func (s *defaultSeqUserModel) SetUserMaxSeq(ctx context.Context, userID, convers
 
 func (s *defaultSeqUserModel) SetUserMinSeq(ctx context.Context, userID, conversationID string, minSeq int64) error {
 	update := bson.M{
+		// min_seq 单调递增（清空历史后不可恢复可见）：用 $max 防并发/重试回退
+		"$max": bson.M{
+			"min_seq": minSeq,
+		},
 		"$set": bson.M{
-			"min_seq":    minSeq,
 			"updated_at": timex.Now(),
 		},
 		"$setOnInsert": bson.M{
 			"user_id":         userID,
 			"conversation_id": conversationID,
-			"max_seq":         1,
+			"max_seq":         0,
 			"read_seq":        0,
 		},
 	}
