@@ -30,6 +30,7 @@ run/
 # Editor directories and files
 .vscode/
 .idea/
+.trae/
 .project
 .classpath
 .settings/
