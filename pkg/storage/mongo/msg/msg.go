@@ -45,9 +45,9 @@ type MsgModel interface {
 	UpdateRevoke(ctx context.Context, conversationID string, seq int64, revoke *model.RevokeModel) error
 	// DeleteBySeq 物理删除消息（$unset 清空槽位）
 	DeleteBySeq(ctx context.Context, conversationID string, seqs []int64) error
-	// DeleteByTimestamp 按时间戳物理删除过期文档
-	DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) error
-	// 标记删除（将 userID 加入 msgs.N.del_list）
+	// DeleteByTimestamp 按时间戳物理删除过期文档，返回 conversationID -> 被删除消息的 seq 列表
+	DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) (map[string][]int64, error)
+	// 标记删除（将 userID 加入目标槽位的 del_list）
 	MarkDeleteBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error
 	// 标记消息已读
 	MarkReadBySeqRange(ctx context.Context, userID string, conversationID string, seqStart, seqEnd int64) error
@@ -72,9 +72,14 @@ func NewMsgModel(mod *mon.Model, barrier syncx.SingleFlight, rdb goredis.Univers
 	return NewCachedMsgModel(m, rdb, barrier)
 }
 
-// docIDPrefix 返回 conversationID 的 DocID 前缀正则匹配
+// docIDPrefix 返回 conversationID 对应的一批 DocID 的前缀匹配条件。
+// DocID 格式为 "conversationID:seqSuffix"，同一会话的所有文档都以此为前缀。
+// 用 [$gte, $lt) 半开区间代替 $regex：conversationID 可能含正则元字符（如 "."、"+"、"("），
+// 直接拼进正则会造成误匹配甚至 invalid regex 报错；半开区间按字节序比较，语义等价且更安全。
+// 上界取 ";"（':' 的下一个 ASCII 字符）：seqSuffix 以数字 0-9 开头，均落在 "conv:" 与 "conv:;" 之间。
 func docIDPrefix(conversationID string) bson.M {
-	return bson.M{"doc_id": bson.M{"$regex": "^" + conversationID + ":"}}
+	prefix := conversationID + ":"
+	return bson.M{"doc_id": bson.M{"$gte": prefix, "$lt": prefix + ";"}}
 }
 
 // buildSlotUpdate 构建按索引位置精确"追加/写入"槽位的聚合管道 $set 片段。
@@ -458,109 +463,144 @@ func (m *defaultMsgModel) UpdateRevoke(ctx context.Context, conversationID strin
 	return err
 }
 
-// DeleteBySeq 物理删除消息：$unset 清空指定槽位
+// DeleteBySeq 物理删除消息：按 docID 分组，每个文档一次 $unset 清空其命中的所有槽位。
+// 同文档下的多个 seq 合并成一次 UpdateOne（旧实现是逐 seq 一次往返），减少 N 倍网络往返。
 func (m *defaultMsgModel) DeleteBySeq(ctx context.Context, conversationID string, seqs []int64) error {
-	doc := &model.MsgDocModel{}
-	for _, seq := range seqs {
-		docID := doc.GetDocID(conversationID, seq)
-		msgIndex := doc.GetMsgIndex(seq)
-
-		filter := bson.M{"doc_id": docID}
-		update := bson.M{
-			"$unset": bson.M{
-				"msgs." + convert.ToString(msgIndex): "",
-			},
-		}
-		if _, err := m.mod.UpdateOne(ctx, filter, update); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// DeleteByTimestamp 按时间戳物理删除过期文档：遍历文档，若所有消息都过期则整文档删除
-func (m *defaultMsgModel) DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) error {
-	for _, conversationID := range conversationIDs {
-		var docs []*model.MsgDocModel
-		if err := m.mod.Find(ctx, &docs, docIDPrefix(conversationID)); err != nil {
-			return err
-		}
-
-		for _, doc := range docs {
-			allExpired := false
-			hasAnyMsg := false
-			for _, info := range doc.Msgs {
-				if info != nil && info.Msg != nil {
-					hasAnyMsg = true
-					if info.Msg.SendTime > timestamp {
-						allExpired = false
-						break
-					}
-					allExpired = true
-				}
-			}
-			if hasAnyMsg && allExpired {
-				if _, err := m.mod.DeleteOne(ctx, bson.M{"doc_id": doc.DocID}); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// MarkDeleteBySeqs 标记删除（将 userID 加入 msgs.N.del_list）
-// 每 doc 仅执行一次 UpdateOne：按 seq 数字索引直接定位槽位路径，批量 $addToSet 追加 userID。
-func (m *defaultMsgModel) MarkDeleteBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error {
-	// doc := &model.MsgDocModel{}
-	// for _, seq := range seqs {
-	// 	docID := doc.GetDocID(conversationID, seq)
-	// 	msgIndex := doc.GetMsgIndex(seq)
-
-	// 	filter := bson.M{"doc_id": docID}
-	// 	update := bson.M{
-	// 		"$addToSet": bson.M{
-	// 			"msgs." + convert.ToString(msgIndex) + ".del_list": userID,
-	// 		},
-	// 	}
-	// 	if _, err := m.mod.UpdateOne(ctx, filter, update); err != nil {
-	// 		return err
-	// 	}
-	// }
-	// return nil
 	if len(seqs) == 0 {
 		return nil
 	}
 
-	// key: docID  value: 该 doc 下需要标记删除的 msgIndex 列表（去重，同槽位多次写入无意义）
 	doc := &model.MsgDocModel{}
-	docIndexMap := make(map[string]map[int64]struct{})
+	docIdxMap := make(map[string][]int64)
 	for _, seq := range seqs {
 		docID := doc.GetDocID(conversationID, seq)
-		idx := doc.GetMsgIndex(seq)
-		if _, ok := docIndexMap[docID]; !ok {
-			docIndexMap[docID] = make(map[int64]struct{})
-		}
-		docIndexMap[docID][idx] = struct{}{}
+		msgIndex := doc.GetMsgIndex(seq)
+		docIdxMap[docID] = append(docIdxMap[docID], msgIndex)
 	}
 
-	// 按 docID 循环，一个 doc 只执行一次 UpdateOne
-	for docID, indexSet := range docIndexMap {
-		addToSet := bson.M{}
-		for idx := range indexSet {
-			addToSet["msgs."+convert.ToString(idx)+".del_list"] = userID
+	for docID, indexes := range docIdxMap {
+		unsetFields := make(bson.M, len(indexes))
+		for _, msgIndex := range indexes {
+			unsetFields["msgs."+convert.ToString(msgIndex)] = ""
+		}
+		update := bson.M{"$unset": unsetFields}
+		if _, err := m.mod.UpdateOne(ctx, bson.M{"doc_id": docID}, update); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteByTimestamp 按时间戳物理删除过期文档（整文档删除），返回 conversationID -> 被删除消息的 seq 列表。
+// timestamp 与 MsgDataModel.SendTime 同为毫秒时间戳；只有"文档内全部有效消息都已过期"的文档才整体删除，
+// 只要存在任一条晚于 timestamp 的消息就保留整个文档（不做文档内部分槽位清理）。
+// 返回被删 seq 是为了让缓存层精确失效这些 seq 的缓存键，保持缓存与 DB 一致。
+func (m *defaultMsgModel) DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) (map[string][]int64, error) {
+	deleted := make(map[string][]int64)
+	if len(conversationIDs) == 0 {
+		return deleted, nil
+	}
+
+	for _, conversationID := range conversationIDs {
+		// 投影只取判定所需的 doc_id 与各槽位的 seq/send_time，避免把整份消息正文加载进内存。
+		opts := options.Find().SetProjection(bson.M{
+			"doc_id":             1,
+			"msgs.msg.seq":       1,
+			"msgs.msg.send_time": 1,
+		})
+		var docs []*model.MsgDocModel
+		if err := m.mod.Find(ctx, &docs, docIDPrefix(conversationID), opts); err != nil {
+			return nil, err
 		}
 
-		update := bson.M{"$addToSet": addToSet}
+		var expiredDocIDs []string
+		var expiredSeqs []int64
+		for _, d := range docs {
+			var docSeqs []int64
+			// 默认视为"可整体回收"：没有任何有效消息的空文档（历史物理删除留下的空壳）同样应当回收，
+			// 而不是像旧实现那样因 hasAnyMsg=false 被永久跳过。
+			allExpired := true
+			for _, info := range d.Msgs {
+				if info == nil || info.Msg == nil {
+					continue
+				}
+				if info.Msg.SendTime > timestamp {
+					allExpired = false
+					break
+				}
+				docSeqs = append(docSeqs, info.Msg.Seq)
+			}
+			if allExpired {
+				expiredDocIDs = append(expiredDocIDs, d.DocID)
+				expiredSeqs = append(expiredSeqs, docSeqs...)
+			}
+		}
 
-		res, err := m.mod.UpdateMany(ctx, bson.M{"doc_id": docID}, update)
-		if err != nil {
+		if len(expiredDocIDs) == 0 {
+			continue
+		}
+		// 分块批量删除：一次 DeleteMany 干掉一整块过期文档，远优于旧实现的逐文档 DeleteOne。
+		// 注：这里是"先扫描判定、后删除"，扫描与删除之间若有新消息写入，新消息可能随整文档一起被删除；
+		// 该接口是管理员触发的低频历史清理，且以 timestamp 为界本就允许清理，残余竞态可接受。
+		for start := 0; start < len(expiredDocIDs); start += deleteDocChunkSize {
+			end := min(start+deleteDocChunkSize, len(expiredDocIDs))
+			if _, err := m.mod.DeleteMany(ctx, bson.M{"doc_id": bson.M{"$in": expiredDocIDs[start:end]}}); err != nil {
+				return nil, err
+			}
+		}
+		deleted[conversationID] = expiredSeqs
+	}
+
+	return deleted, nil
+}
+
+// MarkDeleteBySeqs 标记删除（将 userID 加入目标槽位的 del_list）
+// 每个 doc 执行两次 Update：先把历史 null 的 del_list 规范化为空数组，再按 msg.seq 定位槽位追加 userID。
+// 槽位不存在（消息尚未持久化 / 已被物理删除 / 稀疏占位）时自动跳过，重复标记因 $addToSet 幂等也不会报错。
+func (m *defaultMsgModel) MarkDeleteBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error {
+	if len(seqs) == 0 {
+		return nil
+	}
+
+	// key: docID  value: 该 doc 下需要标记删除的 seq 集合（去重，同一消息多次标记无意义）
+	doc := &model.MsgDocModel{}
+	docSeqMap := make(map[string]map[int64]struct{})
+	for _, seq := range seqs {
+		docID := doc.GetDocID(conversationID, seq)
+		if _, ok := docSeqMap[docID]; !ok {
+			docSeqMap[docID] = make(map[int64]struct{})
+		}
+		docSeqMap[docID][seq] = struct{}{}
+	}
+
+	// 按 docID 循环：每个 doc 先规范化历史数据，再按 msg.seq 定位目标槽位追加 userID
+	for docID, seqSet := range docSeqMap {
+		// 1) 兼容历史数据：早期槽位的 del_list 未加 omitempty，nil 会落库成 del_list: null，
+		//    此时 $addToSet 报 "Cannot apply $addToSet to non-array field"，先规范化为空数组。
+		//    e.msg 存在 => 只处理真实消息槽位（稀疏占位与已被物理删除的槽位是 null 元素，跳过它们，
+		//    否则 $set 会报 "Cannot create field in element null"）；
+		//    $exists + $eq null => 只命中"字段存在且为 null"，新数据该字段缺失，不会被无谓改写。
+		normalizeOpts := options.UpdateMany().SetArrayFilters([]any{
+			bson.M{"e.msg": bson.M{"$exists": true}, "e.del_list": bson.M{"$exists": true, "$eq": nil}},
+		})
+		if _, err := m.mod.UpdateMany(ctx, bson.M{"doc_id": docID},
+			bson.M{"$set": bson.M{"msgs.$[e].del_list": bson.A{}}}, normalizeOpts); err != nil {
 			return err
 		}
 
-		// 文档不存在，消息块还未创建，标记删除无法落地，打 warn 日志
-		if res.MatchedCount == 0 {
-			// log.Warnf("MarkDeleteBySeqs doc not exist, docID=%s indexes=%v", docID, indexSet)
+		// 2) 只对"目标 seq 且真实存在"的槽位追加 userID：槽位不存在（消息尚未持久化 / 已被物理删除 /
+		//    稀疏占位）时不会匹配，因此不会报错；$addToSet 幂等 => 已删除的消息重复标记同样不报错，
+		//    无需额外查询"消息是否已删除"。
+		seqList := make([]int64, 0, len(seqSet))
+		for seq := range seqSet {
+			seqList = append(seqList, seq)
+		}
+		addOpts := options.UpdateMany().SetArrayFilters([]any{
+			bson.M{"e.msg": bson.M{"$exists": true}, "e.msg.seq": bson.M{"$in": seqList}},
+		})
+		if _, err := m.mod.UpdateMany(ctx, bson.M{"doc_id": docID},
+			bson.M{"$addToSet": bson.M{"msgs.$[e].del_list": userID}}, addOpts); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -665,6 +705,9 @@ func (m *defaultMsgModel) SearchMessage(ctx context.Context, req *model.SearchMe
 	if req.RecvID != "" {
 		preMatch["msgs.msg.recv_id"] = req.RecvID
 	}
+	if req.GroupID != "" {
+		preMatch["msgs.msg.group_id"] = req.GroupID
+	}
 	if req.SendTime > 0 {
 		preMatch["msgs.msg.send_time"] = bson.M{"$gte": req.SendTime}
 	}
@@ -688,6 +731,9 @@ func (m *defaultMsgModel) SearchMessage(ctx context.Context, req *model.SearchMe
 	}
 	if req.RecvID != "" {
 		msgMatch["msgs.msg.recv_id"] = req.RecvID
+	}
+	if req.GroupID != "" {
+		msgMatch["msgs.msg.group_id"] = req.GroupID
 	}
 	if req.SendTime > 0 {
 		msgMatch["msgs.msg.send_time"] = bson.M{"$gte": req.SendTime}

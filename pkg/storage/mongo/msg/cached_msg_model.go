@@ -98,19 +98,23 @@ func (m *cachedMsgModel) DeleteBySeq(ctx context.Context, conversationID string,
 	return nil
 }
 
-func (m *cachedMsgModel) DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) error {
-	err := m.MsgModel.DeleteByTimestamp(ctx, conversationIDs, timestamp)
+func (m *cachedMsgModel) DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) (map[string][]int64, error) {
+	deleted, err := m.MsgModel.DeleteByTimestamp(ctx, conversationIDs, timestamp)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, convID := range conversationIDs {
-		sredis.CacheDelDouble(ctx, m.redis,
+	// 只失效真正发生删除的会话：按被删 seq 精确失效单条消息缓存，再失效会话级派生缓存，
+	// 避免 DeleteByTimestamp 整文档删除后缓存里仍残留可读到的旧消息。
+	for convID, seqs := range deleted {
+		delKeys := m.msgSeqCacheKeys(convID, seqs)
+		delKeys = append(delKeys,
 			GetMsgLatestKey(convID),
 			GetMsgMaxSeqKey(convID),
 			GetMsgMinSeqKey(convID),
 		)
+		sredis.CacheDelDouble(ctx, m.redis, delKeys...)
 	}
-	return nil
+	return deleted, nil
 }
 
 func (m *cachedMsgModel) MarkDeleteBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error {

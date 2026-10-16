@@ -155,7 +155,17 @@ func (l *Logic) SetConversationHasReadSeq(ctx context.Context, req *pbmsg.SetCon
 	if err != nil {
 		return nil, err
 	}
-	err = l.svcCtx.SeqUserModel.SetUserReadSeq(ctx, req.UserID, req.ConversationID, req.HasReadSeq)
+
+	conversation, err := l.svcCtx.SeqConversationModel.GetSeqConversation(ctx, req.ConversationID)
+	if err != nil {
+		l.Errorf("get seq conversation failed, convID: %s, err: %v", req.ConversationID, err)
+		return nil, err
+	}
+	hasReadSeq := req.HasReadSeq
+	if hasReadSeq > conversation.MaxSeq {
+		hasReadSeq = conversation.MaxSeq
+	}
+	err = l.svcCtx.SeqUserModel.SetUserReadSeq(ctx, req.UserID, req.ConversationID, hasReadSeq)
 	if err != nil {
 		return nil, err
 	}
@@ -167,8 +177,15 @@ func (l *Logic) SetUserConversationMaxSeq(ctx context.Context, req *pbmsg.SetUse
 	if err != nil {
 		return nil, err
 	}
+
+	conversation, err := l.svcCtx.SeqConversationModel.GetSeqConversation(ctx, req.ConversationID)
+	if err != nil {
+		l.Errorf("get seq conversation failed, convID: %s, err: %v", req.ConversationID, err)
+		return nil, err
+	}
+	maxSeq := sequser.EffectiveMaxSeq(req.MaxSeq, conversation.MaxSeq)
 	for _, userID := range req.OwnerUserID {
-		if err := l.svcCtx.SeqUserModel.SetUserMaxSeq(ctx, userID, req.ConversationID, req.MaxSeq); err != nil {
+		if err := l.svcCtx.SeqUserModel.SetUserMaxSeq(ctx, userID, req.ConversationID, maxSeq); err != nil {
 			return nil, err
 		}
 	}
@@ -180,8 +197,14 @@ func (l *Logic) SetUserConversationMinSeq(ctx context.Context, req *pbmsg.SetUse
 	if err != nil {
 		return nil, err
 	}
+
+	conversation, err := l.svcCtx.SeqConversationModel.GetSeqConversation(ctx, req.ConversationID)
+	if err != nil {
+		l.Errorf("get seq conversation failed, convID: %s, err: %v", req.ConversationID, err)
+		return nil, err
+	}
 	for _, userID := range req.OwnerUserID {
-		if err := l.svcCtx.SeqUserModel.SetUserMinSeq(ctx, userID, req.ConversationID, req.MinSeq); err != nil {
+		if err := l.svcCtx.SeqUserModel.SetUserMinSeq(ctx, userID, req.ConversationID, sequser.EffectiveMinSeq(req.MinSeq, conversation.MinSeq)); err != nil {
 			return nil, err
 		}
 	}
@@ -193,8 +216,15 @@ func (l *Logic) SetUserConversationsMinSeq(ctx context.Context, req *pbmsg.SetUs
 	if err != nil {
 		return nil, err
 	}
+
+	conversation, err := l.svcCtx.SeqConversationModel.GetSeqConversation(ctx, req.ConversationID)
+	if err != nil {
+		l.Errorf("get seq conversation failed, convID: %s, err: %v", req.ConversationID, err)
+		return nil, err
+	}
+	minSeq := sequser.EffectiveMinSeq(req.Seq, conversation.MinSeq)
 	for _, userID := range req.UserIDs {
-		if err := l.svcCtx.SeqUserModel.SetUserMinSeq(ctx, userID, req.ConversationID, req.Seq); err != nil {
+		if err := l.svcCtx.SeqUserModel.SetUserMinSeq(ctx, userID, req.ConversationID, minSeq); err != nil {
 			return nil, err
 		}
 	}

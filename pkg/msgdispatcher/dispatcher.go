@@ -80,7 +80,6 @@ func (d *defaultMsgDispatcher) SendNotification(ctx context.Context, sendID, rec
 	notificationOpt := d.buildNotificationOpt(opts)
 	_ = d.fillSenderInfo(ctx, notificationOpt, msg)
 	optionsConfig := d.getNotificationConfig(contentType)
-	d.adjustSpecialNotificationConfig(optionsConfig, sendID, recvID, contentType)
 	msg.Options = d.buildMessageOptions(optionsConfig, notificationOpt.SendMessage)
 	d.adjustOptionsByContentType(msg.Options, contentType)
 
@@ -160,12 +159,6 @@ func (d *defaultMsgDispatcher) fillSenderInfo(ctx context.Context, opt *notifica
 	return nil
 }
 
-func (d *defaultMsgDispatcher) adjustSpecialNotificationConfig(config *NotificationConfig, sendID, recvID string, contentType int32) {
-	if sendID == recvID && contentType == constant.HasReadReceipt {
-		config.ReliabilityLevel = constant.UnreliableNotification
-	}
-}
-
 func (d *defaultMsgDispatcher) buildMessageOptions(config *NotificationConfig, sendMessage *bool) msgprocessor.Options {
 	opts := msgprocessor.NewOptions()
 
@@ -181,8 +174,12 @@ func (d *defaultMsgDispatcher) buildMessageOptions(config *NotificationConfig, s
 		opts = msgprocessor.WithOptions(opts, msgprocessor.WithOfflinePush(true))
 	}
 
+	// 两个 Reliable 级别都表示"保证送达"：通知必须落库，离线客户端才能通过 pull 补齐。
+	// 二者的差别只体现在通知本身是否携带消息内容（由 config 的 IsSendMsg/UnreadCount/
+	// OfflinePush 表达），不应体现为"是否落库"，否则 ReliableNotificationMsg 会退化成
+	// UnreliableNotification 的行为（实时推送一次即丢）。
 	switch config.ReliabilityLevel {
-	case constant.ReliableNotificationNoMsg:
+	case constant.ReliableNotificationNoMsg, constant.ReliableNotificationMsg:
 		opts = msgprocessor.WithOptions(opts, msgprocessor.WithHistory(true), msgprocessor.WithPersistent())
 	}
 
@@ -210,9 +207,12 @@ func (d *defaultMsgDispatcher) getNotificationConfig(contentType int32) *Notific
 	if config, ok := d.contentTypeMap[contentType]; ok {
 		return config
 	}
+	// 未显式配置的通知类型默认按"实时信号"处理（不落库、不进历史、不计未读）：
+	// 需要进入会话历史的通知必须在 contentTypeMap 中显式声明可靠级别，
+	// 避免新增通知类型默认污染会话历史与未读数。
 	return &NotificationConfig{
 		IsSendMsg:        true,
-		ReliabilityLevel: constant.ReliableNotificationMsg,
+		ReliabilityLevel: constant.UnreliableNotification,
 		UnreadCount:      true,
 		OfflinePush:      OfflinePushConfig{},
 	}

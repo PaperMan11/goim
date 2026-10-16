@@ -61,11 +61,13 @@ var DefaultNotification = Notification{
 	FriendRemarkSet:           NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.ReliableNotificationMsg, UnreadCount: true},
 	BlackAdded:                NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.ReliableNotificationMsg, UnreadCount: true},
 	BlackDeleted:              NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.ReliableNotificationMsg, UnreadCount: true},
-	FriendInfoUpdated:         NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.ReliableNotificationMsg, UnreadCount: true},
-	UserInfoUpdated:           NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.ReliableNotificationMsg, UnreadCount: true},
-	UserStatusChanged:         NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.ReliableNotificationMsg, UnreadCount: true},
-	ConversationChanged:       NotificationConfig{IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
-	ConversationSetPrivate:    NotificationConfig{IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
+	// 以下为"实时信号"类通知：只用于多端同步/缓存刷新，不应进入会话历史，也不应计入未读。
+	// 本项目中等价于"不落库"，离线端可通过会话列表、会话详情等接口补齐，无需靠消息流补发。
+	FriendInfoUpdated:      NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: true},
+	UserInfoUpdated:        NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: true},
+	UserStatusChanged:      NotificationConfig{IsSendMsg: true, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: true},
+	ConversationChanged:    NotificationConfig{IsSendMsg: false, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: false},
+	ConversationSetPrivate: NotificationConfig{IsSendMsg: false, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: false},
 }
 
 func BuildContentTypeMap(n *Notification) map[int32]*NotificationConfig {
@@ -108,9 +110,16 @@ func BuildContentTypeMap(n *Notification) map[int32]*NotificationConfig {
 		constant.ConversationChangeNotification:           &n.ConversationChanged,
 		constant.ConversationUnreadNotification:           &n.ConversationChanged,
 		constant.ConversationPrivateChatNotification:      &n.ConversationSetPrivate,
-		constant.MsgRevokeNotification:                    {IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
-		constant.HasReadReceipt:                           {IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
-		constant.DeleteMsgsNotification:                   {IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
+		// 撤回/删除通知需落库：客户端依赖它更新本地已缓存消息的撤回/删除状态。
+		constant.MsgRevokeNotification:  {IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
+		constant.DeleteMsgsNotification: {IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
+		// 已读回执不落库：已读位置已记录在 SeqUser 上，客户端可直接查询；
+		// 落库只会占用会话 seq、把"对方已读"变成自己的 +1 未读。
+		constant.HasReadReceipt: {IsSendMsg: false, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: false},
+		// 用户指令为多端自同步信号（sendID == recvID），不进会话历史。
+		constant.UserCommandAddNotification:    {IsSendMsg: false, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: false},
+		constant.UserCommandDeleteNotification: {IsSendMsg: false, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: false},
+		constant.UserCommandUpdateNotification: {IsSendMsg: false, ReliabilityLevel: constant.UnreliableNotification, UnreadCount: false},
 	}
 }
 

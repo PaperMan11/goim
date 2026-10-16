@@ -58,10 +58,10 @@ func indexGen(conversationID string, seqSuffix int64) string {
 // MsgInfoModel 消息槽位模型，对应文档中 msgs 数组的一个元素。
 // Msg 为 nil 表示空槽位（稀疏存储），支持 seq 跳跃场景。
 type MsgInfoModel struct {
-	Msg     *MsgDataModel `bson:"msg"`      // 消息数据，nil 表示空槽位
-	Revoke  *RevokeModel  `bson:"revoke"`   // 撤回信息，nil 表示未撤回（独立于 Msg，不修改原始数据）
-	DelList []string      `bson:"del_list"` // 逻辑删除该消息的用户ID列表（群聊场景各用户独立删除）
-	IsRead  bool          `bson:"is_read"`  // 文档级已读标记
+	Msg     *MsgDataModel `bson:"msg"`                // 消息数据，nil 表示空槽位
+	Revoke  *RevokeModel  `bson:"revoke"`             // 撤回信息，nil 表示未撤回（独立于 Msg，不修改原始数据）
+	DelList []string      `bson:"del_list,omitempty"` // 逻辑删除该消息的用户ID列表（群聊场景各用户独立删除）；nil 时不写入字段，避免落成 null 导致 $addToSet 报错
+	IsRead  bool          `bson:"is_read"`            // 文档级已读标记
 }
 
 // RevokeModel 撤回信息，独立存储在 MsgInfoModel.Revoke，不修改原始 MsgDataModel
@@ -121,6 +121,7 @@ func GenExceptionMessageBySeqs(seqs []int64) (exceptionMsg []*sdkws.MsgData) {
 type SearchMessageReq struct {
 	SendID      string
 	RecvID      string
+	GroupID     string // 群聊搜索时使用（群消息的 recv_id 为空，群标识在 group_id 字段）
 	SessionType int32
 	ContentType int32
 	SendTime    int64

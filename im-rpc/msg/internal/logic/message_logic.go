@@ -386,6 +386,7 @@ func (l *Logic) handleDeletedAndRevoked(userID string, msgs []*model.MsgInfoMode
 		if slices.Contains(msg.DelList, userID) {
 			msg.Msg.Content = ""
 			msg.Msg.Status = constant.MsgDeleted
+			continue
 		}
 		if msg.Revoke != nil {
 			msg.Msg.ContentType = constant.MsgRevokeNotification
@@ -621,7 +622,7 @@ func (l *Logic) RevokeMsg(ctx context.Context, req *pbmsg.RevokeMsgReq) (*pbmsg.
 			l.Errorf("get group member cache failed, err: %v, groupID: %s, userID: %s", err, dbMsg.GroupID, userInfo.UserID)
 			return nil, err
 		}
-		if req.UserID != dbMsg.SendID {
+		if req.UserID == dbMsg.SendID {
 			role = opMember.GetMember().RoleLevel
 		} else {
 			senderMember, err := l.svcCtx.GroupService.GetGroupMemberCache(ctx, &pbgroup.GetGroupMemberCacheReq{
@@ -674,6 +675,7 @@ func (l *Logic) MarkMsgsAsRead(ctx context.Context, req *pbmsg.MarkMsgsAsReadReq
 
 	conv, err := l.svcCtx.ConvService.GetConversation(ctx, &pbconv.GetConversationReq{
 		ConversationID: req.ConversationID,
+		OwnerUserID:    req.UserID,
 	})
 	if err != nil {
 		l.Errorf("get conversation failed, err: %v, conversationID: %s", err, req.ConversationID)
@@ -721,6 +723,7 @@ func (l *Logic) MarkConversationAsRead(ctx context.Context, req *pbmsg.MarkConve
 
 	conv, err := l.svcCtx.ConvService.GetConversation(ctx, &pbconv.GetConversationReq{
 		ConversationID: req.ConversationID,
+		OwnerUserID:    req.UserID,
 	})
 	if err != nil {
 		l.Errorf("get conversation failed, err: %v, conversationID: %s", err, req.ConversationID)
@@ -823,8 +826,7 @@ func (l *Logic) DeleteMsgPhysical(ctx context.Context, req *pbmsg.DeleteMsgPhysi
 	if err != nil {
 		return nil, err
 	}
-	err = l.svcCtx.MsgModel.DeleteByTimestamp(ctx, req.ConversationIDs, req.Timestamp)
-	if err != nil {
+	if _, err = l.svcCtx.MsgModel.DeleteByTimestamp(ctx, req.ConversationIDs, req.Timestamp); err != nil {
 		l.Errorf("delete msg by timestamp failed, err: %v, conversationIDs: %s, timestamp: %v", err, req.ConversationIDs, req.Timestamp)
 		return nil, err
 	}
@@ -946,9 +948,8 @@ func (l *Logic) GetLastMessageSeqByTime(ctx context.Context, req *pbmsg.GetLastM
 }
 
 func (l *Logic) SearchMessage(ctx context.Context, req *pbmsg.SearchMessageReq) (*pbmsg.SearchMessageResp, error) {
-	msgs, err := l.svcCtx.MsgModel.SearchMessage(ctx, &model.SearchMessageReq{
+	searchReq := &model.SearchMessageReq{
 		SendID:      req.SendID,
-		RecvID:      req.RecvID,
 		SessionType: req.SessionType,
 		ContentType: req.ContentType,
 		SendTime:    req.SendTime,
@@ -956,7 +957,16 @@ func (l *Logic) SearchMessage(ctx context.Context, req *pbmsg.SearchMessageReq) 
 			Page:     req.Pagination.PageNumber,
 			PageSize: req.Pagination.ShowNumber,
 		},
-	})
+	}
+	// 群消息的 recv_id 为空，群标识存在 group_id 字段；客户端搜索群消息时 recvID 传的是 groupID
+	//（与返回的 ChatLog.RecvID=GroupID 行为对称），按会话类型路由到对应过滤字段。
+	switch req.SessionType {
+	case constant.WriteGroupChatType, constant.ReadGroupChatType:
+		searchReq.GroupID = req.RecvID
+	default:
+		searchReq.RecvID = req.RecvID
+	}
+	msgs, err := l.svcCtx.MsgModel.SearchMessage(ctx, searchReq)
 	if err != nil {
 		l.Errorf("search message failed, err: %v, req: %v", err, req)
 		return nil, err

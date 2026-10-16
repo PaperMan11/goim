@@ -30,6 +30,9 @@ const (
 	msgNilExpireSeconds     = 60
 
 	ttlJitterRatioPct = 10
+
+	// deleteDocChunkSize 按时间戳物理清理时单次 DeleteMany 的文档数上限，避免 $in 查询过大
+	deleteDocChunkSize = 200
 )
 
 var (
