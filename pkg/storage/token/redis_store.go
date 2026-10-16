@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
+	"github.com/PaperMan11/goim/pkg/utils/convert"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
@@ -208,7 +208,7 @@ func (rs *RedisStore) DeleteUserTokens(ctx context.Context, userID string, platf
 func (rs *RedisStore) CheckTokenExists(ctx context.Context, userID string, platformID int32) (bool, error) {
 	now := timex.Unix()
 	count, err := rs.redisClient.ZCount(ctx, GetPlatformTokenKey(userID, platformID),
-		strconv.FormatInt(now, 10), "9223372036854775807").Result()
+		convert.ToString(now), "9223372036854775807").Result()
 	if err != nil {
 		return false, err
 	}
@@ -216,10 +216,11 @@ func (rs *RedisStore) CheckTokenExists(ctx context.Context, userID string, platf
 }
 
 func (rs *RedisStore) GetUserTokens(ctx context.Context, userID string) ([]*TokenInfo, error) {
+	_ = rs.CleanExpiredTokens(ctx, userID)
 	userTokensKey := GetUserTokensKey(userID)
 	now := timex.Unix()
 	zs, err := rs.redisClient.ZRangeByScoreWithScores(ctx, userTokensKey, &goredis.ZRangeBy{
-		Min: strconv.FormatInt(now, 10),
+		Min: convert.ToString(now),
 		Max: "9223372036854775807",
 	}).Result()
 	if err != nil {
@@ -252,10 +253,11 @@ func (rs *RedisStore) GetUserTokens(ctx context.Context, userID string) ([]*Toke
 }
 
 func (rs *RedisStore) GetUserTokensByPlatform(ctx context.Context, userID string, platformID int32) ([]*TokenInfo, error) {
+	_ = rs.CleanExpiredTokens(ctx, userID)
 	platformTokensKey := GetPlatformTokenKey(userID, platformID)
 	now := timex.Unix()
 	zs, err := rs.redisClient.ZRangeByScoreWithScores(ctx, platformTokensKey, &goredis.ZRangeBy{
-		Min: strconv.FormatInt(now, 10),
+		Min: convert.ToString(now),
 		Max: "9223372036854775807",
 	}).Result()
 	if err != nil {
@@ -301,7 +303,7 @@ func (rs *RedisStore) publishTokenDeleteBatch(ctx context.Context, uuids []strin
 
 func (rs *RedisStore) CleanExpiredTokens(ctx context.Context, userID string) error {
 	now := timex.Unix()
-	nowStr := strconv.FormatInt(now-1, 10)
+	nowStr := convert.ToString(now - 1)
 
 	_, _ = rs.redisClient.ZRemRangeByScore(ctx, GetUserTokensKey(userID), "0", nowStr).Result()
 	for pid := constant.IOSPlatformID; pid <= constant.BotPlatformID; pid++ {
