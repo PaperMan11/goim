@@ -17,7 +17,7 @@ type Config struct {
 	Mongo            storagemongo.MongoConf
 
 	// OfflinePush 离线推送第三方配置
-	OfflinePush offlnepush.Config
+	OfflinePush offlnepush.Config `json:",optional"`
 
 	UserRpc    rpcclient.RpcConf
 	GatewayRpc rpcclient.RpcConf

@@ -18,13 +18,13 @@ const (
 
 // Config 离线推送配置，内嵌到主 Config 的 OfflinePush 字段
 type Config struct {
-	MaxConcurrentWorkers int
-	Enable               string
-	PushSound            string
-	BadgeCount           int
-	GeTui                getui.GeTuiConfig
-	FCM                  fcm.FCMConfig
-	JPush                jpush.JpushConfig
+	MaxConcurrentWorkers int               `json:",default=8"`
+	Enable               string            `json:",default=none"`
+	PushSound            string            `json:",default=notification"`
+	BadgeCount           int               `json:",default=1"`
+	GeTui                getui.GeTuiConfig `json:",optional"`
+	FCM                  fcm.FCMConfig     `json:",optional"`
+	JPush                jpush.JpushConfig `json:",optional"`
 }
 
 // OfflinePusher 离线推送接口
@@ -37,7 +37,7 @@ type OfflinePusher interface {
 // 返回 nil 表示未启用离线推送，调用方应做 nil 检查
 func NewOfflinePusher(cfg *Config) OfflinePusher {
 	if cfg == nil || cfg.Enable == "" {
-		return nil
+		return &stubOfflinePusher{}
 	}
 	switch cfg.Enable {
 	case EnableGeTui:
@@ -47,7 +47,7 @@ func NewOfflinePusher(cfg *Config) OfflinePusher {
 	case EnableJPush:
 		return jpush.NewJPushPusher(&cfg.JPush)
 	default:
-		return nil
+		return &stubOfflinePusher{}
 	}
 }
 
@@ -60,4 +60,12 @@ func NewOfflinePusher(cfg *Config) OfflinePusher {
 // 每个平台 Pusher 自身会根据 OfflinePush.Config.IOSPush.Production 决定用生产还是沙盒环境
 func tokenKey(platformID int32) string {
 	return "push_token_" + constant.PlatformIDToName(int(platformID))
+}
+
+// stub offline push
+type stubOfflinePusher struct {
+}
+
+func (s *stubOfflinePusher) Push(ctx context.Context, tokens []string, title string, content string, opts ...options.Option) error {
+	return nil
 }
