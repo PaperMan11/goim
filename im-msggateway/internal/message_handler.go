@@ -96,7 +96,10 @@ func NewBusinessHandler(pushService pushservice.PushService, msgService msgservi
 }
 
 func (h *BusinessHandler) Handle(conn Connection, req *Request) error {
-	logc.Debugf(conn.Context(), "handle business message: %+v", req)
+	// 派生本条消息的处理 context：仅 operationID 覆盖为消息携带值，
+	// 其余（opUserID/token/platform/connID/clientIP/取消信号）沿用连接级。
+	ctx := WithMessageOperationID(conn.Context(), req.OperationID)
+	logc.Debugf(ctx, "handle business message: %+v", req)
 	if conn.Server().Config().EnableAuth && conn.Context().HandshakeInfo().GetUserID() != req.SenderID {
 		h.reply(conn, req, errx.DataError.Wrap("senderID not match"), nil)
 		return fmt.Errorf("senderID not match: %s, expect %s", req.SenderID, conn.Context().HandshakeInfo().GetUserID())
@@ -121,65 +124,65 @@ func (h *BusinessHandler) Handle(conn Connection, req *Request) error {
 	case WSGetNewestSeq:
 		opName = "get_newest_seq"
 		metrics.BusinessOpCounter.Inc(opName)
-		data, err = h.handleGetNewestSeq(conn.Context(), req)
+		data, err = h.handleGetNewestSeq(ctx, req)
 	case WSPullMsgBySeqList:
 		opName = "pull_msg_by_seq"
 		metrics.BusinessOpCounter.Inc(opName)
 		metrics.PullMsgCounter.Inc("by_seq_list")
-		data, err = h.handlePullMsgBySeqList(conn.Context(), req)
+		data, err = h.handlePullMsgBySeqList(ctx, req)
 	case WSSendMsg:
 		opName = "send_msg"
 		metrics.BusinessOpCounter.Inc(opName)
 		metrics.SendMsgCounter.Inc("normal")
-		data, err = h.handleSendMsg(conn.Context(), req)
+		data, err = h.handleSendMsg(ctx, req)
 	case WSSendSignalMsg:
 		opName = "send_signal_msg"
 		metrics.BusinessOpCounter.Inc(opName)
 		metrics.SendMsgCounter.Inc("signal")
-		data, err = h.handleSendSignalMsg(conn.Context(), req)
+		data, err = h.handleSendSignalMsg(ctx, req)
 	case WSPullMsg:
 		opName = "pull_msg"
 		metrics.BusinessOpCounter.Inc(opName)
 		metrics.PullMsgCounter.Inc("normal")
-		data, err = h.handlePullMsg(conn.Context(), req)
+		data, err = h.handlePullMsg(ctx, req)
 	case WSGetConvMaxReadSeq:
 		opName = "get_conv_max_read_seq"
 		metrics.BusinessOpCounter.Inc(opName)
-		data, err = h.handleGetConvMaxReadSeq(conn.Context(), req)
+		data, err = h.handleGetConvMaxReadSeq(ctx, req)
 	case WsPullConvLastMessage:
 		opName = "pull_conv_last_msg"
 		metrics.BusinessOpCounter.Inc(opName)
 		metrics.PullMsgCounter.Inc("last_message")
-		data, err = h.handlePullConvLastMessage(conn.Context(), req)
+		data, err = h.handlePullConvLastMessage(ctx, req)
 	case WSPushMsg:
 		opName = "push_msg"
 		metrics.BusinessOpCounter.Inc(opName)
-		data, err = h.handlePushMsg(conn.Context(), req)
+		data, err = h.handlePushMsg(ctx, req)
 	case WSKickOnlineMsg:
 		opName = "kick_online"
 		metrics.BusinessOpCounter.Inc(opName)
-		data, err = h.handleKickOnlineMsg(conn.Context(), req)
+		data, err = h.handleKickOnlineMsg(ctx, req)
 	case WSLogoutMsg:
 		opName = "logout"
 		metrics.BusinessOpCounter.Inc(opName)
-		data, err = h.handleLogoutMsg(conn.Context(), req)
+		data, err = h.handleLogoutMsg(ctx, req)
 	case WSSetBackgroundStatus:
 		opName = "set_background_status"
 		metrics.BusinessOpCounter.Inc(opName)
-		data, err = h.handleSetBackgroundStatus(conn.Context(), req)
+		data, err = h.handleSetBackgroundStatus(ctx, req)
 	case WSSubUserOnlineStatus:
 		opName = "sub_online_status"
 		metrics.BusinessOpCounter.Inc(opName)
 		metrics.SubscribeCounter.Inc("online_status")
-		data, err = h.handleSubUserOnlineStatus(conn.Context(), req)
+		data, err = h.handleSubUserOnlineStatus(ctx, req)
 	case WSDataError:
 		opName = "data_error"
 		metrics.BusinessOpCounter.Inc(opName)
-		data, err = h.handleDataError(conn.Context(), req)
+		data, err = h.handleDataError(ctx, req)
 	default:
 		opName = "unknown_message"
 		err = errx.UnknownMessageError.Wrap(fmt.Sprintf("reqIdentifier: %d", req.ReqIdentifier))
-		logc.Errorf(conn.Context(), "unknown message: %+v", req)
+		logc.Errorf(ctx, "unknown message: %+v", req)
 	}
 	return h.reply(conn, req, err, data)
 }

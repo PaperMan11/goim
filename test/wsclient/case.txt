@@ -1,0 +1,129 @@
+WebSocket 连接地址（Apifox「地址」栏粘贴）：
+ws://127.0.0.1:50001/ws?userID=user_001&token=test_token&platformID=1&deviceID=apifox_device_001&sendResponse=true&isBackground=false&operationID=apifox-op-0001&compression=none&sdkType=normal&sdkVersion=1.0.0 
+
+各指令报文（Apifox「消息」栏逐条粘贴，类型选 Text）：
+
+--- 鉴权令牌获取（先执行，把 token 填到 {{token}}）---
+POST http://127.0.0.1:18880/api/v1/auth/get_user_token
+Body: {"platformID":1,"userID":"user_001"}
+
+--- [msgIncr=1] 1001 WSGetNewestSeq 获取各会话最大/最小seq ---
+{
+  "reqIdentifier": 1001,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-1-3ave4f",
+  "msgIncr": "1",
+  "data": "Cgh1c2VyXzAwMQ=="
+}
+// data 解码后的 protobuf 字段:
+// "(见脚本内构造逻辑)"
+
+--- [msgIncr=2] 1002 WSPullMsgBySeqList 按seq范围拉取历史消息 ---
+{
+  "reqIdentifier": 1002,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-2-krjhaz",
+  "msgIncr": "2",
+  "data": "Cgh1c2VyXzAwMRIcChRzaV91c2VyXzAwMV91c2VyXzAwMhABGGQgFBINCgVzZ185MxABGGQgFA=="
+}
+// data 解码后的 protobuf 字段:
+// "(见脚本内构造逻辑)"
+
+--- [msgIncr=3] 1003 WSSendMsg 发送单聊文本消息 ---
+{
+  "reqIdentifier": 1003,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-3-ihrudv",
+  "msgIncr": "3",
+  "data": "Cgh1c2VyXzAwMRIIdXNlcl8wMDIiEWNsaWVudC1tc2ctODM5NDQxMAE6D+a1i+ivleeUqOaItzAwMUImaHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vYXZhdGFyLzAwMS5wbmdIAVBkWGViKXsidGV4dCI6ImhlbGxvIGZyb20gYXBpZm94IiwiYXRVc2VycyI6W119gAGRgridlDSaAQsKB2hpc3RvcnkQAZoBDgoKcGVyc2lzdGVudBABmgEPCgtvZmZsaW5lUHVzaBABmgEPCgt1bnJlYWRDb3VudBABmgEWChJjb252ZXJzYXRpb25VcGRhdGUQAZoBDgoKc2VuZGVyU3luYxABmgENCglpc1NlbmRNc2cQAaIBLwoP5rWL6K+V55So5oi3MDAxEhFoZWxsbyBmcm9tIGFwaWZveCIHZGVmYXVsdCgB"
+}
+// data 解码后的 protobuf 字段:
+// {"sendID":"user_001","recvID":"user_002","clientMsgID":"client-msg-839441","senderPlatformID":1,"senderNickname":"测试用户001","sessionType":1,"msgFrom":100,"contentType":101,"content":"{\"text\":\"hello from apifox\",\"atUsers\":[]}","createTime":1792136839441}
+
+--- [msgIncr=4] 1003 WSSendMsg 发送群聊@消息 ---
+{
+  "reqIdentifier": 1003,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-4-ch0hlc",
+  "msgIncr": "4",
+  "data": "Cgh1c2VyXzAwMRoCOTMiEWNsaWVudC1tc2ctODM5NDQzMAE6D+a1i+ivleeUqOaItzAwMUImaHR0cHM6Ly9jZG4uZXhhbXBsZS5jb20vYXZhdGFyLzAwMS5wbmdIA1BkWGpiVnsidGV4dCI6IkB1c2VyXzAwMiDor7fmn6XmlLYiLCJhdFVzZXJzIjpbeyJhdFVzZXJJRCI6InVzZXJfMDAyIiwic3ViVG9wIjoidXNlcl8wMDIifV19gAGTgridlDSaAQsKB2hpc3RvcnkQAZoBDgoKcGVyc2lzdGVudBABmgEPCgtvZmZsaW5lUHVzaBABmgEPCgt1bnJlYWRDb3VudBABmgEWChJjb252ZXJzYXRpb25VcGRhdGUQAZoBDgoKc2VuZGVyU3luYxABmgENCglpc1NlbmRNc2cQAaIBbgoJ576k5raI5oGvElZ7InRleHQiOiJAdXNlcl8wMDIg6K+35p+l5pS2IiwiYXRVc2VycyI6W3siYXRVc2VySUQiOiJ1c2VyXzAwMiIsInN1YlRvcCI6InVzZXJfMDAyIn1dfSIHZGVmYXVsdCgBqgEIdXNlcl8wMDI="
+}
+// data 解码后的 protobuf 字段:
+// {"sendID":"user_001","groupID":"93","clientMsgID":"client-msg-839443","senderPlatformID":1,"senderNickname":"测试用户001","sessionType":3,"msgFrom":100,"contentType":106,"content":"{\"text\":\"@user_002 请查
+收\",\"atUsers\":[{\"atUserID\":\"user_002\",\"subTop\":\"user_002\"}]}","createTime":1792136839443}     
+
+--- [msgIncr=5] 1005 WSPullMsg 按会话+seq列表精确拉取 ---
+{
+  "reqIdentifier": 1005,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-5-8d8yx4",
+  "msgIncr": "5",
+  "data": "Cgh1c2VyXzAwMRIcEhRzaV91c2VyXzAwMV91c2VyXzAwMhgBGAIYAw=="
+}
+// data 解码后的 protobuf 字段:
+// {"userID":"user_001","conversations":[{"conversationID":"si_user_001_user_002","seqs":[1,2,3]}]}      
+
+--- [msgIncr=6] 1006 WSGetConvMaxReadSeq 获取会话已读/最大seq ---
+{
+  "reqIdentifier": 1006,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-6-ggkt7e",
+  "msgIncr": "6",
+  "data": "Cgh1c2VyXzAwMRIUc2lfdXNlcl8wMDFfdXNlcl8wMDISBXNnXzkzGAE="
+}
+// data 解码后的 protobuf 字段:
+// "(见脚本内构造逻辑)"
+
+--- [msgIncr=7] 1007 WsPullConvLastMessage 拉取会话最后一条消息 ---
+{
+  "reqIdentifier": 1007,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-7-6byqp8",
+  "msgIncr": "7",
+  "data": "Cgh1c2VyXzAwMRIUc2lfdXNlcl8wMDFfdXNlcl8wMDISBXNnXzkz"
+}
+// data 解码后的 protobuf 字段:
+// "(见脚本内构造逻辑)"
+
+--- [msgIncr=8] 2005 WSSubUserOnlineStatus 订阅用户在线状态 ---
+{
+  "reqIdentifier": 2005,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-8-mraedf",
+  "msgIncr": "8",
+  "data": "Cgh1c2VyXzAwMgoNdGVzdF91c2VyXzAwMxINdGVzdF91c2VyXzAwNA=="
+}
+// data 解码后的 protobuf 字段:
+// "(见脚本内构造逻辑)"
+
+--- [msgIncr=9] 2004 WSSetBackgroundStatus 设置前后台状态（服务端暂未实现） ---
+{
+  "reqIdentifier": 2004,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-9-9pymwn",
+  "msgIncr": "9",
+  "data": "Cgh1c2VyXzAwMQ=="
+}
+// data 解码后的 protobuf 字段:
+// "(见脚本内构造逻辑)"
+
+--- [msgIncr=10] 2003 WSLogoutMsg 登出（服务端返回 not support 后关闭连接） ---
+{
+  "reqIdentifier": 2003,
+  "token": "test_token",
+  "senderID": "user_001",
+  "operationID": "apifox-10-ya9akg",
+  "msgIncr": "10",
+  "data": ""
+}
+
+提示：msgIncr 每发一条可自增，用于把响应与请求对应起来；response 会原样带回 msgIncr。

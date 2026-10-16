@@ -116,6 +116,10 @@ func (s *wsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 鉴权通过（或未开启鉴权）后，userID 才可信，注入操作人身份，
+	// 之后该连接上的所有 RPC 都会通过 metadata 透传该身份。
+	connContext.SetAuthenticatedUser(connContext.HandshakeInfo().GetUserID())
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logc.Errorf(connContext, "Upgrade failed: %v, remoteAddr: %s", err, connContext.RemoteAddr())
@@ -123,6 +127,7 @@ func (s *wsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wsConn := NewWsConnection(connContext, conn, s)
+	connContext.SetConnID(wsConn.ID())
 	if err := s.connManager.Add(wsConn); err != nil {
 		s.handleError(wsConn, w, err)
 		_ = wsConn.Close()
