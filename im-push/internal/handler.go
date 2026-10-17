@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/mcontext"
+
 	"github.com/PaperMan11/goim/im-push/internal/offlnepush/options"
 	"github.com/PaperMan11/goim/pkg/msgprocessor"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
@@ -27,6 +29,7 @@ const (
 )
 
 func (p *Pusher) consumePushMsg(ctx context.Context, msg queuex.Message) error {
+	ctx = mcontext.SetOperationIDInContext(ctx, mcontext.NewOperationID("online-pusher"))
 	var pushMsg pbpush.PushMsgReq
 	if err := proto.Unmarshal(msg.Value(), &pushMsg); err != nil {
 		logc.Errorf(ctx, "push unmarshal msg err, err: %v, msg: %s", err, msg.Value)
@@ -306,6 +309,7 @@ func extractTextContent(content string) string {
 }
 
 func (p *Pusher) consumeOfflinePushMsg(ctx context.Context, msg queuex.Message) error {
+	ctx = mcontext.SetOperationIDInContext(ctx, mcontext.NewOperationID("offline-pusher"))
 	// 离线推送队列复用 PushMsgReq 格式，消息已过正常 push 队列消费链路后
 	// 投递到离线队列做异步兜底（正常情况下 offlinePush 已经同步处理）
 	// 这里保留消费逻辑，支持"延迟重试"或"离线重放"等场景
