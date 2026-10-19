@@ -942,6 +942,11 @@ func (l *Logic) UpdateConversationsByUser(ctx context.Context, req *pbconversati
 	// 批量写版本日志（Update）
 	if _, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, model.ConversationDID(userID), convIDs, model.VersionStateUpdate); err != nil {
 		l.Errorf("incr version log batch for user conv update failed, userID: %s, err: %v", userID, err)
+	} else {
+		// 版本日志写入成功才通知：客户端收到后带本地 version/versionID 发起增量同步
+		if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, userID, convIDs); err != nil {
+			l.Errorf("send conversation change notification failed, userID: %s, convIDs: %v, err: %v", userID, convIDs, err)
+		}
 	}
 
 	return &pbconversation.UpdateConversationsByUserResp{}, nil
@@ -1079,6 +1084,18 @@ func (l *Logic) CreateSingleChatConversations(ctx context.Context, req *pbconver
 		l.Errorf("incr version log for conv insert failed, owner: %s, conv: %s, err: %v", recvID, conversationID, err)
 	}
 
+	// 通知双方会话列表发生变更：在线端实时收到后发起增量同步，离线端靠登录后补齐
+	// 自己给自己发消息时（sendID == recvID）只需通知一次，避免客户端重复发起同步
+	notifyUsers := []string{sendID}
+	if recvID != sendID {
+		notifyUsers = append(notifyUsers, recvID)
+	}
+	for _, uid := range notifyUsers {
+		if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, uid, []string{conversationID}); err != nil {
+			l.Errorf("send conversation change notification failed, owner: %s, conv: %s, err: %v", uid, conversationID, err)
+		}
+	}
+
 	return &pbconversation.CreateSingleChatConversationsResp{}, nil
 }
 
@@ -1122,6 +1139,13 @@ func (l *Logic) CreateGroupChatConversations(ctx context.Context, req *pbconvers
 		}
 	}
 
+	// 通知每个群成员会话列表发生变更：在线端实时收到后发起增量同步，离线端靠登录后补齐
+	for _, uid := range userIDs {
+		if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, uid, []string{conversationID}); err != nil {
+			l.Errorf("send group conv change notification failed, owner: %s, conv: %s, err: %v", uid, conversationID, err)
+		}
+	}
+
 	return &pbconversation.CreateGroupChatConversationsResp{}, nil
 }
 
@@ -1137,6 +1161,8 @@ func (l *Logic) DeleteConversations(ctx context.Context, req *pbconversation.Del
 		return nil, err
 	}
 
+	// 记录实际发生变更（写入版本日志）的会话，用于结束时统一通知客户端
+	deletedIDs := make([]string, 0, len(convIDs))
 	if len(convIDs) > 0 {
 		// 删除指定会话
 		for _, convID := range convIDs {
@@ -1147,6 +1173,7 @@ func (l *Logic) DeleteConversations(ctx context.Context, req *pbconversation.Del
 			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.ConversationDID(ownerUserID), convID, model.VersionStateDelete); err != nil {
 				l.Errorf("incr version log for conv delete failed, owner: %s, conv: %s, err: %v", ownerUserID, convID, err)
 			}
+			deletedIDs = append(deletedIDs, convID)
 		}
 	} else if req.GetNeedDeleteTime() > 0 {
 		// 按时间删除（needDeleteTime 之前的会话）
@@ -1168,7 +1195,16 @@ func (l *Logic) DeleteConversations(ctx context.Context, req *pbconversation.Del
 			_ = updates
 			if _, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, model.ConversationDID(ownerUserID), toDelete, model.VersionStateDelete); err != nil {
 				l.Errorf("incr version log batch for conv delete failed, owner: %s, err: %v", ownerUserID, err)
+			} else {
+				deletedIDs = append(deletedIDs, toDelete...)
 			}
+		}
+	}
+
+	// 通知会话所有者会话列表发生变更：在线端实时收到后发起增量同步，离线端靠登录后补齐
+	if len(deletedIDs) > 0 {
+		if err := l.svcCtx.NotificationSender.ConversationChangeNotification(ctx, ownerUserID, deletedIDs); err != nil {
+			l.Errorf("send conversation change notification failed, owner: %s, convIDs: %v, err: %v", ownerUserID, deletedIDs, err)
 		}
 	}
 

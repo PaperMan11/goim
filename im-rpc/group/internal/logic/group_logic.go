@@ -125,8 +125,27 @@ func (l *Logic) CreateGroup(ctx context.Context, req *pbgroup.CreateGroupReq) (*
 		for _, member := range members {
 			userIDs = append(userIDs, member.UserID)
 		}
-		if _, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, group.GroupID, userIDs, model.VersionStateInsert); err != nil {
+		versionLog, err := l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, group.GroupID, userIDs, model.VersionStateInsert)
+		if err != nil {
 			l.Errorf("incr version log batch for member insert failed, groupID: %s, err: %v", group.GroupID, err)
+		} else {
+			// 同步推进各成员"已加入的群"版本（JoinGroupDID 维度），
+			// 否则除创建者外的初始成员 get_incremental_join_groups 感知不到新群
+			for _, userID := range userIDs {
+				if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), group.GroupID, model.VersionStateInsert); err != nil {
+					l.Errorf("incr version log for join group insert failed, userID: %s, groupID: %s, err: %v", userID, group.GroupID, err)
+				}
+			}
+
+			// 通知全部初始成员群已创建（创建者另有同步响应，客户端按版本幂等处理）
+			var ownerMember *model.GroupMember
+			for _, member := range members {
+				if member.UserID == ownerUserID {
+					ownerMember = member
+					break
+				}
+			}
+			l.svcCtx.NotificationSender.GroupCreatedNotification(ctx, group, ownerMember, members, uint64(versionLog.Version), versionLog.ID.String())
 		}
 	}
 
@@ -169,7 +188,7 @@ func (l *Logic) SetGroupInfo(ctx context.Context, req *pbgroup.SetGroupInfoReq) 
 		return nil, err
 	}
 
-	_, _, err = l.requireGroupAdmin(ctx, group.GroupID)
+	opUserID, _, err := l.requireGroupAdmin(ctx, group.GroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -198,8 +217,16 @@ func (l *Logic) SetGroupInfo(ctx context.Context, req *pbgroup.SetGroupInfoReq) 
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, group.GroupID, model.VersionGroupChangeID, model.VersionStateUpdate); err != nil {
+	groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, group.GroupID, model.VersionGroupChangeID, model.VersionStateUpdate)
+	if err != nil {
 		l.Errorf("incr version log for group change failed, groupID: %s, err: %v", group.GroupID, err)
+	} else {
+		// 群资料变更通知：在线端实时感知；离线端无补发，靠 GroupChanged + 增量同步兜底
+		opUser, findErr := l.svcCtx.GroupModel.FindMember(ctx, group.GroupID, opUserID)
+		if findErr != nil {
+			l.Errorf("find op member failed, groupID: %s, userID: %s, err: %v", group.GroupID, opUserID, findErr)
+		}
+		l.svcCtx.NotificationSender.GroupInfoSetNotification(ctx, group, opUser, uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
 	}
 
 	return &pbgroup.SetGroupInfoResp{}, nil
@@ -217,7 +244,7 @@ func (l *Logic) SetGroupInfoEx(ctx context.Context, req *pbgroup.SetGroupInfoExR
 		return nil, err
 	}
 
-	_, _, err = l.requireGroupAdmin(ctx, group.GroupID)
+	opUserID, _, err := l.requireGroupAdmin(ctx, group.GroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -256,8 +283,18 @@ func (l *Logic) SetGroupInfoEx(ctx context.Context, req *pbgroup.SetGroupInfoExR
 			l.Errorf("update group ex failed, groupID: %s, err: %v", groupID, err)
 			return nil, err
 		}
-		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, model.VersionGroupChangeID, model.VersionStateUpdate); err != nil {
+		groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, model.VersionGroupChangeID, model.VersionStateUpdate)
+		if err != nil {
 			l.Errorf("incr version log for group change failed, groupID: %s, err: %v", groupID, err)
+		} else if updatedGroup, err := l.svcCtx.GroupModel.FindGroup(ctx, groupID); err != nil {
+			// 通知载荷需携带更新后的群信息：UpdateGroupEx 只改了库，内存快照 group 已过期
+			l.Errorf("find group failed, groupID: %s, err: %v", groupID, err)
+		} else {
+			opUser, findErr := l.svcCtx.GroupModel.FindMember(ctx, groupID, opUserID)
+			if findErr != nil {
+				l.Errorf("find op member failed, groupID: %s, userID: %s, err: %v", groupID, opUserID, findErr)
+			}
+			l.svcCtx.NotificationSender.GroupInfoSetNotification(ctx, updatedGroup, opUser, uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
 		}
 	}
 
@@ -763,6 +800,13 @@ func (l *Logic) InviteUserToGroup(ctx context.Context, req *pbgroup.InviteUserTo
 			l.Errorf("incr version log batch for member insert failed, groupID: %s, err: %v", groupID, err)
 			return nil, err
 		}
+		// 同步推进被邀请者"已加入的群"版本（JoinGroupDID 维度），
+		// 否则除群内通知外，被邀请者 get_incremental_join_groups 感知不到该群
+		for _, userID := range userIDs {
+			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), groupID, model.VersionStateInsert); err != nil {
+				l.Errorf("incr version log for join group insert failed, userID: %s, groupID: %s, err: %v", userID, groupID, err)
+			}
+		}
 		l.svcCtx.NotificationSender.InviteGroupMemberNotification(ctx, group, inviterUser, members, uint64(groupVersionLog.Version), groupVersionLog.ID.String())
 	}
 
@@ -975,14 +1019,18 @@ func (l *Logic) DismissGroup(ctx context.Context, req *pbgroup.DismissGroupReq) 
 		l.Errorf("update group status failed, groupID: %s, err: %v", groupID, err)
 		return nil, err
 	}
+	// 同步内存中的状态，保证解散通知携带的是最新群状态而非解散前的快照
+	group.Status = constant.GroupStatusDismissed
 
+	memberIDs, _ := l.svcCtx.GroupModel.FindMemberIDsByGroup(ctx, groupID)
 	if req.GetDeleteMember() {
-		memberIDs, _ := l.svcCtx.GroupModel.FindMemberIDsByGroup(ctx, groupID)
 		_ = l.svcCtx.GroupModel.DeleteMembers(ctx, groupID, memberIDs)
-		for _, userID := range memberIDs {
-			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), groupID, model.VersionStateDelete); err != nil {
-				l.Errorf("incr version log for member delete failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
-			}
+	}
+	// 无论是否物理删除成员记录，都要推进各成员"已加入的群"版本，
+	// 否则客户端群列表增量同步感知不到群已解散
+	for _, userID := range memberIDs {
+		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), groupID, model.VersionStateDelete); err != nil {
+			l.Errorf("incr version log for member delete failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
 		}
 	}
 
@@ -1193,15 +1241,32 @@ func (l *Logic) SetGroupMemberInfo(ctx context.Context, req *pbgroup.SetGroupMem
 				l.Errorf("update member info failed, groupID: %s, userID: %s, err: %v", member.GetGroupID(), member.GetUserID(), err)
 				return nil, err
 			}
-			// role_level 变更会影响成员列表排序顺序，合并成员更新 + 排序变更为一次 batch（state 均为 Update）
-			if member.RoleLevel != nil {
-				_, err = l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, member.GetGroupID(), []string{member.GetUserID(), model.VersionSortChangeID}, model.VersionStateUpdate)
-				if err != nil {
-					l.Errorf("incr version log batch for member+sort update failed, groupID: %s, userID: %s, err: %v", member.GetGroupID(), member.GetUserID(), err)
-					continue
-				}
+			// 是否发生角色变更
+			roleChanged := member.RoleLevel != nil && int32(groupMember.RoleLevel) != member.RoleLevel.GetValue()
+
+			// 回写内存快照，保证通知携带的是更新后的值而非查询时的旧值；
+			// 同一请求内多次命中同一成员时，后续命中看到的也是更新后的值
+			if member.Nickname != nil {
+				groupMember.Nickname = member.Nickname.GetValue()
 			}
-			groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, member.GetGroupID(), member.GetUserID(), model.VersionStateUpdate)
+			if member.FaceURL != nil {
+				groupMember.FaceURL = member.FaceURL.GetValue()
+			}
+			if member.RoleLevel != nil {
+				groupMember.RoleLevel = int(member.RoleLevel.GetValue())
+			}
+			if member.Ex != nil {
+				groupMember.Extra = member.Ex.GetValue()
+			}
+
+			// 角色实际变更会影响成员列表排序顺序，成员更新 + 排序变更合并为一次 batch 推进版本（state 均为 Update）；
+			// 角色未变更（未传 role_level，或传了但与原值相同）只推进成员版本，不做无意义的排序版本推进
+			var groupVersionLog *model.VersionLog
+			if roleChanged {
+				groupVersionLog, err = l.svcCtx.VersionLogModel.IncrVersionLogBatch(ctx, member.GetGroupID(), []string{member.GetUserID(), model.VersionSortChangeID}, model.VersionStateUpdate)
+			} else {
+				groupVersionLog, err = l.svcCtx.VersionLogModel.IncrVersionLog(ctx, member.GetGroupID(), member.GetUserID(), model.VersionStateUpdate)
+			}
 			if err != nil {
 				l.Errorf("incr version log for member update failed, groupID: %s, userID: %s, err: %v", member.GetGroupID(), member.GetUserID(), err)
 				continue
@@ -1209,12 +1274,14 @@ func (l *Logic) SetGroupMemberInfo(ctx context.Context, req *pbgroup.SetGroupMem
 
 			// send notification
 			if opUser != nil {
-				if member.RoleLevel != nil && member.RoleLevel.GetValue() == constant.GroupAdmin {
+				switch {
+				case !roleChanged:
+					l.svcCtx.NotificationSender.UpdateGroupMemberInfoNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
+				case member.RoleLevel.GetValue() == constant.GroupAdmin:
 					l.svcCtx.NotificationSender.SetGroupAdminNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
-				} else {
+				default:
 					l.svcCtx.NotificationSender.SetToOrdinaryUserNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
 				}
-				l.svcCtx.NotificationSender.UpdateGroupMemberInfoNotification(ctx, group, opUser, groupMember, uint64(groupVersionLog.GetSortVersion()), uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
 			}
 		}
 	}
@@ -1437,19 +1504,24 @@ func (l *Logic) GroupApplicationResponse(ctx context.Context, req *pbgroup.Group
 			return nil, err
 		}
 
-		_, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, fromUserID, model.VersionStateInsert)
+		groupVersionLog, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, groupID, fromUserID, model.VersionStateInsert)
 		if err != nil {
 			l.Errorf("incr version log for member insert failed, groupID: %s, userID: %s, err: %v", groupID, fromUserID, err)
 			return nil, err
 		}
+		// 同步推进申请人"已加入的群"版本（JoinGroupDID 维度），
+		// 否则 get_incremental_join_groups 感知不到该群（与 JoinGroup 保持一致）
+		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(fromUserID), groupID, model.VersionStateInsert); err != nil {
+			l.Errorf("incr version log for join group insert failed, userID: %s, groupID: %s, err: %v", fromUserID, groupID, err)
+		}
 
-		if opUser != nil {
-			l.svcCtx.NotificationSender.AcceptGroupApplicationNotification(ctx, group, opUser, fromUserID, req.GetHandledMsg())
-		}
+		// 通知群内其他成员有新成员加入（申请人此时尚未入群，走下方针对申请人的申请结果通知）
+		l.svcCtx.NotificationSender.MemberEnterNotification(ctx, group, member, uint64(groupVersionLog.Version), groupVersionLog.ID.String())
+
+		// 管理员与申请人本人都要通知；opUser 可能为空（超管非群成员），此处转换对 nil 安全
+		l.svcCtx.NotificationSender.AcceptGroupApplicationNotification(ctx, group, opUser, fromUserID, req.GetHandledMsg())
 	} else {
-		if opUser != nil {
-			l.svcCtx.NotificationSender.RejectGroupApplicationNotification(ctx, group, opUser, fromUserID, req.GetHandledMsg())
-		}
+		l.svcCtx.NotificationSender.RejectGroupApplicationNotification(ctx, group, opUser, fromUserID, req.GetHandledMsg())
 	}
 
 	return &pbgroup.GroupApplicationResponseResp{}, nil

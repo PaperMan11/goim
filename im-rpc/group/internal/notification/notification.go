@@ -87,15 +87,19 @@ func (s *NotificationSender) getGroupApplyRequest(ctx context.Context, groupID s
 	return mconvert.ModelToPbGroupRequest(applyReq, applyMember, nil), nil
 }
 
+// sendNotificationToUser 向单个用户投递通知
+func (s *NotificationSender) sendNotificationToUser(ctx context.Context, recvID string, contentType int32, notification proto.Message) error {
+	opUserID := mcontext.GetOpUserIDFromContext(ctx)
+	return s.MsgDispatcher.SendNotification(ctx, opUserID, recvID, "", contentType, msgdispatcher.SessionTypeMap[contentType], notification)
+}
+
 func (s *NotificationSender) sendNotificationToAdmins(ctx context.Context, groupID string, contentType int32, notification proto.Message) error {
 	adminIDs, err := s.getGroupAdminIDs(ctx, groupID)
 	if err != nil {
 		return err
 	}
-	opUserID := mcontext.GetOpUserIDFromContext(ctx)
 	for _, recvID := range adminIDs {
-		err = s.MsgDispatcher.SendNotification(ctx, opUserID, recvID, "", contentType, msgdispatcher.SessionTypeMap[contentType], notification)
-		if err != nil {
+		if err := s.sendNotificationToUser(ctx, recvID, contentType, notification); err != nil {
 			logx.Errorf("send notification failed, contentType: %d, recvID: %s, err: %v", contentType, recvID, err)
 			return err
 		}
@@ -113,6 +117,35 @@ func (s *NotificationSender) ApplyJoinGroupNotification(ctx context.Context, gro
 	// send notification
 	return s.sendNotificationToAdmins(ctx, group.GroupID, int32(constant.JoinGroupApplicationNotification),
 		mconvert.ModelToPbGroupRequest(applyReq, joinMember, mconvert.ModelToPbGroupInfo(group)))
+}
+
+// GroupCreatedNotification 发送群聊创建通知（携带成员列表与群成员版本，供客户端建群后增量同步）
+func (s *NotificationSender) GroupCreatedNotification(ctx context.Context, group *model.Group, owner *model.GroupMember, members []*model.GroupMember, version uint64, versionID string) error {
+	memberList := make([]*sdkws.GroupMemberFullInfo, 0, len(members))
+	for _, member := range members {
+		memberList = append(memberList, mconvert.ModelToPbGroupMemberInfo(member))
+	}
+	tips := &sdkws.GroupCreatedTips{
+		Group:                mconvert.ModelToPbGroupInfo(group),
+		OpUser:               mconvert.ModelToPbGroupMemberInfo(owner), // 建群操作人即群主
+		MemberList:           memberList,
+		OperationTime:        time.Now().UnixMilli(),
+		GroupOwnerUser:       mconvert.ModelToPbGroupMemberInfo(owner),
+		GroupMemberVersion:   version,
+		GroupMemberVersionID: versionID,
+	}
+	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.GroupCreatedNotification), tips)
+}
+
+// GroupInfoSetNotification 发送群资料变更通知（1502），载荷携带变更后的完整群信息
+func (s *NotificationSender) GroupInfoSetNotification(ctx context.Context, group *model.Group, opUser *model.GroupMember, version uint64, versionID string) error {
+	tips := &sdkws.GroupInfoSetTips{
+		Group:                mconvert.ModelToPbGroupInfo(group),
+		OpUser:               mconvert.ModelToPbGroupMemberInfo(opUser),
+		GroupMemberVersion:   version,
+		GroupMemberVersionID: versionID,
+	}
+	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.GroupInfoSetNotification), tips)
 }
 
 // MemberQuitNotification 发送成员退出群聊通知
@@ -155,7 +188,9 @@ func (s *NotificationSender) MemberKickedNotification(ctx context.Context, group
 	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.MemberKickedNotification), tips)
 }
 
-// AcceptGroupApplicationNotification 发送群聊申请接受通知
+// AcceptGroupApplicationNotification 发送群聊申请接受通知。
+// receiverAs: 1-管理员视角，0-申请人视角。两类接收者都必须通知：
+// 申请人此时还不是群成员，收不到群维度通知，若只发管理员则申请人无法得知申请结果。
 func (s *NotificationSender) AcceptGroupApplicationNotification(ctx context.Context, group *model.Group, opMember *model.GroupMember, userID, handleMsg string) error {
 	applyReq, err := s.getGroupApplyRequest(ctx, group.GroupID, userID)
 	if err != nil {
@@ -163,18 +198,37 @@ func (s *NotificationSender) AcceptGroupApplicationNotification(ctx context.Cont
 	}
 	groupInfo := mconvert.ModelToPbGroupInfo(group)
 	applyReq.GroupInfo = groupInfo
-	tips := &sdkws.GroupApplicationAcceptedTips{
-		Group:      groupInfo,
-		OpUser:     mconvert.ModelToPbGroupMemberInfo(opMember),
-		HandleMsg:  handleMsg,
-		ReceiverAs: 0,
-		Uuid:       group.GroupID,
-		Request:    applyReq, // 申请详情
+
+	adminIDs, err := s.getGroupAdminIDs(ctx, group.GroupID)
+	if err != nil {
+		return err
 	}
-	return s.sendNotificationToAdmins(ctx, group.GroupID, int32(constant.GroupApplicationAcceptedNotification), tips)
+
+	// 同一用户既是管理员又是申请人时，以申请人视角为准，避免重复投递
+	receivers := make(map[string]int32, len(adminIDs)+1)
+	for _, adminID := range adminIDs {
+		receivers[adminID] = 1
+	}
+	receivers[userID] = 0
+
+	for recvID, receiverAs := range receivers {
+		tips := &sdkws.GroupApplicationAcceptedTips{
+			Group:      groupInfo,
+			OpUser:     mconvert.ModelToPbGroupMemberInfo(opMember),
+			HandleMsg:  handleMsg,
+			ReceiverAs: receiverAs,
+			Uuid:       group.GroupID,
+			Request:    applyReq, // 申请详情
+		}
+		if err := s.sendNotificationToUser(ctx, recvID, int32(constant.GroupApplicationAcceptedNotification), tips); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// RejectGroupApplicationNotification 发送群聊申请拒绝通知
+// RejectGroupApplicationNotification 发送群聊申请拒绝通知。
+// receiverAs 语义同 AcceptGroupApplicationNotification：管理员=1、申请人=0，两类接收者都要通知。
 func (s *NotificationSender) RejectGroupApplicationNotification(ctx context.Context, group *model.Group, opMember *model.GroupMember, userID, handleMsg string) error {
 	applyReq, err := s.getGroupApplyRequest(ctx, group.GroupID, userID)
 	if err != nil {
@@ -183,15 +237,32 @@ func (s *NotificationSender) RejectGroupApplicationNotification(ctx context.Cont
 
 	groupInfo := mconvert.ModelToPbGroupInfo(group)
 	applyReq.GroupInfo = groupInfo
-	tips := &sdkws.GroupApplicationRejectedTips{
-		Group:      groupInfo,
-		OpUser:     mconvert.ModelToPbGroupMemberInfo(opMember),
-		HandleMsg:  handleMsg,
-		ReceiverAs: 0,             // 接收者身份(1-管理员, 0-申请人)
-		Uuid:       group.GroupID, // 申请唯一标识
-		Request:    applyReq,      // 申请详情
+
+	adminIDs, err := s.getGroupAdminIDs(ctx, group.GroupID)
+	if err != nil {
+		return err
 	}
-	return s.sendNotificationToAdmins(ctx, group.GroupID, int32(constant.GroupApplicationRejectedNotification), tips)
+
+	receivers := make(map[string]int32, len(adminIDs)+1)
+	for _, adminID := range adminIDs {
+		receivers[adminID] = 1
+	}
+	receivers[userID] = 0
+
+	for recvID, receiverAs := range receivers {
+		tips := &sdkws.GroupApplicationRejectedTips{
+			Group:      groupInfo,
+			OpUser:     mconvert.ModelToPbGroupMemberInfo(opMember),
+			HandleMsg:  handleMsg,
+			ReceiverAs: receiverAs,    // 接收者身份(1-管理员, 0-申请人)
+			Uuid:       group.GroupID, // 申请唯一标识
+			Request:    applyReq,      // 申请详情
+		}
+		if err := s.sendNotificationToUser(ctx, recvID, int32(constant.GroupApplicationRejectedNotification), tips); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GroupOwnerTransferredNotification 发送群聊主转让通知

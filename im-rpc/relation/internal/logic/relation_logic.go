@@ -199,6 +199,8 @@ func (l *Logic) ImportFriends(ctx context.Context, req *pbrelation.ImportFriendR
 	now := timex.Now()
 	opUserID := mcontext.GetOpUserIDFromContext(ctx)
 	var friends []*model.Friend
+	// 被导入者视角的好友记录（owner=被导入者，friend=导入发起人），用于给被导入者推送 1204
+	friendViews := make(map[string]*model.Friend, len(validFriendUserIDs))
 	for _, friendUserID := range validFriendUserIDs {
 		friends = append(friends, &model.Friend{
 			OwnerUserID:    ownerUserID,
@@ -208,7 +210,7 @@ func (l *Logic) ImportFriends(ctx context.Context, req *pbrelation.ImportFriendR
 			OperatorUserID: opUserID,
 			UpdatedAt:      now,
 		})
-		friends = append(friends, &model.Friend{
+		friendView := &model.Friend{
 			OwnerUserID:    friendUserID,
 			FriendUserID:   ownerUserID,
 			Remark:         "",
@@ -216,7 +218,9 @@ func (l *Logic) ImportFriends(ctx context.Context, req *pbrelation.ImportFriendR
 			AddSource:      constant.BecomeFriendByImport,
 			OperatorUserID: opUserID,
 			UpdatedAt:      now,
-		})
+		}
+		friends = append(friends, friendView)
+		friendViews[friendUserID] = friendView
 	}
 
 	if err := l.svcCtx.FriendModel.InsertFriends(ctx, friends); err != nil {
@@ -224,14 +228,23 @@ func (l *Logic) ImportFriends(ctx context.Context, req *pbrelation.ImportFriendR
 		return nil, err
 	}
 
-	if _, err := l.svcCtx.FriendVersionLogModel.IncrVersionLogBatch(ctx, model.FriendDID(ownerUserID), friendUserIDs, model.VersionStateInsert); err != nil {
-		l.Errorf("incr version log batch for friend insert failed, owner: %s, err: %v", ownerUserID, err)
+	// 发起人侧版本：批量新增，并通知发起人自己的其他端刷新好友列表
+	if len(validFriendUserIDs) > 0 {
+		ownerVersion, err := l.svcCtx.FriendVersionLogModel.IncrVersionLogBatch(ctx, model.FriendDID(ownerUserID), validFriendUserIDs, model.VersionStateInsert)
+		if err != nil {
+			l.Errorf("incr version log batch for friend insert failed, owner: %s, err: %v", ownerUserID, err)
+		} else {
+			l.svcCtx.NotificationSender.FriendInfoUpdatedNotification(ctx, ownerUserID, ownerUserID, validFriendUserIDs, uint64(ownerVersion.Version), ownerVersion.ID.Hex())
+		}
 	}
 	for _, friendUserID := range validFriendUserIDs {
-		if _, err := l.svcCtx.FriendVersionLogModel.IncrVersionLogBatch(ctx, model.FriendDID(friendUserID), []string{ownerUserID}, model.VersionStateInsert); err != nil {
+		// 被导入者侧版本：版本号与接收方同命名空间，通知其"已成为好友"
+		friendVersion, err := l.svcCtx.FriendVersionLogModel.IncrVersionLogBatch(ctx, model.FriendDID(friendUserID), []string{ownerUserID}, model.VersionStateInsert)
+		if err != nil {
 			l.Errorf("incr version log batch for friend insert failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 			return nil, err
 		}
+		l.svcCtx.NotificationSender.FriendAddedNotification(ctx, ownerUserID, friendUserID, friendViews[friendUserID], opUserID, uint64(friendVersion.Version), friendVersion.ID.Hex())
 	}
 
 	return &pbrelation.ImportFriendResp{}, nil
@@ -264,18 +277,26 @@ func (l *Logic) DeleteFriend(ctx context.Context, req *pbrelation.DeleteFriendRe
 		return nil, err
 	}
 
+	// 删除方侧版本：供其自身增量同步，同时用于给删除方多端推送实时信号
 	ownerUserVersion, err := l.svcCtx.FriendVersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateDelete)
 	if err != nil {
 		l.Errorf("incr version log for friend delete failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 		return nil, err
 	}
-	_, err = l.svcCtx.FriendVersionLogModel.IncrVersionLog(ctx, model.FriendDID(friendUserID), ownerUserID, model.VersionStateDelete)
+	// 被删方自己那份版本：通知投递给被删方，版本号必须取自它自己的命名空间，
+	// 客户端才能与本地 versionID 比对（否则必然不匹配，每次都退化为全量同步）
+	friendUserVersion, err := l.svcCtx.FriendVersionLogModel.IncrVersionLog(ctx, model.FriendDID(friendUserID), ownerUserID, model.VersionStateDelete)
 	if err != nil {
 		l.Errorf("incr version log for friend delete failed, owner: %s, friend: %s, err: %v", friendUserID, ownerUserID, err)
 		return nil, err
 	}
 
-	if err := l.svcCtx.NotificationSender.FriendDeletedNotification(ctx, ownerUserID, friendUserID, uint64(ownerUserVersion.Version), ownerUserVersion.ID.Hex()); err != nil {
+	// 删除方多端同步：1210 为实时信号（不落库、不计未读），不会在会话里产生系统消息
+	if err := l.svcCtx.NotificationSender.FriendInfoUpdatedNotification(ctx, ownerUserID, ownerUserID, []string{friendUserID}, uint64(ownerUserVersion.Version), ownerUserVersion.ID.Hex()); err != nil {
+		l.Errorf("send friend info updated notification failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
+	}
+
+	if err := l.svcCtx.NotificationSender.FriendDeletedNotification(ctx, ownerUserID, friendUserID, uint64(friendUserVersion.Version), friendUserVersion.ID.Hex()); err != nil {
 		l.Errorf("send friend deleted notification failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 	}
 
@@ -321,6 +342,8 @@ func (l *Logic) UpdateFriends(ctx context.Context, req *pbrelation.UpdateFriends
 		validFriendUserIDs = append(validFriendUserIDs, friend.FriendUserID)
 	}
 
+	// 记录最后一次版本日志：好友版本按命名空间单调递增，最后一条即最大版本，用它作为推送信号
+	var lastVersionLog *model.VersionLog
 	for _, friendUserID := range validFriendUserIDs {
 		if err := l.svcCtx.FriendModel.UpdateFriend(ctx, ownerUserID, friendUserID, updates); err != nil {
 			l.Errorf("update friend failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
@@ -328,14 +351,26 @@ func (l *Logic) UpdateFriends(ctx context.Context, req *pbrelation.UpdateFriends
 		}
 		// isPinned 变更会影响好友列表排序顺序，合并好友更新 + 排序变更为一次 batch
 		if isPinnedChanged {
-			if _, err := l.svcCtx.FriendVersionLogModel.IncrVersionLogBatch(ctx, model.FriendDID(ownerUserID), []string{friendUserID, model.VersionSortChangeID}, model.VersionStateUpdate); err != nil {
+			versionLog, err := l.svcCtx.FriendVersionLogModel.IncrVersionLogBatch(ctx, model.FriendDID(ownerUserID), []string{friendUserID, model.VersionSortChangeID}, model.VersionStateUpdate)
+			if err != nil {
 				l.Errorf("incr version log batch for friend+sort update failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
+			} else {
+				lastVersionLog = versionLog
 			}
 		} else {
-			if _, err := l.svcCtx.FriendVersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateUpdate); err != nil {
+			versionLog, err := l.svcCtx.FriendVersionLogModel.IncrVersionLog(ctx, model.FriendDID(ownerUserID), friendUserID, model.VersionStateUpdate)
+			if err != nil {
 				l.Errorf("incr version log for friend update failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
+			} else {
+				lastVersionLog = versionLog
 			}
 		}
+	}
+
+	// 备注/置顶/ex 都是操作者本人侧的数据，因此通知发给自己（多端同步）；
+	// 版本号同样取自操作者命名空间，与接收方一致
+	if lastVersionLog != nil {
+		l.svcCtx.NotificationSender.FriendInfoUpdatedNotification(ctx, ownerUserID, ownerUserID, validFriendUserIDs, uint64(lastVersionLog.Version), lastVersionLog.ID.Hex())
 	}
 
 	return &pbrelation.UpdateFriendsResp{}, nil
@@ -371,7 +406,9 @@ func (l *Logic) SetFriendRemark(ctx context.Context, req *pbrelation.SetFriendRe
 		return nil, err
 	}
 
-	if err := l.svcCtx.NotificationSender.FriendRemarkSetNotification(ctx, ownerUserID, friendUserID, uint64(ownerUserVersion.GetSortVersion()), uint64(ownerUserVersion.Version), ownerUserVersion.ID.Hex()); err != nil {
+	// 备注是 owner 本人侧的数据（friend 侧不存在对应的版本日志），因此通知投给 owner 自己用于多端同步；
+	// 版本号与接收方同命名空间，客户端可直接比对 versionID
+	if err := l.svcCtx.NotificationSender.FriendRemarkSetNotification(ctx, ownerUserID, ownerUserID, uint64(ownerUserVersion.GetSortVersion()), uint64(ownerUserVersion.Version), ownerUserVersion.ID.Hex()); err != nil {
 		l.Errorf("send friend remark set notification failed, owner: %s, friend: %s, err: %v", ownerUserID, friendUserID, err)
 	}
 
@@ -1321,10 +1358,34 @@ func (l *Logic) GetFullFriendUserIDs(ctx context.Context, req *pbrelation.GetFul
 
 // ==================== 通知方法 ====================
 
-// NotificationUserInfoUpdate 用户信息变更通知，更新好友表中的 friendNickname 和 friendFaceURL
+// NotificationUserInfoUpdate 用户资料变更后向该用户的所有好友扇出实时提示（1209），
+// 让好友端刷新本地缓存的昵称/头像。
+// model.Friend 不冗余存储好友资料，服务端无需更新任何库表，只需推送刷新信号
 func (l *Logic) NotificationUserInfoUpdate(ctx context.Context, req *pbrelation.NotificationUserInfoUpdateReq) (*pbrelation.NotificationUserInfoUpdateResp, error) {
-	// model.Friend 不直接存储 friendNickname/friendFaceURL，好友信息通过 FriendUser.UserInfo 关联获取。
-	// 此处仅返回成功，实际用户信息更新由 UserService 处理并触发缓存失效。
+	userID := req.GetUserID()
+	// 调用方同时给出新旧资料且昵称/头像都没变时，无需打扰好友
+	if oldInfo, newInfo := req.GetOldUserInfo(), req.GetNewUserInfo(); oldInfo != nil && newInfo != nil &&
+		oldInfo.GetNickname() == newInfo.GetNickname() && oldInfo.GetFaceURL() == newInfo.GetFaceURL() {
+		return &pbrelation.NotificationUserInfoUpdateResp{}, nil
+	}
+
+	friends, err := l.svcCtx.FriendModel.FindFriendsByOwner(ctx, userID)
+	if err != nil {
+		l.Errorf("find friends by owner failed, userID: %s, err: %v", userID, err)
+		return nil, err
+	}
+	if len(friends) == 0 {
+		return &pbrelation.NotificationUserInfoUpdateResp{}, nil
+	}
+
+	friendIDs := make([]string, 0, len(friends))
+	for _, friend := range friends {
+		friendIDs = append(friendIDs, friend.FriendUserID)
+	}
+	if err := l.svcCtx.NotificationSender.FriendInfoChangedBatchNotification(ctx, userID, friendIDs); err != nil {
+		l.Errorf("send friend info changed notification failed, userID: %s, friends: %d, err: %v", userID, len(friendIDs), err)
+		return nil, err
+	}
 	return &pbrelation.NotificationUserInfoUpdateResp{}, nil
 }
 

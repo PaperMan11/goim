@@ -9,8 +9,10 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
+	"github.com/PaperMan11/goim/pkg/storage/model"
 	friendModel "github.com/PaperMan11/goim/pkg/storage/mongo/friend"
 	requestModel "github.com/PaperMan11/goim/pkg/storage/mongo/request"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -101,13 +103,20 @@ func (s *NotificationSender) FriendApplyReceived(ctx context.Context, fromUserID
 	return s.sendNotification(ctx, fromUserID, toUserID, int32(constant.FriendApplicationNotification), notification)
 }
 
-// 已添加好友通知
-// func (s *NotificationSender) FriendAddedNotification(ctx context.Context, fromUserID, toUserID string) error {
-// 	notification := &sdkws.FriendAddedTips{}
-// 	return s.sendNotification(ctx, fromUserID, toUserID, int32(constant.FriendAddedNotification), notification)
-// }
+// 已添加好友通知（1204）。friend 为接收方视角的好友记录，
+// version/versionID 取自接收方自己的好友版本命名空间，便于客户端比对后拉增量
+func (s *NotificationSender) FriendAddedNotification(ctx context.Context, fromUserID, toUserID string, friend *model.Friend, opUserID string, version uint64, versionID string) error {
+	notification := &sdkws.FriendAddedTips{
+		Friend:          mconvert.ModelToPbFriendInfo(friend),
+		OperationTime:   timex.Now().UnixMilli(),
+		OpUser:          &sdkws.PublicUserInfo{UserID: opUserID},
+		FriendVersion:   version,
+		FriendVersionID: versionID,
+	}
+	return s.sendNotification(ctx, fromUserID, toUserID, int32(constant.FriendAddedNotification), notification)
+}
 
-// 已删除好友通知
+// 已删除好友通知（1205）。投递给被删除的一方，version/versionID 取自被删方自己的命名空间
 func (s *NotificationSender) FriendDeletedNotification(ctx context.Context, fromUserID, toUserID string, version uint64, versionID string) error {
 	notification := &sdkws.FriendDeletedTips{
 		FromToUserID: &sdkws.FromToUserID{
@@ -120,7 +129,8 @@ func (s *NotificationSender) FriendDeletedNotification(ctx context.Context, from
 	return s.sendNotification(ctx, fromUserID, toUserID, int32(constant.FriendDeletedNotification), notification)
 }
 
-// 好友备注已设置通知
+// 好友备注已设置通知（1206）。备注属于 owner 侧数据，故投递给 owner 自己（多端同步），
+// version/sortVersion 均取自 owner 的命名空间，与接收方一致
 func (s *NotificationSender) FriendRemarkSetNotification(ctx context.Context, fromUserID, toUserID string, sortVersion, version uint64, versionID string) error {
 	notification := &sdkws.FriendInfoChangedTips{
 		FromToUserID: &sdkws.FromToUserID{
@@ -164,13 +174,23 @@ func (s *NotificationSender) FriendInfoChangedNotification(ctx context.Context, 
 	return s.sendNotification(ctx, fromUserID, toUserID, int32(constant.FriendInfoUpdatedNotification), notification)
 }
 
-// 好友信息更新通知
-func (s *NotificationSender) FriendInfoUpdatedNotification(ctx context.Context, fromUserID, toUserID string, version uint64, versionID string) error {
+// 好友信息变更批量通知（1209）：一次构建内容，逐个投递给 changedUserID 的全部好友。
+// 用于用户资料（昵称/头像等）变更后刷新好友端的本地缓存；属实时信号，不落库、不计未读
+func (s *NotificationSender) FriendInfoChangedBatchNotification(ctx context.Context, changedUserID string, friendIDs []string) error {
+	notification := &sdkws.UserInfoUpdatedTips{
+		UserID: changedUserID,
+	}
+	return s.MsgDispatcher.SendBatchNotification(ctx, changedUserID, friendIDs, int32(constant.FriendInfoUpdatedNotification), msgdispatcher.SessionTypeMap[constant.FriendInfoUpdatedNotification], notification)
+}
+
+// 好友信息批量更新通知（1210）。friendIDs 为本次变更的好友，version/versionID 取自接收方自己的好友版本命名空间
+func (s *NotificationSender) FriendInfoUpdatedNotification(ctx context.Context, fromUserID, toUserID string, friendIDs []string, version uint64, versionID string) error {
 	notification := &sdkws.FriendsInfoUpdateTips{
 		FromToUserID: &sdkws.FromToUserID{
 			FromUserID: fromUserID,
 			ToUserID:   toUserID,
 		},
+		FriendIDs:       friendIDs,
 		FriendVersion:   version,
 		FriendVersionID: versionID,
 	}
