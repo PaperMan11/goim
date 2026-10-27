@@ -16,6 +16,9 @@ type Config struct {
 
 	LocalCacheConf localcache.CacheConfig
 
+	// AdminSecret 是 get_admin_token 接口的共享密钥，调用方必须传入正确值才能换取 Admin Token。
+	AdminSecret string `json:",default=goim-admin-secret"`
+
 	JwtAuth struct {
 		AccessSecret string `json:",default=goim-access-secret"`
 		AccessExpire int64  `json:",default=86400"`

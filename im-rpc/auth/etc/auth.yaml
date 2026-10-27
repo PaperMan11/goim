@@ -58,6 +58,9 @@ LoginStrategy:
   # 每个用户每个平台最大连接数
   MaxConnPerUserPerPlatform: 3
 
+# get_admin_token 接口的共享密钥，调用方必须传入正确值才能换取 Admin Token
+AdminSecret: goim-admin-secret-231515sfgsgsdg23&@%@!%#
+
 JwtAuth:
   AccessSecret: goim-access-secret
   AccessExpire: 86400

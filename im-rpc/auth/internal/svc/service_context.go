@@ -30,6 +30,12 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	// 启动时硬性校验 AdminSecret，防止空 secret 陷阱（ConstantTimeCompare("","")==1）
+	// 以及过短密钥被暴力猜测。长度 ≥16 字符。
+	if len(c.AdminSecret) < 16 {
+		panic("auth.rpc: AdminSecret must be at least 16 characters long for get_admin_token; refusing to start")
+	}
+
 	redisCli := sredis.MustNewRedis(c.Redis.RedisConf)
 
 	clientOpts := []zrpc.ClientOption{
