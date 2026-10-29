@@ -66,6 +66,7 @@ func (p *MessagePipeline) HandleRaw(conn Connection, message []byte) error {
 	decompressed, err := compressor.Decompress(message)
 	if err != nil {
 		metrics.MsgHandleErrorCounter.Inc("decompress_failed")
+		logc.Errorf(conn.Context(), "decompress message error: %v", err)
 		return err
 	}
 
@@ -73,6 +74,7 @@ func (p *MessagePipeline) HandleRaw(conn Connection, message []byte) error {
 	decoder := encoder.GetEncoder(sdkType)
 	if err := decoder.Unmarshal(decompressed, req); err != nil {
 		metrics.MsgHandleErrorCounter.Inc("unmarshal_failed")
+		logc.Errorf(conn.Context(), "unmarshal message error: %v", err)
 		return err
 	}
 
@@ -197,7 +199,7 @@ func (h *BusinessHandler) reply(conn Connection, req *Request, err error, data [
 		MsgIncr:       req.MsgIncr,
 		OperationID:   req.OperationID,
 		ErrCode:       errInfo.Code,
-		ErrMsg:        errInfo.Message,
+		ErrMsg:        errInfo.Error(),
 		Data:          data,
 	}
 
@@ -215,6 +217,7 @@ func (h *BusinessHandler) reply(conn Connection, req *Request, err error, data [
 func (h *BusinessHandler) handleGetNewestSeq(ctx context.Context, req *Request) (respData []byte, err error) {
 	var reqData sdkws.GetMaxSeqReq
 	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		logc.Errorf(ctx, "get_newest_seq req data unmarshal error: %v", err)
 		return nil, errx.DataError.Wrap("get_newest_seq req data unmarshal error")
 	}
 	resp, err := h.msgService.GetMaxSeq(ctx, &reqData)
@@ -232,6 +235,7 @@ func (h *BusinessHandler) handleGetNewestSeq(ctx context.Context, req *Request) 
 func (h *BusinessHandler) handleSendMsg(ctx context.Context, req *Request) (respData []byte, err error) {
 	var reqData sdkws.MsgData
 	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		logc.Errorf(ctx, "send_msg req data unmarshal error: %v", err)
 		return nil, errx.DataError.Wrap("send_msg req data unmarshal error")
 	}
 	resp, err := h.msgService.SendMsg(ctx, &pbmsg.SendMsgReq{
@@ -251,6 +255,7 @@ func (h *BusinessHandler) handleSendMsg(ctx context.Context, req *Request) (resp
 func (h *BusinessHandler) handleSendSignalMsg(ctx context.Context, req *Request) (respData []byte, err error) {
 	var reqData sdkws.MsgData
 	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		logc.Errorf(ctx, "send_signal_msg req data unmarshal error: %v", err)
 		return nil, errx.DataError.Wrap("send_signal_msg req data unmarshal error")
 	}
 	resp, err := h.msgService.SendMsg(ctx, &pbmsg.SendMsgReq{
@@ -270,6 +275,7 @@ func (h *BusinessHandler) handleSendSignalMsg(ctx context.Context, req *Request)
 func (h *BusinessHandler) handlePullMsgBySeqList(ctx context.Context, req *Request) (respData []byte, err error) {
 	var reqData sdkws.PullMessageBySeqsReq
 	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		logc.Errorf(ctx, "pull_msg_by_seq_list req data unmarshal error: %v", err)
 		return nil, errx.DataError.Wrap("pull_msg_by_seq_list req data unmarshal error")
 	}
 	resp, err := h.msgService.PullMessageBySeqs(ctx, &reqData)
@@ -287,6 +293,7 @@ func (h *BusinessHandler) handlePullMsgBySeqList(ctx context.Context, req *Reque
 func (h *BusinessHandler) handlePullMsg(ctx context.Context, req *Request) (respData []byte, err error) {
 	var reqData pbmsg.GetSeqMessageReq
 	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		logc.Errorf(ctx, "pull_msg req data unmarshal error: %v", err)
 		return nil, errx.DataError.Wrap("pull_msg req data unmarshal error")
 	}
 	resp, err := h.msgService.GetSeqMessage(ctx, &reqData)
@@ -304,6 +311,7 @@ func (h *BusinessHandler) handlePullMsg(ctx context.Context, req *Request) (resp
 func (h *BusinessHandler) handleGetConvMaxReadSeq(ctx context.Context, req *Request) (respData []byte, err error) {
 	var reqData pbmsg.GetConversationsHasReadAndMaxSeqReq
 	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		logc.Errorf(ctx, "get_conv_max_read_seq req data unmarshal error: %v", err)
 		return nil, errx.DataError.Wrap("get_conv_max_read_seq req data unmarshal error")
 	}
 	resp, err := h.msgService.GetConversationsHasReadAndMaxSeq(ctx, &reqData)
@@ -321,6 +329,7 @@ func (h *BusinessHandler) handleGetConvMaxReadSeq(ctx context.Context, req *Requ
 func (h *BusinessHandler) handlePullConvLastMessage(ctx context.Context, req *Request) (respData []byte, err error) {
 	var reqData pbmsg.GetLastMessageReq
 	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		logc.Errorf(ctx, "pull_conv_last_msg req data unmarshal error: %v", err)
 		return nil, errx.DataError.Wrap("pull_conv_last_msg req data unmarshal error")
 	}
 	resp, err := h.msgService.GetLastMessage(ctx, &reqData)
@@ -358,6 +367,7 @@ func (h *BusinessHandler) handleSetBackgroundStatus(ctx context.Context, req *Re
 func (h *BusinessHandler) handleSubUserOnlineStatus(ctx context.Context, req *Request) (respData []byte, err error) {
 	var reqData sdkws.SubUserOnlineStatus
 	if err := proto.Unmarshal(req.Data, &reqData); err != nil {
+		logc.Errorf(ctx, "sub_user_online_status req data unmarshal error: %v", err)
 		return nil, errx.DataError.Wrap("sub_user_online_status req data unmarshal error")
 	}
 	// todo: 处理订阅用户在线状态请求

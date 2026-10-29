@@ -27,10 +27,11 @@ func NewInvalidateTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *I
 func (l *InvalidateTokenLogic) InvalidateToken(req *auth.InvalidateTokenReq) (*auth.InvalidateTokenResp, error) {
 	tokens, err := l.svcCtx.TokenStore.GetUserTokensByPlatform(l.ctx, req.UserID, req.PlatformID)
 	if err != nil && !errors.Is(err, token.ErrTokenNotFound) {
-		l.Errorf("get user tokens by platform failed: %v", err)
+		l.Errorf("get user tokens by platform failed, userID: %s, platformID: %d, err: %v", req.UserID, req.PlatformID, err)
 		return nil, err
 	}
 
+	deleteCount := 0
 	if len(tokens) > 0 {
 		deleteTokens := make([]string, 0)
 		for _, token := range tokens {
@@ -41,11 +42,14 @@ func (l *InvalidateTokenLogic) InvalidateToken(req *auth.InvalidateTokenReq) (*a
 		if len(deleteTokens) > 0 {
 			err = l.svcCtx.TokenStore.DeleteTokens(l.ctx, deleteTokens)
 			if err != nil {
-				l.Errorf("delete tokens failed: %v", err)
+				l.Errorf("delete tokens failed, userID: %s, platformID: %d, err: %v", req.UserID, req.PlatformID, err)
 				return nil, err
 			}
+			deleteCount = len(deleteTokens)
 		}
 	}
 
+	l.Infof("invalidate token success, userID: %s, platformID: %d, deleted: %d, preserved: %d",
+		req.UserID, req.PlatformID, deleteCount, len(tokens)-deleteCount)
 	return &auth.InvalidateTokenResp{}, nil
 }

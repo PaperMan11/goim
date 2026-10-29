@@ -73,7 +73,7 @@ func ModelToPbChatLog(msg *model.MsgInfoModel) *pbmsg.ChatLog {
 }
 
 func PbToModelMsgData(msg *sdkws.MsgData) *model.MsgDataModel {
-	return &model.MsgDataModel{
+	m := &model.MsgDataModel{
 		SendID:           msg.SendID,
 		RecvID:           msg.RecvID,
 		GroupID:          msg.GroupID,
@@ -85,22 +85,32 @@ func PbToModelMsgData(msg *sdkws.MsgData) *model.MsgDataModel {
 		SessionType:      msg.SessionType,
 		MsgFrom:          msg.MsgFrom,
 		ContentType:      msg.ContentType,
-		Content:          string(msg.Content),
+		Content:          msg.Content,
 		Seq:              msg.Seq,
 		SendTime:         msg.SendTime,
 		Status:           msg.Status,
 		IsRead:           msg.IsRead,
 		CreateTime:       msg.CreateTime,
 		Options:          msg.Options, // 消息选项
-		OfflinePush: &model.OfflinePushModel{
+		// OfflinePush: &model.OfflinePushModel{
+		// 	Title:         msg.OfflinePushInfo.Title,
+		// 	Desc:          msg.OfflinePushInfo.Desc,
+		// 	Ex:            msg.OfflinePushInfo.Ex,
+		// 	IOSPushSound:  msg.OfflinePushInfo.IOSPushSound,
+		// 	IOSBadgeCount: msg.OfflinePushInfo.IOSBadgeCount,
+		// },
+		AtUserIDList: msg.AtUserIDList, // @用户ID列表
+		AttachedInfo: msg.AttachedInfo, // 附加信息
+		Ex:           msg.Ex,
+	}
+	if msg.OfflinePushInfo != nil {
+		m.OfflinePush = &model.OfflinePushModel{ // 离线推送信息
 			Title:         msg.OfflinePushInfo.Title,
 			Desc:          msg.OfflinePushInfo.Desc,
 			Ex:            msg.OfflinePushInfo.Ex,
 			IOSPushSound:  msg.OfflinePushInfo.IOSPushSound,
 			IOSBadgeCount: msg.OfflinePushInfo.IOSBadgeCount,
-		}, // 离线推送信息
-		AtUserIDList: msg.AtUserIDList, // @用户ID列表
-		AttachedInfo: msg.AttachedInfo, // 附加信息
-		Ex:           msg.Ex,
+		}
 	}
+	return m
 }

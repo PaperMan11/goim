@@ -38,6 +38,7 @@ func (l *GetUserTokenLogic) GetUserToken(req *auth.GetUserTokenReq) (*auth.GetUs
 	}
 
 	if req.PlatformID == constant.AdminPlatformID {
+		l.Errorf("get user token: admin platform id is not allowed, opUserID: %s, targetUserID: %s", opUserID, req.UserID)
 		return nil, errx.NoPermissionError.Wrap("admin platform id is not allowed")
 	}
 
@@ -78,6 +79,8 @@ func (l *GetUserTokenLogic) GetUserToken(req *auth.GetUserTokenReq) (*auth.GetUs
 		return nil, errx.InternalError.WrapWithError(err)
 	}
 
+	l.Infof("get user token success, userID: %s, platformID: %d, invalidateTokens: %d, loginStrategy: %s",
+		req.UserID, req.PlatformID, len(needInvalidateTokens), l.svcCtx.Config.LoginStrategy.LoginStrategy)
 	return &auth.GetUserTokenResp{
 		Token:             newTokenInfo.Token,
 		ExpireTimeSeconds: newTokenInfo.ExpireAt - timex.Unix(),

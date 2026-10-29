@@ -41,10 +41,13 @@ func (mt *MsgTransfer) consumePersistentMsgs(ctx context.Context, msg queuex.Mes
 		ConversationID: msgData.ConversationID,
 		Msgs:           msgData.MsgData,
 	}); err != nil {
-		logc.Errorf(ctx, "failed to add msgs to db, err: %v", err)
+		logc.Errorf(ctx, "failed to add msgs to db, conversationID: %s, msgCount: %d, err: %v",
+			msgData.ConversationID, len(msgData.MsgData), err)
 		return err
 	}
 
+	logc.Infof(ctx, "persist msgs success, conversationID: %s, msgCount: %d",
+		msgData.ConversationID, len(msgData.MsgData))
 	return nil
 }
 
@@ -69,6 +72,9 @@ func (mt *MsgTransfer) batchHandleMsg(conversationID string, msgs []*sdkws.MsgDa
 	ctx := withOperationID(context.Background(), "")
 	mt.handleReadReceipt(ctx, msgs)
 	storeMsg, notStoreMsg, storeNotifyMsg, notStoreNotifyMsg := mt.classifyMsgType(ctx, msgs)
+
+	logc.Infof(ctx, "classify msg type, storeMsgCount: %d, notStoreMsgCount: %d, storeNotifyMsgCount: %d, notStoreNotifyMsgCount: %d",
+		len(storeMsg), len(notStoreMsg), len(storeNotifyMsg), len(notStoreNotifyMsg))
 
 	// 推送消息到 push topic
 	mt.toPushTopic(ctx, conversationID, msgs)

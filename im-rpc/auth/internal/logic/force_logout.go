@@ -45,5 +45,7 @@ func (l *ForceLogoutLogic) ForceLogout(req *auth.ForceLogoutReq) (*auth.ForceLog
 		l.Errorf("failed to delete user tokens, platformID: %s, userID: %s, err: %v", req.PlatformID, req.UserID, err)
 		return nil, err
 	}
+
+	l.Infof("force logout success, platformID: %s, userID: %s", req.PlatformID, req.UserID)
 	return &auth.ForceLogoutResp{}, nil
 }

@@ -14,6 +14,7 @@ import (
 func (l *Logic) GetDesignateUsers(ctx context.Context, req *pbuser.GetDesignateUsersReq) (*pbuser.GetDesignateUsersResp, error) {
 	users, err := l.svcCtx.UserModel.FindByIDs(ctx, req.GetUserIDs())
 	if err != nil {
+		l.Errorf("find users by ids failed, userIDs: %v, err: %v", req.GetUserIDs(), err)
 		return nil, err
 	}
 
@@ -59,9 +60,11 @@ func (l *Logic) UpdateUserInfo(ctx context.Context, req *pbuser.UpdateUserInfoRe
 
 	err = l.svcCtx.UserModel.Update(ctx, user)
 	if err != nil {
+		l.Errorf("update user info failed, userID: %s, err: %v", userInfo.GetUserID(), err)
 		return nil, err
 	}
 
+	l.Infof("update user info success, userID: %s", userInfo.GetUserID())
 	return &pbuser.UpdateUserInfoResp{}, nil
 }
 
@@ -154,10 +157,12 @@ func (l *Logic) UserRegister(ctx context.Context, req *pbuser.UserRegisterReq) (
 	for _, userInfo := range req.GetUsers() {
 		userID := userInfo.GetUserID()
 		if userID == "" {
+			l.Errorf("user register: user id is empty")
 			return nil, errx.ArgsError.Wrap("user id is empty")
 		}
 		newUserIDs = append(newUserIDs, userID)
 		if _, ok := userIDSet[userID]; ok {
+			l.Errorf("user register: duplicate user id, userID: %s", userID)
 			return nil, errx.ArgsError.Wrap("user id is duplicate")
 		}
 		userIDSet[userID] = struct{}{}
@@ -171,6 +176,7 @@ func (l *Logic) UserRegister(ctx context.Context, req *pbuser.UserRegisterReq) (
 	}
 	for _, exists := range exists {
 		if exists {
+			l.Errorf("user register: user already registered")
 			return nil, errx.UserRegisteredAlreadyError
 		}
 	}
@@ -190,6 +196,7 @@ func (l *Logic) UserRegister(ctx context.Context, req *pbuser.UserRegisterReq) (
 		return nil, err
 	}
 
+	l.Infof("user register success, count: %d", len(users))
 	return &pbuser.UserRegisterResp{}, nil
 }
 
@@ -214,6 +221,7 @@ func (l *Logic) GetAllUserID(ctx context.Context, req *pbuser.GetAllUserIDReq) (
 func (l *Logic) SortQuery(ctx context.Context, req *pbuser.SortQueryReq) (*pbuser.SortQueryResp, error) {
 	users, err := l.svcCtx.UserModel.SortQuery(ctx, req.GetUserIDName(), req.GetAsc())
 	if err != nil {
+		l.Errorf("sort query failed, keyword: %s, asc: %v, err: %v", req.GetUserIDName(), req.GetAsc(), err)
 		return nil, err
 	}
 
@@ -228,6 +236,7 @@ func (l *Logic) SortQuery(ctx context.Context, req *pbuser.SortQueryReq) (*pbuse
 func (l *Logic) IsIMAdmin(ctx context.Context, req *pbuser.IsIMAdminReq) (*pbuser.IsIMAdminResp, error) {
 	isAdmin, err := l.svcCtx.UserModel.IsIMAdmin(ctx, req.GetUserID())
 	if err != nil {
+		l.Errorf("check is IM admin failed, userID: %s, err: %v", req.GetUserID(), err)
 		return nil, err
 	}
 

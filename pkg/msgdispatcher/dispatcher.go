@@ -3,6 +3,8 @@ package msgdispatcher
 import (
 	"context"
 	"encoding/json"
+	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/mcontext"
 
 	"github.com/PaperMan11/goim/pkg/msgprocessor"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
@@ -11,6 +13,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/utils/randx"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
+	"github.com/PaperMan11/goim/pkg/utils/workerpool"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 )
@@ -42,11 +45,25 @@ type MsgDispatcher interface {
 	SendMsg(ctx context.Context, msgData *sdkws.MsgData) (*pbmsg.SendMsgResp, error)
 }
 
+const (
+	// 通知异步派发参数：通知发送是 I/O 密集（msg.rpc SendMsg 内含 seq 分配 + Kafka 发布），
+	// worker 给足以避免单慢请求阻塞整条通知链；队列满时 TrySubmit 明确报错（背压不静默丢弃）
+	notificationWorkerCount = 32
+	notificationBufferSize  = 4096
+)
+
 type defaultMsgDispatcher struct {
 	msgService     msgservice.MsgService
 	getUserInfo    GetUserInfoFunc
 	contentTypeMap map[int32]*NotificationConfig
 	sessionTypeMap map[int32]int32
+	notifyPool     *workerpool.WorkerPool[func()]
+}
+
+func newNotifyPool() *workerpool.WorkerPool[func()] {
+	pool := workerpool.New[func()](func(task func()) { task() }, notificationWorkerCount, notificationBufferSize)
+	pool.Start()
+	return pool
 }
 
 func NewMsgDispatcher(msgService msgservice.MsgService) MsgDispatcher {
@@ -54,6 +71,7 @@ func NewMsgDispatcher(msgService msgservice.MsgService) MsgDispatcher {
 		msgService:     msgService,
 		contentTypeMap: ContentTypeMap,
 		sessionTypeMap: SessionTypeMap,
+		notifyPool:     newNotifyPool(),
 	}
 }
 
@@ -63,6 +81,7 @@ func NewMsgDispatcherWithConfig(msgService msgservice.MsgService, notification *
 		getUserInfo:    getUserInfo,
 		contentTypeMap: BuildContentTypeMap(notification),
 		sessionTypeMap: SessionTypeMap,
+		notifyPool:     newNotifyPool(),
 	}
 }
 
@@ -89,7 +108,27 @@ func (d *defaultMsgDispatcher) SendNotification(ctx context.Context, sendID, rec
 		Ex:    optionsConfig.OfflinePush.Ext,
 	}
 
-	return d.sendMsg(ctx, msg)
+	// 通知以 sendID 身份发出，补齐操作人上下文，
+	// 避免内部触发路径（断线清理、定时任务等 detached context）丢失 opUserID，
+	// 导致下游 requireSelfOrAdmin 查询 isIMAdmin("") 报 user not found 而误杀通知
+	ctx = mcontext.SetOpUserIDInContext(ctx, sendID)
+
+	// 异步派发：通知是 best-effort 旁路操作，与上游请求生命周期彻底解耦
+	// 1) 不阻塞调用方——首聊等同步链路不再被通知 RPC 的延迟堆叠拖到逼近客户端超时
+	// 2) WithoutCancel 切断取消级联——上游超时/断连后通知继续在后台发完
+	// 3) WithoutCancel 保留 context value，trace/metadata 连续性不断
+	taskCtx := context.WithoutCancel(ctx)
+	if !d.notifyPool.TrySubmit(func() {
+		if err := d.sendMsg(taskCtx, msg); err != nil {
+			logx.WithContext(taskCtx).Errorf("async send notification failed, contentType: %d, sendID: %s, recvID: %s, err: %v",
+				contentType, sendID, recvID, err)
+		}
+	}) {
+		logx.WithContext(ctx).Errorf("notification queue full, reject notification, contentType: %d, sendID: %s, recvID: %s",
+			contentType, sendID, recvID)
+		return errx.InternalError.Wrap("notification queue full")
+	}
+	return nil
 }
 
 func (d *defaultMsgDispatcher) SendBatchNotification(ctx context.Context, sendID string, recvIDs []string, contentType, sessionType int32, m proto.Message, opts ...NotificationOptions) error {

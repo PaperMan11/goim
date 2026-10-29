@@ -3,8 +3,12 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mconvert"
@@ -38,7 +42,7 @@ func (l *Logic) GetConversation(ctx context.Context, req *pbconversation.GetConv
 	conv, err := l.svcCtx.ConversationModel.FindConversation(ctx, ownerUserID, conversationID)
 	if err != nil {
 		if isConversationNotFound(err) {
-			return nil, errx.RecordNotFoundError
+			return nil, status.Error(codes.NotFound, fmt.Sprintf("conversation not found, owner: %s, conv: %s", ownerUserID, conversationID))
 		}
 		l.Errorf("find conversation failed, owner: %s, conv: %s, err: %v", ownerUserID, conversationID, err)
 		return nil, err

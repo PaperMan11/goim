@@ -32,12 +32,12 @@ func (p *Pusher) consumePushMsg(ctx context.Context, msg queuex.Message) error {
 	ctx = mcontext.SetOperationIDInContext(ctx, mcontext.NewOperationID("online-pusher"))
 	var pushMsg pbpush.PushMsgReq
 	if err := proto.Unmarshal(msg.Value(), &pushMsg); err != nil {
-		logc.Errorf(ctx, "push unmarshal msg err, err: %v, msg: %s", err, msg.Value)
+		logc.Errorf(ctx, "push unmarshal msg err, err: %v, msg: %s", err, msg.Value())
 		return err
 	}
 
 	if timex.Since(timex.ParseUnixMilli(pushMsg.MsgData.SendTime)) > 10*time.Second {
-		logc.Infof(ctx, "push msg is expired, send time: %d, now: %d", pushMsg.MsgData.SendTime, timex.Now())
+		logc.Infof(ctx, "push msg is expired, send time: %d, now: %d", pushMsg.MsgData.SendTime, timex.Now().UnixMilli())
 		return nil
 	}
 
@@ -69,6 +69,7 @@ func (p *Pusher) pushToGroup(ctx context.Context, groupID string, msg *sdkws.Msg
 	}
 	userIDs := membersResp.GetUserIDs()
 	if len(userIDs) == 0 {
+		logc.Infof(ctx, "push to group: no members to push, groupID: %s", groupID)
 		return nil
 	}
 
@@ -110,6 +111,9 @@ func (p *Pusher) pushToUser(ctx context.Context, userIDs []string, msg *sdkws.Ms
 			offlineUserIDs = append(offlineUserIDs, status.UserID)
 		}
 	}
+
+	logc.Infof(ctx, "push msg to user, userStatusResp: %+v, onlineUserIDs: %v, offlineUserIDs: %v",
+		userStatusResp.GetStatusList(), onlineUserIDs, offlineUserIDs)
 
 	if len(onlineUserIDs) > 0 {
 		err = p.onlinePush(ctx, onlineUserIDs, msg)
@@ -211,7 +215,8 @@ func (p *Pusher) offlinePush(ctx context.Context, userIDs []string, msg *sdkws.M
 func (p *Pusher) getUserPushTokens(ctx context.Context, userIDs []string) map[string][]string {
 	result := make(map[string][]string)
 	for _, userID := range userIDs {
-		resp, err := p.userService.GetUserClientConfig(ctx, &pbuser.GetUserClientConfigReq{
+		userCtx := mcontext.SetOpUserIDInContext(ctx, userID)
+		resp, err := p.userService.GetUserClientConfig(userCtx, &pbuser.GetUserClientConfigReq{
 			UserID: userID,
 		})
 		if err != nil {
@@ -315,7 +320,7 @@ func (p *Pusher) consumeOfflinePushMsg(ctx context.Context, msg queuex.Message) 
 	// 这里保留消费逻辑，支持"延迟重试"或"离线重放"等场景
 	var pushMsg pbpush.PushMsgReq
 	if err := proto.Unmarshal(msg.Value(), &pushMsg); err != nil {
-		logc.Errorf(ctx, "offline push unmarshal msg err, err: %v, msg: %s", err, msg.Value)
+		logc.Errorf(ctx, "offline push unmarshal msg err, err: %v, msg: %s", err, msg.Value())
 		return err
 	}
 

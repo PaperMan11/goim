@@ -21,6 +21,7 @@ func (l *Logic) GetSubscribeUsersStatus(ctx context.Context, req *pbuser.GetSubs
 func (l *Logic) GetUserStatus(ctx context.Context, req *pbuser.GetUserStatusReq) (*pbuser.GetUserStatusResp, error) {
 	statuses, err := l.svcCtx.UserModel.GetUserStatus(ctx, req.GetUserIDs())
 	if err != nil {
+		l.Errorf("get user status failed, userIDs: %v, err: %v", req.GetUserIDs(), err)
 		return nil, err
 	}
 
@@ -90,9 +91,13 @@ func (l *Logic) SetUserStatus(ctx context.Context, req *pbuser.SetUserStatusReq)
 		req.GetDeviceID(),
 		int(req.GetStatus()))
 	if err != nil {
+		l.Errorf("set user status failed, userID: %s, platformID: %d, status: %d, err: %v",
+			req.GetUserID(), req.GetPlatformID(), req.GetStatus(), err)
 		return nil, err
 	}
 
+	l.Infof("set user status success, userID: %s, platformID: %d, status: %d",
+		req.GetUserID(), req.GetPlatformID(), req.GetStatus())
 	return &pbuser.SetUserStatusResp{}, nil
 }
 
@@ -139,9 +144,11 @@ func (l *Logic) SetUserOnlineStatus(ctx context.Context, req *pbuser.SetUserOnli
 
 	err := l.svcCtx.UserModel.SetUserOnlineStatus(ctx, statuses)
 	if err != nil {
+		l.Errorf("set user online status failed, statusCount: %d, err: %v", len(statuses), err)
 		return nil, err
 	}
 
+	l.Infof("set user online status success, statusCount: %d", len(statuses))
 	return &pbuser.SetUserOnlineStatusResp{}, nil
 }
 

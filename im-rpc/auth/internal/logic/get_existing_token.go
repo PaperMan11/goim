@@ -26,7 +26,7 @@ func NewGetExistingTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 func (l *GetExistingTokenLogic) GetExistingToken(req *auth.GetExistingTokenReq) (*auth.GetExistingTokenResp, error) {
 	tokens, err := l.svcCtx.TokenStore.GetUserTokensByPlatform(l.ctx, req.UserID, req.PlatformID)
 	if err != nil {
-		l.Errorf("get user tokens by platform failed: %v", err)
+		l.Errorf("get user tokens by platform failed, userID: %s, platformID: %d, err: %v", req.UserID, req.PlatformID, err)
 		return nil, err
 	}
 
@@ -38,6 +38,8 @@ func (l *GetExistingTokenLogic) GetExistingToken(req *auth.GetExistingTokenReq) 
 			respTokens[token.Token] = constant.NormalToken
 		}
 	}
+	l.Infof("get existing token success, userID: %s, platformID: %d, total: %d",
+		req.UserID, req.PlatformID, len(tokens))
 	return &auth.GetExistingTokenResp{
 		TokenStates: respTokens,
 	}, nil

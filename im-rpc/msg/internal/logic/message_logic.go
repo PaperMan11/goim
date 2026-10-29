@@ -8,6 +8,9 @@ import (
 	"slices"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/mconvert"
@@ -204,6 +207,7 @@ func (l *Logic) isRecvMsgAllowed(ctx context.Context, userID, conversationID str
 	}
 	recvOptResp, err := l.svcCtx.UserService.GetGlobalRecvMessageOpt(ctx, &pbuser.GetGlobalRecvMessageOptReq{UserID: userID})
 	if err != nil {
+		l.Errorf("get global recv message opt failed, userID: %s, err: %v", userID, err)
 		return false, err
 	}
 	switch recvOptResp.GetGlobalRecvMsgOpt() {
@@ -223,6 +227,14 @@ func (l *Logic) isRecvMsgAllowed(ctx context.Context, userID, conversationID str
 		OwnerUserID:    userID,
 	})
 	if err != nil {
+		status, ok := status.FromError(err)
+		if ok && status.Code() == codes.NotFound {
+			// 会话不存在 → 没有会话级 recvMsgOpt 覆盖
+			// 全局已校验过（走到这里说明全局是 ReceiveMessage=0 默认值）
+			// 直接放行，首次发消息后 msgtransfer 会自动建会话
+			return true, nil
+		}
+		l.Errorf("get conversation failed, userID: %s, conversationID: %s, err: %v", userID, conversationID, err)
 		return false, err
 	}
 	switch conversationResp.GetConversation().GetRecvMsgOpt() {
@@ -241,12 +253,15 @@ func (l *Logic) isRecvMsgAllowed(ctx context.Context, userID, conversationID str
 }
 
 func (l *Logic) SendMsg(ctx context.Context, req *pbmsg.SendMsgReq) (*pbmsg.SendMsgResp, error) {
-	msgData := req.MsgData
+	msgData := req.GetMsgData()
 	if err := l.requireSelfOrAdmin(msgData.SendID); err != nil {
+		l.Errorf("require self or admin failed, err: %v, senderID: %s, receiverID: %s, groupID: %s, sessionType: %d, contentType: %d",
+			err, msgData.SendID, msgData.RecvID, msgData.GroupID, msgData.SessionType, msgData.ContentType)
 		return nil, err
 	}
 	if err := l.sendMsg(ctx, msgData); err != nil {
-		l.Errorf("send msg failed, err: %v, msgData: %+v", err, msgData)
+		l.Errorf("send msg failed, err: %v, senderID: %s, receiverID: %s, groupID: %s, sessionType: %d",
+			err, msgData.SendID, msgData.RecvID, msgData.GroupID, msgData.SessionType)
 		return nil, err
 	}
 
@@ -591,6 +606,8 @@ func (l *Logic) GetLastMessage(ctx context.Context, req *pbmsg.GetLastMessageReq
 
 func (l *Logic) RevokeMsg(ctx context.Context, req *pbmsg.RevokeMsgReq) (*pbmsg.RevokeMsgResp, error) {
 	if err := l.requireSelfOrAdmin(req.UserID); err != nil {
+		l.Errorf("require self or admin failed, err: %v, userID: %s, conversationID: %s",
+			err, req.UserID, req.ConversationID)
 		return nil, err
 	}
 
@@ -763,6 +780,8 @@ func (l *Logic) MarkConversationAsRead(ctx context.Context, req *pbmsg.MarkConve
 func (l *Logic) DeleteMsgs(ctx context.Context, req *pbmsg.DeleteMsgsReq) (*pbmsg.DeleteMsgsResp, error) {
 	err := l.requireSelfOrAdmin(req.UserID)
 	if err != nil {
+		l.Errorf("require self or admin failed, err: %v, userID: %s, conversationID: %s",
+			err, req.UserID, req.ConversationID)
 		return nil, err
 	}
 
@@ -837,6 +856,8 @@ func (l *Logic) DeleteMsgPhysical(ctx context.Context, req *pbmsg.DeleteMsgPhysi
 func (l *Logic) ClearConversationsMsg(ctx context.Context, req *pbmsg.ClearConversationsMsgReq) (*pbmsg.ClearConversationsMsgResp, error) {
 	err := l.requireSelfOrAdmin(req.UserID)
 	if err != nil {
+		l.Errorf("require self or admin failed, err: %v, userID: %s, conversationIDs: %s",
+			err, req.UserID, req.ConversationIDs)
 		return nil, err
 	}
 
@@ -853,6 +874,7 @@ func (l *Logic) ClearConversationsMsg(ctx context.Context, req *pbmsg.ClearConve
 func (l *Logic) UserClearAllMsg(ctx context.Context, req *pbmsg.UserClearAllMsgReq) (*pbmsg.UserClearAllMsgResp, error) {
 	err := l.requireSelfOrAdmin(req.UserID)
 	if err != nil {
+		l.Errorf("require self or admin failed, err: %v, userID: %s", err, req.UserID)
 		return nil, err
 	}
 
@@ -1269,6 +1291,8 @@ func (l *Logic) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddM
 			l.Errorf("set sender read seq failed, err: %v, conversationID: %s, senderID: %s, readSeq: %d", err, conversationID, senderID, readSeq)
 		}
 	}
+
+	l.Infof("add msgs success, conversationID: %s, seqEnd: %d", conversationID, seqEnd)
 	return &pbmsg.AddMsgsResp{
 		LastSeq: seqEnd,
 	}, nil

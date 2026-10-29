@@ -218,21 +218,18 @@ func (h *HubServer) SuperGroupOnlineBatchPushOneMsg(ctx context.Context, req *pb
 }
 
 func (h *HubServer) KickUserOffline(ctx context.Context, req *pbmsggateway.KickUserOfflineReq) (*pbmsggateway.KickUserOfflineResp, error) {
+	totalKicked := 0
 	for _, userID := range req.KickUserIDList {
 		userConns := h.wsServer.GetUserConnections(userID)
-		if req.PlatformID == 0 {
-			for _, conn := range userConns {
+		for _, conn := range userConns {
+			if req.PlatformID == 0 || conn.Context().HandshakeInfo().GetPlatformID() == req.PlatformID {
 				h.wsServer.Kick(conn)
-			}
-		} else {
-			for _, conn := range userConns {
-				if conn.Context().HandshakeInfo().GetPlatformID() == req.PlatformID {
-					h.wsServer.Kick(conn)
-				}
+				totalKicked++
 			}
 		}
 	}
-
+	logc.Infof(ctx, "kick user offline success, userCount: %d, platformID: %d, kickedConns: %d",
+		len(req.KickUserIDList), req.PlatformID, totalKicked)
 	return &pbmsggateway.KickUserOfflineResp{}, nil
 }
 

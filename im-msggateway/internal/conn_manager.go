@@ -8,6 +8,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/loginstrategy"
 	"github.com/PaperMan11/goim/pkg/metrics"
 	"github.com/PaperMan11/goim/pkg/utils/workerpool"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 type ConnManager interface {
@@ -112,11 +113,13 @@ func (cm *connManager) Add(conn Connection) error {
 
 	if cm.connCount >= cm.maxConns {
 		cm.mu.Unlock()
+		logx.Errorf("conn add failed: conn count %d reached max limit %d", cm.connCount, cm.maxConns)
 		return errx.ConnOverMaxNumLimit
 	}
 
 	if _, exists := cm.connIndex[conn.ID()]; exists {
 		cm.mu.Unlock()
+		logx.Infof("conn add skipped: connID %s already exists", conn.ID())
 		return errx.ConnResetError
 	}
 

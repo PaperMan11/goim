@@ -29,8 +29,10 @@ func (l *KickTokensLogic) KickTokens(req *auth.KickTokensReq) (*auth.KickTokensR
 
 	err := l.svcCtx.TokenStore.DeleteTokens(l.ctx, req.Tokens)
 	if err != nil {
-		l.Errorf("delete tokens failed: %v", err)
+		l.Errorf("delete tokens failed, count: %d, err: %v", len(req.Tokens), err)
 		return nil, err
 	}
+
+	l.Infof("kick tokens success, count: %d", len(req.Tokens))
 	return &auth.KickTokensResp{}, nil
 }
