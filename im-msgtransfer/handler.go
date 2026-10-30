@@ -52,6 +52,8 @@ func (mt *MsgTransfer) consumePersistentMsgs(ctx context.Context, msg queuex.Mes
 }
 
 func (mt *MsgTransfer) consumeMsg(ctx context.Context, msg queuex.Message) error {
+	ctx = withOperationID(ctx, "")
+
 	msgData := mt.batcher.Get()
 	if err := proto.Unmarshal(msg.Value(), msgData); err != nil {
 		logc.Errorf(ctx, "failed to unmarshal msg data, err: %v", err)
@@ -61,11 +63,34 @@ func (mt *MsgTransfer) consumeMsg(ctx context.Context, msg queuex.Message) error
 	logc.Infof(ctx, "received msg, sendID: %s, recvID: %s, groupID: %s, sessionType: %d, contentType: %d",
 		msgData.SendID, msgData.RecvID, msgData.GroupID, msgData.SessionType, msgData.ContentType)
 
+	// push 不进攒批：toPushTopic 本就逐条投递，攒批对 push 零收益纯延迟，
+	// 且 push 不应被落库路径（RPC/produce）阻塞。key 分发模式下同会话消息
+	// 串行到达，此处直接推送可保证同会话推送顺序。
+	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
+	fixNotifyOptions(msgData)
+	if err := mt.toPushTopic(ctx, conversationID, []*sdkws.MsgData{msgData}); err != nil {
+		return err
+	}
+
 	if err := mt.batcher.Push(msgData); err != nil {
 		logc.Errorf(ctx, "failed to push msg to batcher, err: %v", err)
 		return err
 	}
 	return nil
+}
+
+// fixNotifyOptions 对未显式配置的默认通知（IsSendMsg）：按"实时信号不打扰"语义，
+// 原地关闭离线推送与未读计数，保证在线端与离线端 pull 补齐时行为一致。
+// 必须在推送前执行；注意不可用 NewOptions 重建 Options（会丢失 history/persistent
+// 等标志，导致落库消息语义错乱）。
+func fixNotifyOptions(msg *sdkws.MsgData) {
+	msgOpts := msgprocessor.Options(msg.Options)
+	if !msgOpts.IsNotNotification() && msgOpts.IsSendMsg() {
+		msg.Options = msgprocessor.WithOptions(msg.Options,
+			msgprocessor.WithOfflinePush(false),
+			msgprocessor.WithUnreadCount(false),
+		)
+	}
 }
 
 func (mt *MsgTransfer) batchHandleMsg(conversationID string, msgs []*sdkws.MsgData) {
@@ -76,9 +101,7 @@ func (mt *MsgTransfer) batchHandleMsg(conversationID string, msgs []*sdkws.MsgDa
 	logc.Infof(ctx, "classify msg type, storeMsgCount: %d, notStoreMsgCount: %d, storeNotifyMsgCount: %d, notStoreNotifyMsgCount: %d",
 		len(storeMsg), len(notStoreMsg), len(storeNotifyMsg), len(notStoreNotifyMsg))
 
-	// 推送消息到 push topic
-	mt.toPushTopic(ctx, conversationID, msgs)
-
+	// push 已在 consumeMsg 阶段完成，批处理只负责落库攒批
 	if len(storeMsg) > 0 {
 		mt.toMongoTopic(ctx, conversationID, 0, storeMsg)
 	}
@@ -106,19 +129,6 @@ func (mt *MsgTransfer) classifyMsgType(_ context.Context, msgs []*sdkws.MsgData)
 				notStoreMsg = append(notStoreMsg, msg)
 			}
 		} else {
-			if msgOpts.IsSendMsg() {
-				cloneMsg := proto.Clone(msg).(*sdkws.MsgData)
-				cloneMsg.Options = msgprocessor.NewOptions(
-					msgprocessor.WithOfflinePush(msgOpts.IsOfflinePush()),
-					msgprocessor.WithUnreadCount(msgOpts.IsUnreadCount()),
-				)
-				//storeNotifyMsg = append(storeNotifyMsg, cloneMsg)
-
-				msg.Options = msgprocessor.WithOptions(msg.Options,
-					msgprocessor.WithOfflinePush(false),
-					msgprocessor.WithUnreadCount(false),
-				)
-			}
 			if msgOpts.IsHistory() {
 				storeNotifyMsg = append(storeNotifyMsg, msg)
 			} else {
@@ -172,12 +182,16 @@ func (mt *MsgTransfer) handleReadReceipt(ctx context.Context, msgs []*sdkws.MsgD
 		for userID, hasReadSeq := range hasReadSeqMap {
 			// 已读回执由该用户发出，继承其身份使下游 requireSelfOrAdmin 自然通过
 			callCtx := withOperationID(ctx, userID)
-			mt.msgService.SetConversationHasReadSeq(callCtx, &pbmsg.SetConversationHasReadSeqReq{
+			if _, err := mt.msgService.SetConversationHasReadSeq(callCtx, &pbmsg.SetConversationHasReadSeqReq{
 				ConversationID: conversationID,
 				HasReadSeq:     hasReadSeq,
 				UserID:         userID,
 				NoNotification: true,
-			})
+			}); err != nil {
+				// 已读进度静默丢失会导致对端已读状态回退
+				logc.Errorf(ctx, "failed to set conversation has read seq, userID: %s, conversationID: %s, hasReadSeq: %d, err: %v",
+					userID, conversationID, hasReadSeq, err)
+			}
 		}
 	}
 }

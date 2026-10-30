@@ -22,6 +22,9 @@ MsgTransferConsumer:
   MaxBytes: 1048576
   Processors: 4
   Consumers: 2
+  # 按消息 key（conversationID）hash 分发到固定 consumeLoop，
+  # 同会话消息严格串行处理，保证推送顺序；分片数 = Processors
+  KeySharding: true
 
 MsgPersistentTopic:
   Brokers:
