@@ -1082,7 +1082,8 @@ func (l *Logic) CreateSingleChatConversations(ctx context.Context, req *pbconver
 
 	// 对两个用户写版本日志（Insert）：跨主体单次 BulkWrite，替代逐用户 2 次 Mongo 往返
 	// （自聊场景 sendID == recvID 由批量接口内部去重）
-	if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, []string{sendID, recvID}, conversationID, model.VersionStateInsert); err != nil {
+	dids := []string{model.ConversationDID(sendID), model.ConversationDID(recvID)}
+	if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, dids, conversationID, model.VersionStateInsert); err != nil {
 		l.Errorf("incr version log for conv insert failed, sendID: %s, recvID: %s, conv: %s, err: %v", sendID, recvID, conversationID, err)
 	}
 
@@ -1135,7 +1136,11 @@ func (l *Logic) CreateGroupChatConversations(ctx context.Context, req *pbconvers
 
 	// 对每个用户写版本日志（Insert）：所有用户共用同一 conversationID，
 	// 跨主体单次 BulkWrite 完成全部成员的版本推进，Mongo 往返从 N 次降为 1 次
-	if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, userIDs, conversationID, model.VersionStateInsert); err != nil {
+	dids := make([]string, 0, len(userIDs))
+	for _, uid := range userIDs {
+		dids = append(dids, model.ConversationDID(uid))
+	}
+	if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, dids, conversationID, model.VersionStateInsert); err != nil {
 		l.Errorf("incr version log for group conv insert failed, groupID: %s, conv: %s, memberCount: %d, err: %v",
 			groupID, conversationID, len(userIDs), err)
 	}
