@@ -8,7 +8,7 @@ import (
 
 // ModelToPbMsgData 将 MsgDataModel 转为 sdkws.MsgData
 func ModelToPbMsgData(msg *model.MsgDataModel) *sdkws.MsgData {
-	return &sdkws.MsgData{
+	m := &sdkws.MsgData{
 		SendID:           msg.SendID,
 		RecvID:           msg.RecvID,
 		GroupID:          msg.GroupID,
@@ -30,15 +30,18 @@ func ModelToPbMsgData(msg *model.MsgDataModel) *sdkws.MsgData {
 		AtUserIDList:     msg.AtUserIDList,
 		AttachedInfo:     msg.AttachedInfo,
 		Ex:               msg.Ex,
-		OfflinePushInfo: &sdkws.OfflinePushInfo{
+	}
+	if msg.OfflinePush != nil {
+		m.OfflinePushInfo = &sdkws.OfflinePushInfo{
 			Title:         msg.OfflinePush.Title,
 			Desc:          msg.OfflinePush.Desc,
 			Ex:            msg.OfflinePush.Ex,
 			IOSPushSound:  msg.OfflinePush.IOSPushSound,
 			IOSBadgeCount: msg.OfflinePush.IOSBadgeCount,
 			SignalInfo:    "",
-		},
+		}
 	}
+	return m
 }
 
 func ModelToPbChatLog(msg *model.MsgInfoModel) *pbmsg.ChatLog {
