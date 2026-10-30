@@ -54,7 +54,7 @@ func (mt *MsgTransfer) consumePersistentMsgs(ctx context.Context, msg queuex.Mes
 func (mt *MsgTransfer) consumeMsg(ctx context.Context, msg queuex.Message) error {
 	ctx = withOperationID(ctx, "")
 
-	msgData := mt.batcher.Get()
+	msgData := &sdkws.MsgData{}
 	if err := proto.Unmarshal(msg.Value(), msgData); err != nil {
 		logc.Errorf(ctx, "failed to unmarshal msg data, err: %v", err)
 		return err

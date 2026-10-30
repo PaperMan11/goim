@@ -78,9 +78,6 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 
 	// 初始化批量处理器
 	batcher := batcher.NewBatcher[sdkws.MsgData]()
-	batcher.SetResetFunc(func(md *sdkws.MsgData) {
-		md.Reset()
-	})
 
 	mt := &MsgTransfer{
 		cfg:                   cfg,
