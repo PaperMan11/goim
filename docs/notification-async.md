@@ -82,11 +82,38 @@ return nil
 3. 背压观测：日志中不应出现 `notification queue full`
 4. 已知历史错误不再出现：`user not found`、`context canceled`（通知路径）
 
-## 5. 后续优化（未实施）
+## 5. 后续优化
 
-- **seq 兜底预热**：`CreateSingleChatConversations` 建会话时顺带初始化 seq 文档/缓存，消除首聊 seq 分配的 Mongo 兜底 RTT
-- **CreateSingleChatConversations 异步化评估**：建会话本身是否可从 SendMsg 主链路剥离（走 Kafka/异步），进一步压缩首聊延迟
+### 5.1 已实施：首聊建会话批量写版本日志（2026-10-30）
+
+**方向 1（保持同步、消除延迟）落地**，对象是首聊同步链 `AddMsg → CreateSingleChat/GroupChatConversations`。
+
+**实施前的诊断修正**：原推测"seq 兜底 Mongo RTT × 嵌套次数"不成立——`AddMsg` 在建会话**之前**先 `Allocate` seq（message_logic.go:1146），seq 冷启动兜底每会话终身仅一次，且嵌套通知的 seq 分配复用已预热的 Redis key。989ms 的真实大头是 `CreateXxxConversations` 内的 Mongo 写入轮次，其中群聊为**逐成员循环 IncrVersionLog**（N 成员 = N 次 Mongo 往返）。因此 seq 预热无收益，改为**批量化版本日志**。
+
+**改动**：
+
+| 文件 | 内容 |
+|---|---|
+| `pkg/storage/mongo/versionlog/version_log.go` | 新增 `IncrVersionLogBatchDIDs(ctx, dids, eid, state)`：跨主体批量（N 个 DID × 同一 EID），每 DID 一条聚合管道（版本自增 + 去重 + 追加），合并为单次 unordered `BulkWrite`，N 次往返 → 1 次；dids 内部去重（自聊 sendID==recvID）；要求 MongoDB ≥ 4.2 |
+| `pkg/storage/mongo/versionlog/cached_version_log.go` | 包装：写后逐 DID 精确失效 `CacheDelDouble` |
+| `im-rpc/conversation/internal/logic/conversation_logic.go` | `CreateSingleChatConversations`：2 次 IncrVersionLog → 1 次 BatchDIDs；`CreateGroupChatConversations`：N 次循环 → 1 次 BatchDIDs |
+
+**效果**（首聊同步链 Mongo 往返）：
+
+| 场景 | 改造前 | 改造后 |
+|---|---|---|
+| 单聊首聊 | 1(批量insert) + 2(版本日志) = 3 次 | 2 次 |
+| N 人群首聊 | 1 + N = N+1 次 | 2 次（与 N 无关） |
+
+**语义注意**：unordered BulkWrite 下部分 DID 失败不自动重试，整批 err 上报（现有调用方版本日志失败均为 log-and-continue，兼容）；各 DID 的 version 独立自增，与逐个调用语义一致。
+
+**AddMsgs / AddMsg 自动受益**：二者调用同一 Create 函数（message_logic.go:1156/1175/1229/1248）。
+
+### 5.2 未实施
+
+- **CreateXxxConversations 异步化评估**（方向 2）：建会话从 AddMsg 主链路剥离需重新设计"消息先于会话到达"的消费端兜底，暂缓——批量优化后同步链已与 N 无关，群聊收益递减
 - **死代码清理**：`user/notification.go` `UserStatusChangedNotification` 无任何调用点——若产品预期"上下线通知订阅者"，则缺的是调用方而非删除；需产品确认
+- **审计结论（2026-10-29）**：SendMsg 校验段（IsIMAdmin/IsBlack/IsFriend/群缓存）为必要同步（异步化会引入 TOCTOU 窗口）；群退群/踢人的 `SetUserConversationMaxSeq` 为会话边界一致性语义，必须保持同步；其余嵌套均为缓存读，无级联风险
 
 ## 6. 关键文件
 

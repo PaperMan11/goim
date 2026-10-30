@@ -36,7 +36,7 @@ func (p *Pusher) consumePushMsg(ctx context.Context, msg queuex.Message) error {
 		return err
 	}
 
-	if timex.Since(timex.ParseUnixMilli(pushMsg.MsgData.SendTime)) > 10*time.Second {
+	if timex.Since(timex.ParseUnixMilli(pushMsg.MsgData.SendTime)) > 5*time.Minute {
 		logc.Infof(ctx, "push msg is expired, send time: %d, now: %d", pushMsg.MsgData.SendTime, timex.Now().UnixMilli())
 		return nil
 	}
@@ -92,7 +92,7 @@ func (p *Pusher) pushToGroup(ctx context.Context, groupID string, msg *sdkws.Msg
 }
 
 func (p *Pusher) pushToUser(ctx context.Context, userIDs []string, msg *sdkws.MsgData) error {
-	logc.Infof(ctx, "push msg to user, userIDs: %v, msg: %s", userIDs, msg.String())
+	logc.Debugf(ctx, "push msg to user, userIDs: %v, msg: %s", userIDs, msg.String())
 
 	userStatusResp, err := p.userService.GetUserStatus(ctx, &pbuser.GetUserStatusReq{
 		UserIDs: userIDs,
@@ -112,8 +112,7 @@ func (p *Pusher) pushToUser(ctx context.Context, userIDs []string, msg *sdkws.Ms
 		}
 	}
 
-	logc.Infof(ctx, "push msg to user, userStatusResp: %+v, onlineUserIDs: %v, offlineUserIDs: %v",
-		userStatusResp.GetStatusList(), onlineUserIDs, offlineUserIDs)
+	logc.Debugf(ctx, "push msg to user, onlineUserIDs: %v, offlineUserIDs: %v", onlineUserIDs, offlineUserIDs)
 
 	if len(onlineUserIDs) > 0 {
 		err = p.onlinePush(ctx, onlineUserIDs, msg)
