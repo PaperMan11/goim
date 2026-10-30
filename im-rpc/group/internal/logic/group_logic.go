@@ -92,6 +92,16 @@ func (l *Logic) CreateGroup(ctx context.Context, req *pbgroup.CreateGroupReq) (*
 	}
 
 	var members []*model.GroupMember
+	members = append(members, &model.GroupMember{
+		GroupID:        group.GroupID,
+		UserID:         ownerUserID,
+		RoleLevel:      constant.GroupOwner,
+		Nickname:       groupInfo.GetGroupName(),
+		JoinTime:       now,
+		JoinSource:     1,
+		OperatorUserID: ownerUserID,
+		UpdatedAt:      now,
+	})
 	for _, userID := range memberUserIDs {
 		roleLevel := constant.GroupOrdinaryUsers
 		if userID == ownerUserID {
@@ -131,10 +141,13 @@ func (l *Logic) CreateGroup(ctx context.Context, req *pbgroup.CreateGroupReq) (*
 		} else {
 			// 同步推进各成员"已加入的群"版本（JoinGroupDID 维度），
 			// 否则除创建者外的初始成员 get_incremental_join_groups 感知不到新群
+			dids := make([]string, 0, len(userIDs)+1)
+			dids = append(dids, model.JoinGroupDID(ownerUserID))
 			for _, userID := range userIDs {
-				if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), group.GroupID, model.VersionStateInsert); err != nil {
-					l.Errorf("incr version log for join group insert failed, userID: %s, groupID: %s, err: %v", userID, group.GroupID, err)
-				}
+				dids = append(dids, model.JoinGroupDID(userID))
+			}
+			if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, dids, group.GroupID, model.VersionStateInsert); err != nil {
+				l.Errorf("incr version log for join group insert failed, groupID: %s, err: %v", group.GroupID, err)
 			}
 
 			// 通知全部初始成员群已创建（创建者另有同步响应，客户端按版本幂等处理）
