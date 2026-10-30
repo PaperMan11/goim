@@ -50,6 +50,17 @@ func (m *cachedVersionLogModel) IncrVersionLogBatch(ctx context.Context, did str
 	return ver, nil
 }
 
+func (m *cachedVersionLogModel) IncrVersionLogBatchDIDs(ctx context.Context, dids []string, eid string, state int32) error {
+	if err := m.VersionLogModel.IncrVersionLogBatchDIDs(ctx, dids, eid, state); err != nil {
+		return err
+	}
+	// 精确失效每个被写入的 DID 缓存（重复 did 的重复删除无副作用）
+	for _, did := range dids {
+		sredis.CacheDelDouble(ctx, m.redis, GetVersionLogKey(did))
+	}
+	return nil
+}
+
 func (m *cachedVersionLogModel) GetVersionLog(ctx context.Context, did string) (*model.VersionLog, error) {
 	if m.redis == nil {
 		return m.VersionLogModel.GetVersionLog(ctx, did)

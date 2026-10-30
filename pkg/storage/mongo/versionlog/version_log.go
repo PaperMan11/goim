@@ -27,6 +27,10 @@ type VersionLogModel interface {
 	// IncrVersionLogBatch 批量推进版本日志：对 N 个 EID 同时写入同一种 state，整体只推进一次 version。
 	// 写入前会先清除 logs 中与这批 eid 相同的旧条目，保证每个实体只保留最新一次变更。
 	IncrVersionLogBatch(ctx context.Context, did string, eids []string, state int32) (*model.VersionLog, error)
+	// IncrVersionLogBatchDIDs 跨主体批量推进版本日志：对 N 个 DID 各写一条同 eid 同 state 的变更，
+	// 每个 DID 的 version 独立自增 1。单次 BulkWrite（unordered）完成，避免逐 DID 的 N 次网络往返。
+	// dids 内部去重；返回 err 时表示整批失败（unordered 下部分成功不自动重试，由调用方决定重试语义）。
+	IncrVersionLogBatchDIDs(ctx context.Context, dids []string, eid string, state int32) error
 	// GetVersionLog 获取指定 DID 的版本日志。
 	GetVersionLog(ctx context.Context, did string) (*model.VersionLog, error)
 	// FindChangeLog 查询变更记录：根据客户端版本号查询变更记录，返回最新 limit 条。
@@ -171,6 +175,85 @@ func (m *defaultVersionLogModel) IncrVersionLogBatch(ctx context.Context, did st
 		})
 	}
 	return table.VersionLog(), nil
+}
+
+// IncrVersionLogBatchDIDs 跨主体批量推进版本日志。
+// 与 IncrVersionLogBatch 的区别：批量维度是"多个 DID × 同一个 EID"（如群首聊时给每个群成员
+// 的会话版本日志追加同一条 conversationID 变更），而非"一个 DID × 多个 EID"。
+//
+// 实现上为每个 DID 构造一条与 IncrVersionLogBatch 等价的聚合管道（版本自增 + 去重旧条目 +
+// 追加新条目），合并为一次 unordered BulkWrite，Mongo 往返从 N 次降为 1 次。
+// 要求 MongoDB ≥ 4.2（管道更新 + bulk 支持）。
+func (m *defaultVersionLogModel) IncrVersionLogBatchDIDs(ctx context.Context, dids []string, eid string, state int32) error {
+	if len(dids) == 0 {
+		return errors.New("dids must not be empty")
+	}
+	if eid == "" {
+		return errors.New("eid must not be empty")
+	}
+
+	now := timex.Now()
+	// dids 去重（如自聊场景 sendID == recvID），避免同一文档在一次 BulkWrite 内被更新两次
+	seen := make(map[string]struct{}, len(dids))
+	uniqueDIDs := make([]string, 0, len(dids))
+	for _, did := range dids {
+		if did == "" {
+			continue
+		}
+		if _, ok := seen[did]; ok {
+			continue
+		}
+		seen[did] = struct{}{}
+		uniqueDIDs = append(uniqueDIDs, did)
+	}
+	if len(uniqueDIDs) == 0 {
+		return errors.New("dids must not be empty")
+	}
+
+	newElem := bson.M{
+		"e_id":        eid,
+		"version":     "$version",
+		"state":       state,
+		"last_update": now,
+	}
+
+	models := make([]mongo.WriteModel, 0, len(uniqueDIDs))
+	for _, did := range uniqueDIDs {
+		pipeline := mongo.Pipeline{
+			// Stage 1: 对 upsert 文档补零值（filter 的等值字段 d_id 由 MongoDB 自动并入新文档，此处 $ifNull 兜底）
+			{{Key: "$set", Value: bson.M{
+				"d_id":    bson.M{"$ifNull": bson.A{"$d_id", did}},
+				"version": bson.M{"$ifNull": bson.A{"$version", model.FirstVersion}},
+				"deleted": bson.M{"$ifNull": bson.A{"$deleted", model.DefaultDeleteVersion}},
+				"logs":    bson.M{"$ifNull": bson.A{"$logs", []model.VersionLogElem{}}},
+			}}},
+			// Stage 2: version 独立自增 + last_update 更新
+			{{Key: "$set", Value: bson.M{
+				"version":     bson.M{"$add": bson.A{"$version", 1}},
+				"last_update": now,
+			}}},
+			// Stage 3: 剔除 logs 中与本次 eid 相同的旧条目（单 eid 用 $ne，无需临时字段）
+			{{Key: "$set", Value: bson.M{
+				"logs": bson.M{"$filter": bson.M{
+					"input": "$logs",
+					"as":    "log",
+					"cond":  bson.M{"$ne": bson.A{"$$log.e_id", eid}},
+				}},
+			}}},
+			// Stage 4: 追加新元素（version 取 Stage 2 计算后的 "$version"）
+			{{Key: "$set", Value: bson.M{
+				"logs": bson.M{"$concatArrays": bson.A{"$logs", bson.A{newElem}}},
+			}}},
+		}
+		models = append(models, mongo.NewUpdateOneModel().
+			SetFilter(bson.M{"d_id": did}).
+			SetUpdate(pipeline).
+			SetUpsert(true))
+	}
+
+	// unordered：各 DID 的版本日志相互独立，单个失败不阻塞其余（失败由 err 上报，调用方决定补偿）
+	_, err := m.versionMod.Collection.BulkWrite(ctx, models, options.BulkWrite().SetOrdered(false))
+	return err
 }
 
 func (m *defaultVersionLogModel) GetVersionLog(ctx context.Context, did string) (*model.VersionLog, error) {

@@ -1080,12 +1080,10 @@ func (l *Logic) CreateSingleChatConversations(ctx context.Context, req *pbconver
 		return nil, err
 	}
 
-	// 对两个用户写版本日志（Insert）
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.ConversationDID(sendID), conversationID, model.VersionStateInsert); err != nil {
-		l.Errorf("incr version log for conv insert failed, owner: %s, conv: %s, err: %v", sendID, conversationID, err)
-	}
-	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.ConversationDID(recvID), conversationID, model.VersionStateInsert); err != nil {
-		l.Errorf("incr version log for conv insert failed, owner: %s, conv: %s, err: %v", recvID, conversationID, err)
+	// 对两个用户写版本日志（Insert）：跨主体单次 BulkWrite，替代逐用户 2 次 Mongo 往返
+	// （自聊场景 sendID == recvID 由批量接口内部去重）
+	if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, []string{sendID, recvID}, conversationID, model.VersionStateInsert); err != nil {
+		l.Errorf("incr version log for conv insert failed, sendID: %s, recvID: %s, conv: %s, err: %v", sendID, recvID, conversationID, err)
 	}
 
 	// 通知双方会话列表发生变更：在线端实时收到后发起增量同步，离线端靠登录后补齐
@@ -1135,12 +1133,11 @@ func (l *Logic) CreateGroupChatConversations(ctx context.Context, req *pbconvers
 		return nil, err
 	}
 
-	// 对每个用户写版本日志（Insert）
-	// 注意：所有用户共用同一 conversationID，因此对每个 user 写一次 IncrVersionLog
-	for _, uid := range userIDs {
-		if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.ConversationDID(uid), conversationID, model.VersionStateInsert); err != nil {
-			l.Errorf("incr version log for group conv insert failed, owner: %s, conv: %s, err: %v", uid, conversationID, err)
-		}
+	// 对每个用户写版本日志（Insert）：所有用户共用同一 conversationID，
+	// 跨主体单次 BulkWrite 完成全部成员的版本推进，Mongo 往返从 N 次降为 1 次
+	if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, userIDs, conversationID, model.VersionStateInsert); err != nil {
+		l.Errorf("incr version log for group conv insert failed, groupID: %s, conv: %s, memberCount: %d, err: %v",
+			groupID, conversationID, len(userIDs), err)
 	}
 
 	// 通知每个群成员会话列表发生变更：在线端实时收到后发起增量同步，离线端靠登录后补齐
