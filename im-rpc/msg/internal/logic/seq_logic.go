@@ -10,16 +10,47 @@ import (
 )
 
 func (l *Logic) GetMaxSeq(ctx context.Context, req *sdkws.GetMaxSeqReq) (*sdkws.GetMaxSeqResp, error) {
-	seqs, err := l.svcCtx.SeqUserModel.FindAllUserSeqs(ctx, req.UserID)
+	// seqUser 的 max/min 仅在冻结（被踢/退群）或清空边界时非 0，正常会话恒为 0，
+	// 直接返回会令客户端认为无消息。用户可见 seq 必须由会话级 seq 与用户级冻结值合并得出。
+	resp, err := l.svcCtx.ConvService.GetConversationIDs(ctx, &pbconv.GetConversationIDsReq{
+		UserID: req.UserID,
+	})
 	if err != nil {
-		l.Errorf("get max seq failed, userID: %s, err: %v", req.UserID, err)
+		l.Errorf("get conversation ids failed, userID: %s, err: %v", req.UserID, err)
 		return nil, err
 	}
-	maxSeqs := make(map[string]int64)
-	minSeqs := make(map[string]int64)
-	for _, seq := range seqs {
-		maxSeqs[seq.ConversationID] = seq.MaxSeq
-		minSeqs[seq.ConversationID] = seq.MinSeq
+	conversationIDs := resp.ConversationIDs
+	if len(conversationIDs) == 0 {
+		return &sdkws.GetMaxSeqResp{
+			MaxSeqs: map[string]int64{},
+			MinSeqs: map[string]int64{},
+		}, nil
+	}
+
+	seqConvs, err := l.svcCtx.SeqConversationModel.BatchGetConversationSeqs(ctx, conversationIDs)
+	if err != nil {
+		l.Errorf("batch get conversation seqs failed, userID: %s, convCount: %d, err: %v", req.UserID, len(conversationIDs), err)
+		return nil, err
+	}
+	userSeqs, err := l.svcCtx.SeqUserModel.BatchGetUserSeqs(ctx, req.UserID, conversationIDs)
+	if err != nil {
+		l.Errorf("batch get user seqs failed, userID: %s, convCount: %d, err: %v", req.UserID, len(conversationIDs), err)
+		return nil, err
+	}
+
+	maxSeqs := make(map[string]int64, len(conversationIDs))
+	minSeqs := make(map[string]int64, len(conversationIDs))
+	for _, convID := range conversationIDs {
+		var convMax, convMin int64
+		if cs := seqConvs[convID]; cs != nil {
+			convMax, convMin = cs.MaxSeq, cs.MinSeq
+		}
+		var userMax, userMin int64
+		if us := userSeqs[convID]; us != nil {
+			userMax, userMin = us.MaxSeq, us.MinSeq
+		}
+		maxSeqs[convID] = sequser.EffectiveMaxSeq(userMax, convMax)
+		minSeqs[convID] = sequser.EffectiveMinSeq(userMin, convMin)
 	}
 	return &sdkws.GetMaxSeqResp{
 		MaxSeqs: maxSeqs,

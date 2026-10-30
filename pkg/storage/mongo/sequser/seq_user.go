@@ -39,7 +39,6 @@ func EffectiveMinSeq(userMinSeq, convMinSeq int64) int64 {
 type SeqUserModel interface {
 	BatchGetUserReadSeqs(ctx context.Context, userID string, conversationIDs []string) (map[string]int64, error)
 	BatchGetUserSeqs(ctx context.Context, userID string, conversationIDs []string) (map[string]*model.SeqUser, error)
-	FindAllUserSeqs(ctx context.Context, userID string) ([]*model.SeqUser, error)
 	GetUserSeq(ctx context.Context, userID string, conversationID string) (*model.SeqUser, error)
 	SetUserMaxSeq(ctx context.Context, userID string, conversationID string, maxSeq int64) error
 	SetUserMinSeq(ctx context.Context, userID string, conversationID string, minSeq int64) error
@@ -152,13 +151,4 @@ func (s *defaultSeqUserModel) BatchGetUserReadSeqs(ctx context.Context, userID s
 		result[convID] = seq.ReadSeq
 	}
 	return result, nil
-}
-
-func (s *defaultSeqUserModel) FindAllUserSeqs(ctx context.Context, userID string) ([]*model.SeqUser, error) {
-	var seqs []*model.SeqUser
-	err := s.mod.Find(ctx, &seqs, bson.M{"user_id": userID})
-	if err != nil {
-		return nil, err
-	}
-	return seqs, nil
 }
