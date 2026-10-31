@@ -168,6 +168,13 @@ func WithBalancer(balancer kafka.Balancer) ProducerOption {
 	}
 }
 
+// WithHashBalancer 按 message key 哈希选分区：相同 key（如会话 ID）的消息
+// 固定落入同一分区，从而保证同会话消息在消费端串行有序。
+// 默认的 LeastBytes 均衡器只按字节量分发、忽略 key，无法提供该保证。
+func WithHashBalancer() ProducerOption {
+	return WithBalancer(&kafka.Hash{})
+}
+
 func WithSyncPush(syncPush bool) ProducerOption {
 	return func(o *ProducerOptions) {
 		o.syncPush = syncPush

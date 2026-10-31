@@ -1143,13 +1143,18 @@ func (l *Logic) AddMsg(ctx context.Context, req *pbmsg.AddMsgReq) (*pbmsg.AddMsg
 	msg := req.GetMsgData()
 	conversationID := req.GetConversationID()
 
-	seq, err := l.svcCtx.SeqAllocator.Allocate(ctx, conversationID)
-	if err != nil {
-		l.Errorf("allocate seq failed, err: %v, conversationID: %s", err, conversationID)
-		return nil, err
+	// seq 由 msgtransfer 在推送前统一分配并随消息携带；仅在调用方未携带 seq 时兜底分配
+	var err error
+	seq := msg.Seq
+	if seq <= 0 {
+		seq, err = l.svcCtx.SeqAllocator.Allocate(ctx, conversationID)
+		if err != nil {
+			l.Errorf("allocate seq failed, err: %v, conversationID: %s", err, conversationID)
+			return nil, err
+		}
+		msg.Seq = seq
 	}
 	isNewConversation := seq == 1
-	msg.Seq = seq
 	if isNewConversation {
 		switch msg.SessionType {
 		case constant.SingleChatType, constant.NotificationChatType:
@@ -1210,19 +1215,32 @@ func (l *Logic) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddM
 		return &pbmsg.AddMsgsResp{}, nil
 	}
 
-	seqStart, seqEnd, err := l.svcCtx.SeqAllocator.AllocateBatch(ctx, conversationID, len(msgs))
-	if err != nil {
-		l.Errorf("allocate seq failed, err: %v, conversationID: %s", err, conversationID)
-		return nil, err
-	}
-	isNewConversation := seqStart == 1
-	for _, msg := range msgs {
-		if seqStart > seqEnd {
-			break
+	// seq 由 msgtransfer 在推送前统一分配并随消息携带；仅在调用方未携带 seq 时兜底分配。
+	// 分配顺序 = 推送顺序 = 落库顺序（同会话消息按 Kafka key 串行）。
+	var err error
+	var seqEnd int64
+	if msgs[0].Seq <= 0 {
+		var seqStart int64
+		seqStart, seqEnd, err = l.svcCtx.SeqAllocator.AllocateBatch(ctx, conversationID, len(msgs))
+		if err != nil {
+			l.Errorf("allocate seq failed, err: %v, conversationID: %s", err, conversationID)
+			return nil, err
 		}
-		msg.Seq = seqStart
-		seqStart++
+		for _, msg := range msgs {
+			if seqStart > seqEnd {
+				break
+			}
+			msg.Seq = seqStart
+			seqStart++
+		}
+	} else {
+		for _, msg := range msgs {
+			if msg.Seq > seqEnd {
+				seqEnd = msg.Seq
+			}
+		}
 	}
+	isNewConversation := msgs[0].Seq == 1
 	if isNewConversation {
 		switch msgs[0].SessionType {
 		case constant.SingleChatType, constant.NotificationChatType:

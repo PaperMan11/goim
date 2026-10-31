@@ -64,10 +64,18 @@ func (mt *MsgTransfer) consumeMsg(ctx context.Context, msg queuex.Message) error
 		msgData.SendID, msgData.RecvID, msgData.GroupID, msgData.SessionType, msgData.ContentType)
 
 	// push 不进攒批：toPushTopic 本就逐条投递，攒批对 push 零收益纯延迟，
-	// 且 push 不应被落库路径（RPC/produce）阻塞。key 分发模式下同会话消息
-	// 串行到达，此处直接推送可保证同会话推送顺序。
+	// 且 push 不应被落库路径（RPC/produce）阻塞。msg-transfer-topic 按会话 key
+	// 哈希分区，同会话消息串行到达，此处直接推送可保证同会话推送顺序。
 	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
 	fixNotifyOptions(msgData)
+
+	// seq 必须在 push 前分配，推送消息才能携带 seq，且分配顺序与推送顺序、
+	// 落库顺序一致。仅持久化消息（IsHistory）参与编号；typing 等不落库消息
+	// 不占 seq，避免客户端按 seq 拉取时出现永久空洞。
+	if err := mt.allocateMsgSeq(ctx, conversationID, msgData); err != nil {
+		return err
+	}
+
 	if err := mt.toPushTopic(ctx, conversationID, []*sdkws.MsgData{msgData}); err != nil {
 		return err
 	}
@@ -196,6 +204,22 @@ func (mt *MsgTransfer) handleReadReceipt(ctx context.Context, msgs []*sdkws.MsgD
 	}
 }
 
+// allocateMsgSeq 为需要持久化（IsHistory）的消息分配会话级 seq。
+// 分配必须先于 push：推送消息携带 seq 供客户端直接排序展示，无需回源拉取。
+func (mt *MsgTransfer) allocateMsgSeq(ctx context.Context, conversationID string, msg *sdkws.MsgData) error {
+	if !msgprocessor.Options(msg.Options).IsHistory() {
+		return nil
+	}
+	seq, err := mt.seqAllocator.Allocate(ctx, conversationID)
+	if err != nil {
+		logc.Errorf(ctx, "allocate msg seq failed, err: %v, conversationID: %s, clientMsgID: %s",
+			err, conversationID, msg.ClientMsgID)
+		return err
+	}
+	msg.Seq = seq
+	return nil
+}
+
 func (mt *MsgTransfer) toMongoTopic(ctx context.Context, conversationID string, lastSeq int64, msgs []*sdkws.MsgData) error {
 	if len(msgs) == 0 {
 		return nil
@@ -209,7 +233,8 @@ func (mt *MsgTransfer) toMongoTopic(ctx context.Context, conversationID string, 
 		logc.Errorf(ctx, "failed to marshal msg data to mongo by mq, err: %v", err)
 		return err
 	}
-	err = mt.msgPersistentProducer.Push(ctx, string(pbMsg))
+	// 按会话 key 投递：同会话批次串行落库，保证 maxSeq 更新不回退
+	err = mt.msgPersistentProducer.PushWithKey(ctx, conversationID, string(pbMsg))
 	if err != nil {
 		logc.Errorf(ctx, "failed to push msg data to mongo by mq, err: %v", err)
 		return err
@@ -235,7 +260,8 @@ func (mt *MsgTransfer) toPushTopic(ctx context.Context, conversationID string, m
 			logc.Errorf(ctx, "failed to marshal msg data to push by mq, err: %v", err)
 			return err
 		}
-		mt.msgPushProducer.Push(ctx, string(pbMsg))
+		// 按会话 key 投递，保证同会话推送到客户端的顺序与 seq 一致
+		mt.msgPushProducer.PushWithKey(ctx, conversationID, string(pbMsg))
 	}
 	return nil
 }

@@ -44,8 +44,11 @@ func NewSeqConversationModel(mod *mon.Model, barrier syncx.SingleFlight, rdb gor
 
 func (s *defaultSeqConversationModel) SetConversationMaxSeq(ctx context.Context, conversationID string, maxSeq int64) error {
 	_, err := s.mod.UpdateOne(ctx, bson.M{"conversation_id": conversationID}, bson.M{
+		// $max 防回退：重投/乱序写入旧批次时不得把 maxSeq 拉低
+		"$max": bson.M{
+			"max_seq": maxSeq,
+		},
 		"$set": bson.M{
-			"max_seq":    maxSeq,
 			"updated_at": timex.Now(),
 		},
 		"$setOnInsert": bson.M{

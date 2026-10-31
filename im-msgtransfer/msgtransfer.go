@@ -1,6 +1,7 @@
 package immsgtransfer
 
 import (
+	"context"
 	"errors"
 	"runtime"
 
@@ -11,12 +12,16 @@ import (
 	"github.com/PaperMan11/goim/pkg/rpcclient"
 	"github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
+	"github.com/PaperMan11/goim/pkg/storage/model"
+	seqConversationModel "github.com/PaperMan11/goim/pkg/storage/mongo/seqconversation"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
+	allocator "github.com/PaperMan11/goim/pkg/storage/redis/allocator"
 	webhookStore "github.com/PaperMan11/goim/pkg/storage/webhook"
 	"github.com/PaperMan11/goim/pkg/utils/batcher"
 	"github.com/PaperMan11/goim/pkg/webhooks"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/mon"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -39,6 +44,8 @@ type MsgTransfer struct {
 
 	msgService msgservice.MsgService
 	batcher    *batcher.Batcher[sdkws.MsgData]
+	// seq 分配器：在推送前为持久化消息分配会话级 seq，保证推送消息携带 seq
+	seqAllocator allocator.SeqAllocator
 }
 
 func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
@@ -50,15 +57,30 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 		return nil, err
 	}
 
+	// 消息传输/持久化/推送 topic 均按会话 key 哈希分区，保证同会话消息串行有序
 	msgTransferConsumer := kafkax.MustNewConsumer(cfg.MsgTransferConsumer)
 	msgPersistentConsumer := kafkax.MustNewConsumer(cfg.MsgPersistentTopic)
-	msgPersistentProducer := kafkax.MustNewProducer(cfg.MsgPersistentTopic)
-	msgPushProducer := kafkax.MustNewProducer(cfg.MsgPushProducer)
+	msgPersistentProducer := kafkax.MustNewProducer(cfg.MsgPersistentTopic, kafkax.WithHashBalancer())
+	msgPushProducer := kafkax.MustNewProducer(cfg.MsgPushProducer, kafkax.WithHashBalancer())
 
 	monClient := mon.MustNewModel(cfg.Mongo.Uri, cfg.Mongo.Database, "webhook")
 	redisClient := sredis.MustNewRedis(cfg.Redis)
 	webhookStore := webhookStore.NewWebhookMongoStore(monClient, redisClient)
 	webhookManager := webhooks.NewManager(webhookStore, runtime.NumCPU())
+
+	// seq 分配器：Redis lua 原子分配；Redis 数据丢失时从 mongo 会话级 maxSeq 同步恢复，
+	// 与 msg RPC 内的分配器保持同一套恢复语义
+	convSeqMongo := mon.MustNewModel(cfg.Mongo.Uri, cfg.Mongo.Database, model.CollectionSeqConversation)
+	seqConvModel := seqConversationModel.NewSeqConversationModel(convSeqMongo, syncx.NewSingleFlight(), redisClient, cfg.Mongo.EnableCache)
+	seqAllocator := allocator.MustNewRedisSeqAllocator(redisClient, allocator.WithGetMaxSeqFn(func(ctx context.Context, conversationID string) (int64, error) {
+		maxSeq, err := seqConvModel.GetConversationMaxSeq(ctx, conversationID)
+		if errors.Is(err, seqConversationModel.ErrSeqConversationNotFound) {
+			return 0, nil
+		} else if err != nil {
+			return 0, err
+		}
+		return maxSeq, nil
+	}))
 
 	clientOpts := []zrpc.ClientOption{
 		zrpc.WithDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
@@ -88,6 +110,7 @@ func NewMsgTransfer(cfg *Config) (*MsgTransfer, error) {
 		webhookManager:        webhookManager,
 		msgService:            msgService,
 		batcher:               batcher,
+		seqAllocator:          seqAllocator,
 	}
 
 	if err := mt.msgTransferConsumer.Subscribe(mt.consumeMsg); err != nil {

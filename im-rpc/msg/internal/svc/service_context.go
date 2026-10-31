@@ -130,8 +130,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	relationServiceWrapperCache = relationServiceCache.NewRelationServiceWrapperCache(relationService, localCache, c.RelationRpc.EnableCache)
 	groupServiceWrapperCache = groupServiceCache.NewGroupServiceWrapperCache(groupService, localCache, c.GroupRpc.EnableCache)
 
-	// msg transfer producer
-	msgTransferProducer := kafkax.MustNewProducer(c.MsgTransferProducer)
+	// msg transfer producer：按会话 key 哈希分区，保证同会话消息在 msgtransfer 串行消费
+	msgTransferProducer := kafkax.MustNewProducer(c.MsgTransferProducer, kafkax.WithHashBalancer())
 
 	// seq allocator
 	seqAllocator := allocator.MustNewRedisSeqAllocator(redisCli, allocator.WithGetMaxSeqFn(func(ctx context.Context, conversationID string) (int64, error) {
