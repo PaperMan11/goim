@@ -18,10 +18,16 @@ MsgTransferConsumer:
   Topic: msg-transfer-topic
   GroupID: msg-transfer-group
   Offset: last
-  MinBytes: 1024
+  # MinBytes/MaxBytes/MaxWait 为 Kafka fetch 语义：
+  # - MinBytes: broker 攒够 N 字节才返回本批数据；消息量小时要等满 MaxWrite(默认 10s)，
+  #   造成消息成批延迟到达。消息链路设为 1 = 来一条立刻交付，延迟毫秒级。
+  # - MaxBytes: 单次 fetch 最大字节数，防超大响应。
+  # - MaxWait: 无新数据时的兜底等待上限，代码默认 10s（无数据时才触发，不影响实时性）。
+  # 高吞吐场景可调大 MinBytes 换取更少 fetch 请求，但消息延迟会上升。
+  MinBytes: 1
   MaxBytes: 1048576
   Processors: 4
-  Consumers: 2
+  Consumers: 1
   # 按消息 key（conversationID）hash 分发到固定 consumeLoop，
   # 同会话消息严格串行处理，保证推送顺序；分片数 = Processors
   KeySharding: true
@@ -36,10 +42,11 @@ MsgPersistentTopic:
   Topic: msg-persist-topic
   GroupID: msg-persist-group
   Offset: last
-  MinBytes: 1024
+  # 持久化链路同样要求低延迟：落库越早，客户端按 seq 拉取越不容易扑空
+  MinBytes: 1
   MaxBytes: 1048576
   Processors: 4
-  Consumers: 2
+  Consumers: 1
 
 MsgPushProducer:
   Brokers:

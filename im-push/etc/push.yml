@@ -18,6 +18,8 @@ OfflinePushTopic:
   Topic: msg-offline-push-topic
   GroupID: msg-offline-push-group
   Offset: last
+  # 离线推送常为批量产生（如群发通知），保留攒批换吞吐，秒级延迟可接受；
+  # 语义见 PushConsumer 处注释
   MinBytes: 1024
   MaxBytes: 1048576
   Processors: 4
@@ -29,10 +31,17 @@ PushConsumer:
   Topic: msg-push-topic
   GroupID: msg-push-group
   Offset: last
-  MinBytes: 1024
+  # MinBytes: broker 攒够 N 字节才返回本批 fetch 数据。设为 1024 时小消息要等满
+  # MaxWait（代码默认 10s）才交付，造成观测到的 5~17s 成批延迟；设为 1 = 来一条
+  # 立刻交付，端到端延迟毫秒级。MaxBytes 为单次 fetch 上限，防超大响应。
+  MinBytes: 1
   MaxBytes: 1048576
   Processors: 4
-  Consumers: 2
+  Consumers: 1
+  # 按消息 key（conversationID）hash 分发到固定 consumeLoop，
+  # 同会话消息严格串行推送，保证到达客户端的顺序与 seq 一致；
+  # 不同会话仍并行处理，分片数 = Processors
+  KeySharding: true
 
 Redis:
   Host: 127.0.0.1:6379

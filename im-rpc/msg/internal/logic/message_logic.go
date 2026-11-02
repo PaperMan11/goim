@@ -107,11 +107,12 @@ func (l *Logic) sendReadGroupChatMsg(ctx context.Context, msgData *sdkws.MsgData
 		return err
 	}
 
+	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
 	msgDataBytes, err := proto.Marshal(msgData)
 	if err != nil {
 		return err
 	}
-	err = l.svcCtx.MsgTransferProducer.PushWithKey(ctx, msgData.GroupID, string(msgDataBytes))
+	err = l.svcCtx.MsgTransferProducer.PushWithKey(ctx, conversationID, string(msgDataBytes))
 	if err != nil {
 		return err
 	}
