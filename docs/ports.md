@@ -27,7 +27,7 @@
 | 服务 | 配置文件 | Prometheus 端口 | 说明 |
 |------|----------|-----------------|------|
 | im-cron | `im-cron/etc/cron.yml` | 11020 | 定时任务（消息/会话留存清理） |
-| im-msgtransfer | `im-msgtransfer/etc/msgtransfer.yml` | 11040 | Kafka 消费者（消息持久化/推送分发） |
+| im-msgtransfer | `im-msgtransfer/etc/msgtransfer.yml` | 11040 | Kafka 消费者（通知消息持久化/推送分发；用户消息已改由 msg.rpc 同步提交） |
 | im-push | `im-push/etc/push.yml` | 11050 | Kafka 消费者（在线推送/离线推送） |
 
 ## 端口规划规则
@@ -53,7 +53,7 @@
 
 | Topic | 生产者 | 消费者 |
 |-------|--------|--------|
-| msg-transfer-topic | msg.rpc | im-msgtransfer |
+| msg-transfer-topic | msg.rpc（通知消息、typing 等非持久化消息） | im-msgtransfer |
 | msg-persist-topic | im-msgtransfer | im-msgtransfer |
-| msg-push-topic | im-msgtransfer | im-push |
+| msg-push-topic | msg.rpc（用户消息，落库后携带 seq 投递）、im-msgtransfer（通知消息） | im-push |
 | msg-offline-push-topic | im-msgtransfer | im-push |

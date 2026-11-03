@@ -11072,6 +11072,15 @@
           },
           "modify": {
             "$ref": "#/components/schemas/MsgData"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "会话内消息序号（同步提交路径返回；通知消息为 0）"
+          },
+          "conversationID": {
+            "type": "string",
+            "description": "会话ID"
           }
         }
       },
@@ -11101,6 +11110,15 @@
           },
           "modify": {
             "$ref": "#/components/schemas/MsgData"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "会话内消息序号（同步提交路径返回；通知消息为 0）"
+          },
+          "conversationID": {
+            "type": "string",
+            "description": "会话ID"
           }
         }
       },

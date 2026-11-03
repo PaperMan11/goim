@@ -246,17 +246,21 @@ message PullMsgs {
 - Request.data：`sdkws.MsgData`（完整字段见《消息协议文档》）
 - Response.data：`sdkws.UserSendMsgResp`
 
+发送采用同步提交（写通）：msg.rpc 在返回 ack 前完成 seq 分配、落库、会话创建与游标推进，推送扇出为异步。ack（errCode=0）即代表消息已可查（重登录同步必含该消息）；持久化失败返回 errCode=90002，客户端携带原 `clientMsgID` 重发时服务端幂等返回已有 seq，不会重复落库。
+
 ```protobuf
 message UserSendMsgResp {
   string serverMsgID = 1;
   string clientMsgID = 2;
   int64 sendTime = 3;
+  int64 seq = 4;             // 会话内消息序号（客户端据此去重与缺口判断）
+  string conversationID = 5; // 会话ID
 }
 ```
 
 #### 1004 WSSendSignalMsg — 发送信令消息
 
-同 1003，用于 RTC 信令等场景，Request.data 为 `sdkws.MsgData`（`contentType=202 SignalMsg`），Response.data 为 `sdkws.UserSendMsgResp`。
+同 1003（同步提交、响应契约一致），用于 RTC 信令等场景，Request.data 为 `sdkws.MsgData`（`contentType=202 SignalMsg`），Response.data 为 `sdkws.UserSendMsgResp`。
 
 #### 1005 WSPullMsg — 按会话区间拉取消息
 
@@ -363,14 +367,18 @@ message PushMessages {
 ### 5.1 发送消息（1003）
 
 ```
-Client A                MsgGateway              Msg RPC              MsgTransfer/MQ
+Client A                MsgGateway              Msg RPC              MQ / im-push
    │  Request(1003,MsgData) │                      │                      │
    │ ─────────────────────> │  proto.Unmarshal     │                      │
-   │                        │ ─── SendMsg ───────> │ 分配seq/落库         │
+   │                        │ ─── SendMsg ───────> │ 幂等分配 seq          │
+   │                        │                      │ 同步落库/建会话/游标推进 │
+   │                        │                      │ ── msg-push-topic（携带 seq）──> │ 推送给接收方网关
    │                        │ <── SendMsgResp ──── │                      │
-   │ Response(1003, UserSendMsgResp)               │                      │
-   │ <───────────────────── │                      │ ── MQ ─────────────> │ 推送给接收方网关
+   │ Response(1003, UserSendMsgResp 含 seq)        │                      │
+   │ <───────────────────── │                      │                      │
 ```
+
+发送为同步提交：ack 返回时消息已落库、游标已推进，客户端随后 1001/1002 拉取必含该消息。2001 推送在落库之后异步下发，与 ack 无先后保证，客户端按 seq 去重即可。typing 等非持久化消息（`options.isHistory=false`）不占 seq、不落库，仍走 msg-transfer-topic 异步管道。
 
 ### 5.2 接收推送（2001）
 
@@ -430,6 +438,8 @@ MsgGateway              Client B
 | 90007 | ErrCodeDataError | 数据错误（如反序列化失败、senderID 不匹配） |
 
 错误信息约定：`errMsg` 已剥离 `rpc error: code = ... desc =` 前缀，直接返回原始业务错误描述。
+
+发送场景约定（1003/1004）：seq 分配、落库、游标推进失败返回 `90002`，push topic 投递失败返回 `90004`。两种情况消息均未成功提交，客户端应携带原 `clientMsgID` 重发——服务端按 `(conversationID, clientMsgID)` 幂等去重，重发返回首次落库的 seq，不会重复落库。
 
 ---
 
