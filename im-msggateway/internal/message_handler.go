@@ -242,13 +242,29 @@ func (h *BusinessHandler) handleSendMsg(ctx context.Context, req *Request) (resp
 		MsgData: &reqData,
 	})
 	if err != nil {
+		// RPC 失败原样透传给发送方（如落库失败 90002），SDK 收到 errCode 非 0 可重发
 		return nil, err
 	}
-	respData, err = proto.Marshal(resp)
+	// 1003 ack 按契约返回 UserSendMsgResp：同步提交路径下携带 seq/conversationID，
+	// 客户端据此做去重与缺口判断（G4）
+	respData, err = proto.Marshal(sendMsgRespToUser(resp))
 	if err != nil {
 		return nil, errx.DataError.Wrap("send_msg resp data marshal error")
 	}
 	return respData, nil
+}
+
+// sendMsgRespToUser 把 SendMsgResp 映射为 SDK 侧 1003 ack 契约 UserSendMsgResp。
+// 不能直接透传 SendMsgResp：其 modify 字段占 wire 字段 4，而 UserSendMsgResp 的
+// 字段 4 是 seq，跨类型解析会因 wire type 不匹配而失败。
+func sendMsgRespToUser(resp *pbmsg.SendMsgResp) *sdkws.UserSendMsgResp {
+	return &sdkws.UserSendMsgResp{
+		ServerMsgID:    resp.GetServerMsgID(),
+		ClientMsgID:    resp.GetClientMsgID(),
+		SendTime:       resp.GetSendTime(),
+		Seq:            resp.GetSeq(),
+		ConversationID: resp.GetConversationID(),
+	}
 }
 
 // handleSendSignalMsg 处理发送信号消息请求
@@ -264,7 +280,7 @@ func (h *BusinessHandler) handleSendSignalMsg(ctx context.Context, req *Request)
 	if err != nil {
 		return nil, err
 	}
-	respData, err = proto.Marshal(resp)
+	respData, err = proto.Marshal(sendMsgRespToUser(resp))
 	if err != nil {
 		return nil, errx.DataError.Wrap("send_signal_msg resp data marshal error")
 	}

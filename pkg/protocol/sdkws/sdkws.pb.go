@@ -1522,12 +1522,14 @@ func (x *GetMaxSeqResp) GetMinSeqs() map[string]int64 {
 
 // 用户发送消息响应
 type UserSendMsgResp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ServerMsgID   string                 `protobuf:"bytes,1,opt,name=serverMsgID,proto3" json:"serverMsgID,omitempty"` // 服务端消息ID
-	ClientMsgID   string                 `protobuf:"bytes,2,opt,name=clientMsgID,proto3" json:"clientMsgID,omitempty"` // 客户端消息ID
-	SendTime      int64                  `protobuf:"varint,3,opt,name=sendTime,proto3" json:"sendTime,omitempty"`      // 发送时间戳
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ServerMsgID    string                 `protobuf:"bytes,1,opt,name=serverMsgID,proto3" json:"serverMsgID,omitempty"`       // 服务端消息ID
+	ClientMsgID    string                 `protobuf:"bytes,2,opt,name=clientMsgID,proto3" json:"clientMsgID,omitempty"`       // 客户端消息ID
+	SendTime       int64                  `protobuf:"varint,3,opt,name=sendTime,proto3" json:"sendTime,omitempty"`            // 发送时间戳
+	Seq            int64                  `protobuf:"varint,4,opt,name=seq,proto3" json:"seq,omitempty"`                      // 会话内消息序号（同步提交后返回，客户端据此去重与缺口判断）
+	ConversationID string                 `protobuf:"bytes,5,opt,name=conversationID,proto3" json:"conversationID,omitempty"` // 会话ID
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *UserSendMsgResp) Reset() {
@@ -1579,6 +1581,20 @@ func (x *UserSendMsgResp) GetSendTime() int64 {
 		return x.SendTime
 	}
 	return 0
+}
+
+func (x *UserSendMsgResp) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *UserSendMsgResp) GetConversationID() string {
+	if x != nil {
+		return x.ConversationID
+	}
+	return ""
 }
 
 // 消息数据
@@ -5823,11 +5839,13 @@ const file_sdkws_sdkws_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1a:\n" +
 	"\fMinSeqsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"q\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xab\x01\n" +
 	"\x0fUserSendMsgResp\x12 \n" +
 	"\vserverMsgID\x18\x01 \x01(\tR\vserverMsgID\x12 \n" +
 	"\vclientMsgID\x18\x02 \x01(\tR\vclientMsgID\x12\x1a\n" +
-	"\bsendTime\x18\x03 \x01(\x03R\bsendTime\"\xa2\x06\n" +
+	"\bsendTime\x18\x03 \x01(\x03R\bsendTime\x12\x10\n" +
+	"\x03seq\x18\x04 \x01(\x03R\x03seq\x12&\n" +
+	"\x0econversationID\x18\x05 \x01(\tR\x0econversationID\"\xa2\x06\n" +
 	"\aMsgData\x12\x16\n" +
 	"\x06sendID\x18\x01 \x01(\tR\x06sendID\x12\x16\n" +
 	"\x06recvID\x18\x02 \x01(\tR\x06recvID\x12\x18\n" +

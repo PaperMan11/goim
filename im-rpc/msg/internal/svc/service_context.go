@@ -43,6 +43,7 @@ type ServiceContext struct {
 
 	AuthVerifier        authverify.AuthVerifyService
 	MsgTransferProducer queuex.Producer
+	MsgPushProducer     queuex.Producer
 	LocalCache          localcache.LocalCache
 	RedisClient         redis.UniversalClient
 	SingleFlight        syncx.SingleFlight
@@ -132,6 +133,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// msg transfer producer：按会话 key 哈希分区，保证同会话消息在 msgtransfer 串行消费
 	msgTransferProducer := kafkax.MustNewProducer(c.MsgTransferProducer, kafkax.WithHashBalancer())
+	// msg push producer：用户消息同步落库成功后投递 push topic（携带 seq），按会话 key 分区
+	msgPushProducer := kafkax.MustNewProducer(c.MsgPushProducer, kafkax.WithHashBalancer())
 
 	// seq allocator
 	seqAllocator := allocator.MustNewRedisSeqAllocator(redisCli, allocator.WithGetMaxSeqFn(func(ctx context.Context, conversationID string) (int64, error) {
@@ -154,6 +157,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		SingleFlight:         singleFlight,
 		AuthVerifier:         authVerifier,
 		MsgTransferProducer:  msgTransferProducer,
+		MsgPushProducer:      msgPushProducer,
 		MsgModel:             newMsgModel,
 		SeqUserModel:         newSeqUserModel,
 		SeqConversationModel: newSeqConversationModel,

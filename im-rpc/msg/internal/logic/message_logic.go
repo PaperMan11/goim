@@ -91,15 +91,7 @@ func (l *Logic) sendSingleChatMsg(ctx context.Context, msgData *sdkws.MsgData) e
 		return fmt.Errorf("user %s is not allowed to send message to user %s", msgData.SendID, msgData.RecvID)
 	}
 
-	msgDataBytes, err := proto.Marshal(msgData)
-	if err != nil {
-		return err
-	}
-	err = l.svcCtx.MsgTransferProducer.PushWithKey(ctx, conversationID, string(msgDataBytes))
-	if err != nil {
-		return err
-	}
-	return nil
+	return l.dispatchUserMsg(ctx, conversationID, msgData)
 }
 
 func (l *Logic) sendReadGroupChatMsg(ctx context.Context, msgData *sdkws.MsgData) error {
@@ -108,15 +100,7 @@ func (l *Logic) sendReadGroupChatMsg(ctx context.Context, msgData *sdkws.MsgData
 	}
 
 	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
-	msgDataBytes, err := proto.Marshal(msgData)
-	if err != nil {
-		return err
-	}
-	err = l.svcCtx.MsgTransferProducer.PushWithKey(ctx, conversationID, string(msgDataBytes))
-	if err != nil {
-		return err
-	}
-	return nil
+	return l.dispatchUserMsg(ctx, conversationID, msgData)
 }
 
 func (l *Logic) sendNotificationMsg(ctx context.Context, msgData *sdkws.MsgData) error {
@@ -128,6 +112,175 @@ func (l *Logic) sendNotificationMsg(ctx context.Context, msgData *sdkws.MsgData)
 	err = l.svcCtx.MsgTransferProducer.PushWithKey(ctx, conversationID, string(msgDataBytes))
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// dispatchUserMsg 用户消息路由：持久化消息（IsHistory）走同步提交路径，在 ack 返回前
+// 完成 seq 分配、落库、会话创建与游标推进（G1~G4）；typing 等非持久化消息不占 seq、
+// 不落库，维持原异步管道（D5）。
+func (l *Logic) dispatchUserMsg(ctx context.Context, conversationID string, msgData *sdkws.MsgData) error {
+	if !msgprocessor.Options(msgData.Options).IsHistory() {
+		return l.pushToTransferTopic(ctx, conversationID, msgData)
+	}
+	return l.commitUserMsgSync(ctx, conversationID, msgData)
+}
+
+// pushToTransferTopic 非持久化用户消息（typing 等）维持原异步管道：
+// 投递 msg-transfer-topic，由 msgtransfer 扇出推送。
+func (l *Logic) pushToTransferTopic(ctx context.Context, conversationID string, msgData *sdkws.MsgData) error {
+	msgDataBytes, err := proto.Marshal(msgData)
+	if err != nil {
+		return err
+	}
+	return l.svcCtx.MsgTransferProducer.PushWithKey(ctx, conversationID, string(msgDataBytes))
+}
+
+// commitUserMsgSync 同步提交（写通）：seq 幂等分配 → 落库（唯一索引冲突读回）→
+// 建会话（首条，幂等）→ 游标推进 → sender ReadSeq → 落库成功后投递推送（携带 seq）。
+// 任一持久化步骤失败都向发送方显式报错，发送方可携带原 clientMsgID 重发，幂等键保证不重复落库（G2）。
+func (l *Logic) commitUserMsgSync(ctx context.Context, conversationID string, msgData *sdkws.MsgData) error {
+	seq, err := l.svcCtx.SeqAllocator.Allocate(ctx, conversationID)
+	if err != nil {
+		l.Errorf("allocate seq failed, err: %v, conversationID: %s, clientMsgID: %s", err, conversationID, msgData.ClientMsgID)
+		return errx.DatabaseError.WrapWithError(err)
+	}
+	msgData.Seq = seq
+
+	if err := l.insertMsgIdempotent(ctx, conversationID, msgData); err != nil {
+		return err
+	}
+	if err := l.ensureConversationsForMsgs(ctx, conversationID, []*sdkws.MsgData{msgData}); err != nil {
+		return err
+	}
+	if err := l.advanceConversationCursor(ctx, conversationID, []*sdkws.MsgData{msgData}); err != nil {
+		return errx.DatabaseError.WrapWithError(err)
+	}
+	l.Infof("commit user msg sync success, conversationID: %s, seq: %d, clientMsgID: %s", conversationID, msgData.Seq, msgData.ClientMsgID)
+
+	// 推送在落库之后（G3）；投递失败时返回错误触发 SDK 携带原 clientMsgID 重发，
+	// 幂等读回后仅重试推送，不会重复落库
+	if err := l.pushToPushTopic(ctx, conversationID, msgData); err != nil {
+		return errx.NetworkError.WrapWithError(err)
+	}
+	return nil
+}
+
+// insertMsgIdempotent 同步落库单条消息：命中幂等唯一索引（E11000）时按
+// (conversationID, clientMsgID) 读回已有消息，复用其 seq 与 serverMsgID 按成功返回。
+func (l *Logic) insertMsgIdempotent(ctx context.Context, conversationID string, msgData *sdkws.MsgData) error {
+	err := l.svcCtx.MsgModel.Insert(ctx, conversationID, mconvert.PbToModelMsgData(msgData))
+	if err == nil {
+		return nil
+	}
+	if !msgModel.IsDuplicateKey(err) {
+		l.Errorf("insert msg failed, err: %v, conversationID: %s, clientMsgID: %s", err, conversationID, msgData.ClientMsgID)
+		return errx.DatabaseError.WrapWithError(err)
+	}
+
+	existing, findErr := l.svcCtx.MsgModel.FindByClientMsgID(ctx, conversationID, msgData.ClientMsgID)
+	if findErr != nil {
+		l.Errorf("find msg by client msg id after duplicate key failed, err: %v, conversationID: %s, clientMsgID: %s",
+			findErr, conversationID, msgData.ClientMsgID)
+		return errx.DatabaseError.WrapWithError(findErr)
+	}
+	l.Infof("msg already persisted, reuse existing seq, conversationID: %s, clientMsgID: %s, allocatedSeq: %d, existingSeq: %d",
+		conversationID, msgData.ClientMsgID, msgData.Seq, existing.Seq)
+	msgData.Seq = existing.Seq
+	msgData.ServerMsgID = existing.ServerMsgID
+	return nil
+}
+
+// pushToPushTopic 落库成功后把推送消息（携带已分配 seq）投递 push topic，
+// im-push 消费后经网关下发 2001。按会话 key 投递，保证同会话推送顺序与 seq 一致。
+func (l *Logic) pushToPushTopic(ctx context.Context, conversationID string, msgData *sdkws.MsgData) error {
+	pbMsg, err := proto.Marshal(&pbmsg.PushMsgDataToMQ{
+		ConversationID: conversationID,
+		MsgData:        msgData,
+	})
+	if err != nil {
+		return err
+	}
+	return l.svcCtx.MsgPushProducer.PushWithKey(ctx, conversationID, string(pbMsg))
+}
+
+// ensureConversationsForMsgs 首条消息（seq==1）触发会话创建；会话创建幂等，
+// 同步路径失败重试（重发命中 seq==1 读回）时重复触发由下游兜底。
+func (l *Logic) ensureConversationsForMsgs(ctx context.Context, conversationID string, msgs []*sdkws.MsgData) error {
+	if len(msgs) == 0 || msgs[0].Seq != 1 {
+		return nil
+	}
+
+	switch msgs[0].SessionType {
+	case constant.SingleChatType, constant.NotificationChatType:
+		_, err := l.svcCtx.ConvService.CreateSingleChatConversations(ctx, &conversation.CreateSingleChatConversationsReq{
+			RecvID:           msgs[0].RecvID,
+			SendID:           msgs[0].SendID,
+			ConversationID:   conversationID,
+			ConversationType: msgs[0].SessionType,
+		})
+		if err != nil {
+			l.Errorf("create single chat conversations failed, err: %v, conversationID: %s", err, conversationID)
+			return err
+		}
+	case constant.ReadGroupChatType:
+		groupInfoResp, err := l.svcCtx.GroupService.GetGroupMemberUserIDs(ctx, &group.GetGroupMemberUserIDsReq{
+			GroupID: msgs[0].GroupID,
+		})
+		if err != nil {
+			l.Errorf("get group member user ids failed, err: %v, groupID: %s", err, msgs[0].GroupID)
+			return err
+		}
+		memberUserIDs := groupInfoResp.GetUserIDs()
+		_, err = l.svcCtx.ConvService.CreateGroupChatConversations(ctx, &conversation.CreateGroupChatConversationsReq{
+			GroupID:        msgs[0].GroupID,
+			UserIDs:        memberUserIDs,
+			ConversationID: conversationID,
+		})
+		if err != nil {
+			l.Errorf("create group chat conversations failed, err: %v, groupID: %s", err, msgs[0].GroupID)
+			return err
+		}
+	default:
+		return errors.New("unknown conversation session type")
+	}
+	return nil
+}
+
+// advanceConversationCursor 推进会话游标（$max 单调，乱序并发不会回退），
+// 并把发送者对自己消息的已读水位推进到其在本批的最大 seq。
+// maxSeq 推进失败返回错误：同步路径据此向发送方显式报错，保证 ack ⇒ 游标已推进；
+// sender ReadSeq 失败仅影响发送者本地已读展示，记录日志不阻断。
+func (l *Logic) advanceConversationCursor(ctx context.Context, conversationID string, msgs []*sdkws.MsgData) error {
+	var maxSeq int64
+	for _, msg := range msgs {
+		if msg.Seq > maxSeq {
+			maxSeq = msg.Seq
+		}
+	}
+	if maxSeq <= 0 {
+		return nil
+	}
+
+	if err := l.svcCtx.SeqConversationModel.SetConversationMaxSeq(ctx, conversationID, maxSeq); err != nil {
+		l.Errorf("set conversation max seq failed, err: %v, conversationID: %s, maxSeq: %d", err, conversationID, maxSeq)
+		return err
+	}
+
+	senderReadSeq := make(map[string]int64)
+	for _, msg := range msgs {
+		if msg.MsgFrom != constant.UserMsgType {
+			continue
+		}
+		if msg.Seq > senderReadSeq[msg.SendID] {
+			senderReadSeq[msg.SendID] = msg.Seq
+		}
+	}
+	for senderID, readSeq := range senderReadSeq {
+		if err := l.svcCtx.SeqUserModel.SetUserReadSeq(ctx, senderID, conversationID, readSeq); err != nil {
+			l.Errorf("set sender read seq failed, err: %v, conversationID: %s, senderID: %s, readSeq: %d",
+				err, conversationID, senderID, readSeq)
+		}
 	}
 	return nil
 }
@@ -266,11 +419,14 @@ func (l *Logic) SendMsg(ctx context.Context, req *pbmsg.SendMsgReq) (*pbmsg.Send
 		return nil, err
 	}
 
+	// 同步提交路径下 msgData.Seq 已在 ack 前分配并落库；通知消息不占 seq，Seq 为 0
 	return &pbmsg.SendMsgResp{
-		ServerMsgID: msgData.ServerMsgID,
-		ClientMsgID: msgData.ClientMsgID,
-		SendTime:    msgData.SendTime,
-		Modify:      msgData,
+		ServerMsgID:    msgData.ServerMsgID,
+		ClientMsgID:    msgData.ClientMsgID,
+		SendTime:       msgData.SendTime,
+		Modify:         msgData,
+		Seq:            msgData.Seq,
+		ConversationID: msgprocessor.GetConversationIDByMsg(msgData),
 	}, nil
 }
 
@@ -297,10 +453,12 @@ func (l *Logic) SendSimpleMsg(ctx context.Context, req *pbmsg.SendSimpleMsgReq) 
 		return nil, err
 	}
 	return &pbmsg.SendSimpleMsgResp{
-		ServerMsgID: resp.ServerMsgID,
-		ClientMsgID: resp.ClientMsgID,
-		SendTime:    resp.SendTime,
-		Modify:      resp.Modify,
+		ServerMsgID:    resp.ServerMsgID,
+		ClientMsgID:    resp.ClientMsgID,
+		SendTime:       resp.SendTime,
+		Modify:         resp.Modify,
+		Seq:            resp.Seq,
+		ConversationID: resp.ConversationID,
 	}, nil
 }
 
@@ -1241,42 +1399,9 @@ func (l *Logic) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddM
 			}
 		}
 	}
-	isNewConversation := msgs[0].Seq == 1
-	if isNewConversation {
-		switch msgs[0].SessionType {
-		case constant.SingleChatType, constant.NotificationChatType:
-			_, err = l.svcCtx.ConvService.CreateSingleChatConversations(ctx, &conversation.CreateSingleChatConversationsReq{
-				RecvID:           msgs[0].RecvID,
-				SendID:           msgs[0].SendID,
-				ConversationID:   conversationID,
-				ConversationType: msgs[0].SessionType,
-			})
-			if err != nil {
-				l.Errorf("create single chat conversations failed, err: %v, conversationID: %s", err, conversationID)
-				return nil, err
-			}
-		case constant.ReadGroupChatType:
-			groupInfoResp, err := l.svcCtx.GroupService.GetGroupMemberUserIDs(ctx, &group.GetGroupMemberUserIDsReq{
-				GroupID: msgs[0].GroupID,
-			})
-			if err != nil {
-				l.Errorf("get group member user ids failed, err: %v, groupID: %s", err, msgs[0].GroupID)
-				return nil, err
-			}
-			memberUserIDs := groupInfoResp.GetUserIDs()
-			_, err = l.svcCtx.ConvService.CreateGroupChatConversations(ctx, &conversation.CreateGroupChatConversationsReq{
-				GroupID:        msgs[0].GroupID,
-				UserIDs:        memberUserIDs,
-				ConversationID: conversationID,
-			})
-			if err != nil {
-				l.Errorf("create group chat conversations failed, err: %v, groupID: %s", err, msgs[0].GroupID)
-				return nil, err
-			}
-		default:
-			// 未知会话类型，创建会话
-			return nil, errors.New("unknown conversation session type")
-		}
+	// 消费侧兜底路径与发送同步路径共用持久化方法：首条建会话（幂等）→ 批量落库 → 游标推进
+	if err := l.ensureConversationsForMsgs(ctx, conversationID, msgs); err != nil {
+		return nil, err
 	}
 
 	modelMsgs := make([]*model.MsgDataModel, 0, len(msgs))
@@ -1289,27 +1414,8 @@ func (l *Logic) AddMsgs(ctx context.Context, req *pbmsg.AddMsgsReq) (*pbmsg.AddM
 		return nil, err
 	}
 
-	err = l.svcCtx.SeqConversationModel.SetConversationMaxSeq(ctx, conversationID, seqEnd)
-	if err != nil {
-		l.Errorf("set conversation max seq failed, err: %v, conversationID: %s", err, conversationID)
-	}
-
-	// 发送者对自己发送的消息默认已读：按 sender 去重，ReadSeq 推进到各自在本批的最大 seq。
-	// 群聊批次可能含多个发送者，不能用整批 seqEnd（会把别人晚发的消息误判已读）。
-	senderReadSeq := make(map[string]int64)
-	for _, msg := range msgs {
-		if msg.MsgFrom != constant.UserMsgType {
-			continue
-		}
-		if msg.Seq > senderReadSeq[msg.SendID] {
-			senderReadSeq[msg.SendID] = msg.Seq
-		}
-	}
-	for senderID, readSeq := range senderReadSeq {
-		if err := l.svcCtx.SeqUserModel.SetUserReadSeq(ctx, senderID, conversationID, readSeq); err != nil {
-			l.Errorf("set sender read seq failed, err: %v, conversationID: %s, senderID: %s, readSeq: %d", err, conversationID, senderID, readSeq)
-		}
-	}
+	// 兜底路径保持原有容错语义：maxSeq 推进失败仅记录日志，不阻断返回
+	_ = l.advanceConversationCursor(ctx, conversationID, msgs)
 
 	l.Infof("add msgs success, conversationID: %s, seqEnd: %d", conversationID, seqEnd)
 	return &pbmsg.AddMsgsResp{

@@ -16,7 +16,10 @@ type Config struct {
 	Mongo          storagemongo.MongoConf
 	LocalCacheConf localcache.CacheConfig
 
+	// MsgTransferProducer 异步管道投递：通知消息、typing 等非持久化消息
 	MsgTransferProducer queuex.KafkaConfig
+	// MsgPushProducer 推送扇出投递：用户消息同步落库成功后由此投递 push topic（携带 seq）
+	MsgPushProducer queuex.KafkaConfig
 
 	UserRpc     rpcclient.RpcConf
 	ConvRpc     rpcclient.RpcConf

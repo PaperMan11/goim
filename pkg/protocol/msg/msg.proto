@@ -58,6 +58,8 @@ message SendMsgResp {
   string clientMsgID = 2;            // 客户端消息ID
   int64 sendTime = 3;                // 发送时间戳
   openim.sdkws.MsgData modify = 4;   // 修改后的消息数据
+  int64 seq = 5;                     // 会话内消息序号（同步提交路径返回；通知消息为 0）
+  string conversationID = 6;         // 会话ID
 }
 
 // 发送简单消息请求
@@ -71,6 +73,8 @@ message SendSimpleMsgResp {
   string clientMsgID = 2;            // 客户端消息ID
   int64 sendTime = 3;                // 发送时间戳
   openim.sdkws.MsgData modify = 4;   // 修改后的消息数据
+  int64 seq = 5;                     // 会话内消息序号（同步提交路径返回；通知消息为 0）
+  string conversationID = 6;         // 会话ID
 }
 
 // ================================ 消息状态管理 ================================

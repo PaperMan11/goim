@@ -380,13 +380,15 @@ func (x *SendMsgReq) GetMsgData() *sdkws.MsgData {
 
 // 发送消息响应
 type SendMsgResp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ServerMsgID   string                 `protobuf:"bytes,1,opt,name=serverMsgID,proto3" json:"serverMsgID,omitempty"` // 服务端消息ID
-	ClientMsgID   string                 `protobuf:"bytes,2,opt,name=clientMsgID,proto3" json:"clientMsgID,omitempty"` // 客户端消息ID
-	SendTime      int64                  `protobuf:"varint,3,opt,name=sendTime,proto3" json:"sendTime,omitempty"`      // 发送时间戳
-	Modify        *sdkws.MsgData         `protobuf:"bytes,4,opt,name=modify,proto3" json:"modify,omitempty"`           // 修改后的消息数据
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ServerMsgID    string                 `protobuf:"bytes,1,opt,name=serverMsgID,proto3" json:"serverMsgID,omitempty"`       // 服务端消息ID
+	ClientMsgID    string                 `protobuf:"bytes,2,opt,name=clientMsgID,proto3" json:"clientMsgID,omitempty"`       // 客户端消息ID
+	SendTime       int64                  `protobuf:"varint,3,opt,name=sendTime,proto3" json:"sendTime,omitempty"`            // 发送时间戳
+	Modify         *sdkws.MsgData         `protobuf:"bytes,4,opt,name=modify,proto3" json:"modify,omitempty"`                 // 修改后的消息数据
+	Seq            int64                  `protobuf:"varint,5,opt,name=seq,proto3" json:"seq,omitempty"`                      // 会话内消息序号（同步提交路径返回；通知消息为 0）
+	ConversationID string                 `protobuf:"bytes,6,opt,name=conversationID,proto3" json:"conversationID,omitempty"` // 会话ID
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SendMsgResp) Reset() {
@@ -447,6 +449,20 @@ func (x *SendMsgResp) GetModify() *sdkws.MsgData {
 	return nil
 }
 
+func (x *SendMsgResp) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *SendMsgResp) GetConversationID() string {
+	if x != nil {
+		return x.ConversationID
+	}
+	return ""
+}
+
 // 发送简单消息请求
 type SendSimpleMsgReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -494,13 +510,15 @@ func (x *SendSimpleMsgReq) GetMsgData() *sdkws.MsgData {
 
 // 发送简单消息响应
 type SendSimpleMsgResp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ServerMsgID   string                 `protobuf:"bytes,1,opt,name=serverMsgID,proto3" json:"serverMsgID,omitempty"` // 服务端消息ID
-	ClientMsgID   string                 `protobuf:"bytes,2,opt,name=clientMsgID,proto3" json:"clientMsgID,omitempty"` // 客户端消息ID
-	SendTime      int64                  `protobuf:"varint,3,opt,name=sendTime,proto3" json:"sendTime,omitempty"`      // 发送时间戳
-	Modify        *sdkws.MsgData         `protobuf:"bytes,4,opt,name=modify,proto3" json:"modify,omitempty"`           // 修改后的消息数据
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ServerMsgID    string                 `protobuf:"bytes,1,opt,name=serverMsgID,proto3" json:"serverMsgID,omitempty"`       // 服务端消息ID
+	ClientMsgID    string                 `protobuf:"bytes,2,opt,name=clientMsgID,proto3" json:"clientMsgID,omitempty"`       // 客户端消息ID
+	SendTime       int64                  `protobuf:"varint,3,opt,name=sendTime,proto3" json:"sendTime,omitempty"`            // 发送时间戳
+	Modify         *sdkws.MsgData         `protobuf:"bytes,4,opt,name=modify,proto3" json:"modify,omitempty"`                 // 修改后的消息数据
+	Seq            int64                  `protobuf:"varint,5,opt,name=seq,proto3" json:"seq,omitempty"`                      // 会话内消息序号（同步提交路径返回；通知消息为 0）
+	ConversationID string                 `protobuf:"bytes,6,opt,name=conversationID,proto3" json:"conversationID,omitempty"` // 会话ID
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SendSimpleMsgResp) Reset() {
@@ -559,6 +577,20 @@ func (x *SendSimpleMsgResp) GetModify() *sdkws.MsgData {
 		return x.Modify
 	}
 	return nil
+}
+
+func (x *SendSimpleMsgResp) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *SendSimpleMsgResp) GetConversationID() string {
+	if x != nil {
+		return x.ConversationID
+	}
+	return ""
 }
 
 // 设置消息发送状态请求
@@ -4536,19 +4568,23 @@ const file_msg_msg_proto_rawDesc = "" +
 	"\x06MinSeq\x18\x02 \x01(\x03R\x06MinSeq\"=\n" +
 	"\n" +
 	"SendMsgReq\x12/\n" +
-	"\amsgData\x18\x03 \x01(\v2\x15.openim.sdkws.MsgDataR\amsgData\"\x9c\x01\n" +
+	"\amsgData\x18\x03 \x01(\v2\x15.openim.sdkws.MsgDataR\amsgData\"\xd6\x01\n" +
 	"\vSendMsgResp\x12 \n" +
 	"\vserverMsgID\x18\x01 \x01(\tR\vserverMsgID\x12 \n" +
 	"\vclientMsgID\x18\x02 \x01(\tR\vclientMsgID\x12\x1a\n" +
 	"\bsendTime\x18\x03 \x01(\x03R\bsendTime\x12-\n" +
-	"\x06modify\x18\x04 \x01(\v2\x15.openim.sdkws.MsgDataR\x06modify\"C\n" +
+	"\x06modify\x18\x04 \x01(\v2\x15.openim.sdkws.MsgDataR\x06modify\x12\x10\n" +
+	"\x03seq\x18\x05 \x01(\x03R\x03seq\x12&\n" +
+	"\x0econversationID\x18\x06 \x01(\tR\x0econversationID\"C\n" +
 	"\x10SendSimpleMsgReq\x12/\n" +
-	"\amsgData\x18\x03 \x01(\v2\x15.openim.sdkws.MsgDataR\amsgData\"\xa2\x01\n" +
+	"\amsgData\x18\x03 \x01(\v2\x15.openim.sdkws.MsgDataR\amsgData\"\xdc\x01\n" +
 	"\x11SendSimpleMsgResp\x12 \n" +
 	"\vserverMsgID\x18\x01 \x01(\tR\vserverMsgID\x12 \n" +
 	"\vclientMsgID\x18\x02 \x01(\tR\vclientMsgID\x12\x1a\n" +
 	"\bsendTime\x18\x03 \x01(\x03R\bsendTime\x12-\n" +
-	"\x06modify\x18\x04 \x01(\v2\x15.openim.sdkws.MsgDataR\x06modify\"-\n" +
+	"\x06modify\x18\x04 \x01(\v2\x15.openim.sdkws.MsgDataR\x06modify\x12\x10\n" +
+	"\x03seq\x18\x05 \x01(\x03R\x03seq\x12&\n" +
+	"\x0econversationID\x18\x06 \x01(\tR\x0econversationID\"-\n" +
 	"\x13SetSendMsgStatusReq\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\x05R\x06status\"\x16\n" +
 	"\x14SetSendMsgStatusResp\"\x15\n" +

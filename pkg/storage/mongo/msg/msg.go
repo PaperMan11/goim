@@ -10,6 +10,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/storage/model"
 	"github.com/PaperMan11/goim/pkg/utils/convert"
 	goredis "github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"github.com/zeromicro/go-zero/core/syncx"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -22,11 +23,20 @@ var (
 	ErrInvalidSeq  = errors.New("msg seq must be positive")
 )
 
+// IsDuplicateKey 判断错误是否为 Mongo 唯一索引冲突（E11000）。
+// 发送同步路径据此识别幂等键冲突并读回已有消息。
+func IsDuplicateKey(err error) bool {
+	return mongo.IsDuplicateKeyError(err)
+}
+
 type MsgModel interface {
 	// Insert 向分桶文档中插入一条消息（Upsert 文档 + $set 槽位）
 	Insert(ctx context.Context, conversationID string, msg *model.MsgDataModel) error
 	// BatchInsert 批量插入消息到分桶文档
 	BatchInsert(ctx context.Context, conversationID string, msgs []*model.MsgDataModel) error
+	// FindByClientMsgID 按幂等键 (conversationID, clientMsgID) 读回消息，
+	// 供发送同步路径在唯一索引冲突（E11000）后取回已有消息的 seq
+	FindByClientMsgID(ctx context.Context, conversationID string, clientMsgID string) (*model.MsgDataModel, error)
 	// FindBySeq 按 seq 查询单条消息
 	FindBySeq(ctx context.Context, conversationID string, seq int64) (*model.MsgDataModel, error)
 	// FindInfoBySeq 按 seq 查询单条消息的完整槽位（含 Revoke/DelList/IsRead），用于引用消息回源判断撤回状态
@@ -66,10 +76,30 @@ func NewMsgModel(mod *mon.Model, barrier syncx.SingleFlight, rdb goredis.Univers
 	m := &defaultMsgModel{
 		mod: mod,
 	}
+	if err := m.ensureMsgIndexes(context.Background()); err != nil {
+		// 幂等唯一索引创建失败只降级幂等能力（重发可能落库两条），不阻断服务启动，
+		// 但必须暴露日志便于立即处理
+		logx.Errorf("ensure msg indexes failed: %v", err)
+	}
 	if !enableCache || rdb == nil {
 		return m
 	}
 	return NewCachedMsgModel(m, rdb, barrier)
+}
+
+// ensureMsgIndexes 幂等创建消息集合的唯一索引。
+// 契约上的幂等键是 (conversationID, clientMsgID)；分桶文档把 conversationID 编码进
+// doc_id、消息存于 msgs 数组槽位，无法直接建复合唯一索引，改用数组元素内
+// client_msg_id 的多键唯一索引——clientMsgID 为客户端生成的 UUID，全局唯一与会话内唯一等价。
+// partial filter 排除空 clientMsgID（未携带幂等键的消息不参与去重），避免全库只允许一条空值。
+func (m *defaultMsgModel) ensureMsgIndexes(ctx context.Context) error {
+	uniq := mongo.IndexModel{
+		Keys: bson.D{{Key: "msgs.msg.client_msg_id", Value: 1}},
+		Options: options.Index().SetUnique(true).SetName("uniq_client_msg_id").
+			SetPartialFilterExpression(bson.M{"msgs.msg.client_msg_id": bson.M{"$gt": ""}}),
+	}
+	_, err := m.mod.Collection.Indexes().CreateOne(ctx, uniq)
+	return err
 }
 
 // docIDPrefix 返回 conversationID 对应的一批 DocID 的前缀匹配条件。
@@ -241,6 +271,28 @@ func (m *defaultMsgModel) BatchInsert(ctx context.Context, conversationID string
 		}
 	}
 	return nil
+}
+
+// FindByClientMsgID 按幂等键 (conversationID, clientMsgID) 读回消息。
+// 走 uniq_client_msg_id 索引定位候选文档后按会话前缀过滤，返回命中槽位的消息。
+func (m *defaultMsgModel) FindByClientMsgID(ctx context.Context, conversationID string, clientMsgID string) (*model.MsgDataModel, error) {
+	filter := docIDPrefix(conversationID)
+	filter["msgs.msg.client_msg_id"] = clientMsgID
+
+	var doc model.MsgDocModel
+	err := m.mod.FindOne(ctx, &doc, filter)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrMsgNotFound
+		}
+		return nil, err
+	}
+	for _, info := range doc.Msgs {
+		if info != nil && info.Msg != nil && info.Msg.ClientMsgID == clientMsgID {
+			return info.Msg, nil
+		}
+	}
+	return nil, ErrMsgNotFound
 }
 
 // FindBySeq 按 seq 查询单条消息：定位文档 → 从 msgs 数组取指定索引槽位
