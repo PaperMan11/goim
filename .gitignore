@@ -37,6 +37,11 @@ run/
 *.swo
 *~
 
+# IDE/Agent 本地缓存
+.screenshots/
+.trae/
+.claude/
+
 # OS generated files
 .DS_Store
 .DS_Store?
