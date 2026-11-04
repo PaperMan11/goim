@@ -61,6 +61,7 @@ type MsgInfoModel struct {
 	Msg     *MsgDataModel `bson:"msg"`                // 消息数据，nil 表示空槽位
 	Revoke  *RevokeModel  `bson:"revoke"`             // 撤回信息，nil 表示未撤回（独立于 Msg，不修改原始数据）
 	DelList []string      `bson:"del_list,omitempty"` // 逻辑删除该消息的用户ID列表（群聊场景各用户独立删除）；nil 时不写入字段，避免落成 null 导致 $addToSet 报错
+	Deleted bool          `bson:"deleted,omitempty"`  // 全员逻辑删除标记（对所有人删除）；独立于 Msg，不修改原始数据
 	IsRead  bool          `bson:"is_read"`            // 文档级已读标记
 }
 

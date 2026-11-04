@@ -127,6 +127,18 @@ func (m *cachedMsgModel) MarkDeleteBySeqs(ctx context.Context, userID string, co
 	return nil
 }
 
+func (m *cachedMsgModel) MarkDeleteForAll(ctx context.Context, conversationID string, seqs []int64) error {
+	err := m.MsgModel.MarkDeleteForAll(ctx, conversationID, seqs)
+	if err != nil {
+		return err
+	}
+	// 槽位仍存在（仅标记 deleted），会话最新消息可能因此变化，需要一并失效
+	delKeys := m.msgSeqCacheKeys(conversationID, seqs)
+	delKeys = append(delKeys, GetMsgLatestKey(conversationID))
+	sredis.CacheDelDouble(ctx, m.redis, delKeys...)
+	return nil
+}
+
 func (m *cachedMsgModel) FindBySeq(ctx context.Context, conversationID string, seq int64) (*model.MsgDataModel, error) {
 	if m.redis == nil {
 		return m.MsgModel.FindBySeq(ctx, conversationID, seq)

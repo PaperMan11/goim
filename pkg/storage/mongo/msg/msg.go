@@ -59,6 +59,8 @@ type MsgModel interface {
 	DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) (map[string][]int64, error)
 	// 标记删除（将 userID 加入目标槽位的 del_list）
 	MarkDeleteBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error
+	// MarkDeleteForAll 全员逻辑删除（将目标槽位的 deleted 置为 true，不修改原始 Msg）
+	MarkDeleteForAll(ctx context.Context, conversationID string, seqs []int64) error
 	// 标记消息已读
 	MarkReadBySeqRange(ctx context.Context, userID string, conversationID string, seqStart, seqEnd int64) error
 	MarkReadBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error
@@ -441,7 +443,10 @@ func (m *defaultMsgModel) FindLatestMsg(ctx context.Context, conversationID stri
 		bson.E{"$limit", 1},
 		bson.E{"$project", bson.M{"_id": 0, "doc_id": 0, "msgs": 1}},
 		bson.E{"$unwind", "$msgs"},
-		bson.E{"$match", bson.M{"msgs.msg.status": bson.M{"$lt": constant.MsgStatusHasDeleted}}},
+		bson.E{"$match", bson.M{
+			"msgs.msg.status": bson.M{"$lt": constant.MsgStatusHasDeleted},
+			"msgs.deleted":    bson.M{"$ne": true}, // 全员逻辑删除的槽位不算最新消息
+		}},
 		bson.E{"$sort", bson.M{"msgs.msg.seq": -1}},
 		bson.E{"$limit", 1},
 	}
@@ -652,6 +657,41 @@ func (m *defaultMsgModel) MarkDeleteBySeqs(ctx context.Context, userID string, c
 		})
 		if _, err := m.mod.UpdateMany(ctx, bson.M{"doc_id": docID},
 			bson.M{"$addToSet": bson.M{"msgs.$[e].del_list": userID}}, addOpts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// MarkDeleteForAll 全员逻辑删除：按 msg.seq 定位目标槽位并置 deleted=true，不修改原始 Msg。
+// 与物理删除（$unset 清空槽位）相比，槽位与 seq 保持连续，也不会产生缺失 client_msg_id 的
+// null 索引键（避免触发 uniq_client_msg_id 唯一索引冲突）。
+// 槽位不存在（消息尚未持久化 / 稀疏占位 / 已物理删除）时自动跳过，$set 幂等，重复删除不报错。
+func (m *defaultMsgModel) MarkDeleteForAll(ctx context.Context, conversationID string, seqs []int64) error {
+	if len(seqs) == 0 {
+		return nil
+	}
+
+	doc := &model.MsgDocModel{}
+	docSeqMap := make(map[string]map[int64]struct{})
+	for _, seq := range seqs {
+		docID := doc.GetDocID(conversationID, seq)
+		if _, ok := docSeqMap[docID]; !ok {
+			docSeqMap[docID] = make(map[int64]struct{})
+		}
+		docSeqMap[docID][seq] = struct{}{}
+	}
+
+	for docID, seqSet := range docSeqMap {
+		seqList := make([]int64, 0, len(seqSet))
+		for seq := range seqSet {
+			seqList = append(seqList, seq)
+		}
+		opts := options.UpdateMany().SetArrayFilters([]any{
+			bson.M{"e.msg": bson.M{"$exists": true}, "e.msg.seq": bson.M{"$in": seqList}},
+		})
+		if _, err := m.mod.UpdateMany(ctx, bson.M{"doc_id": docID},
+			bson.M{"$set": bson.M{"msgs.$[e].deleted": true}}, opts); err != nil {
 			return err
 		}
 	}

@@ -557,7 +557,7 @@ func (l *Logic) handleDeletedAndRevoked(userID string, msgs []*model.MsgInfoMode
 			continue
 		}
 		msg.Msg.IsRead = msg.IsRead
-		if slices.Contains(msg.DelList, userID) {
+		if msg.Deleted || slices.Contains(msg.DelList, userID) {
 			msg.Msg.Content = ""
 			msg.Msg.Status = constant.MsgDeleted
 			continue
@@ -612,7 +612,7 @@ func (l *Logic) handleQuote(ctx context.Context, conversationID, userID string, 
 			continue
 		}
 		msg.Msg.IsRead = msg.IsRead
-		if slices.Contains(msg.DelList, userID) {
+		if msg.Deleted || slices.Contains(msg.DelList, userID) {
 			msg.Msg.Content = ""
 			msg.Msg.Status = constant.MsgDeleted
 		}
@@ -733,6 +733,10 @@ func (l *Logic) GetMsgByConversationIDs(ctx context.Context, req *pbmsg.GetMsgBy
 			}
 			if dbMsg != nil {
 				sdkMsg := mconvert.ModelToPbMsgData(dbMsg.Msg)
+				if dbMsg.Deleted {
+					sdkMsg.Content = ""
+					sdkMsg.Status = constant.MsgDeleted
+				}
 				msgDatas[convID] = sdkMsg
 			}
 		}
@@ -875,7 +879,7 @@ func (l *Logic) MarkMsgsAsRead(ctx context.Context, req *pbmsg.MarkMsgsAsReadReq
 			return nil, err
 		}
 
-		if conversation.ConversationType == constant.SingleChatType {
+		if conversation.ConversationType == constant.SingleChatType && len(req.Seqs) > 0 {
 			err = l.svcCtx.MsgModel.MarkReadBySeqs(ctx, req.UserID, req.ConversationID, req.Seqs)
 			if err != nil {
 				return nil, err
@@ -922,7 +926,7 @@ func (l *Logic) MarkConversationAsRead(ctx context.Context, req *pbmsg.MarkConve
 			return nil, err
 		}
 
-		if conversation.ConversationType == constant.SingleChatType {
+		if conversation.ConversationType == constant.SingleChatType && len(req.Seqs) > 0 {
 			err = l.svcCtx.MsgModel.MarkReadBySeqs(ctx, req.UserID, req.ConversationID, req.Seqs)
 			if err != nil {
 				return nil, err
@@ -957,19 +961,26 @@ func (l *Logic) DeleteMsgs(ctx context.Context, req *pbmsg.DeleteMsgsReq) (*pbms
 
 func (l *Logic) deleteMsgs(ctx context.Context, userID, conversationID string, seqs []int64, isSyncOther, isSyncSelf bool) (err error) {
 	if isSyncOther {
-		err = l.svcCtx.MsgModel.DeleteBySeq(ctx, conversationID, seqs)
+		// 对所有人删除走槽位级逻辑删除（标记 deleted），不再物理 $unset：
+		// 槽位与 seq 保持连续，也不会产生缺失 client_msg_id 的 null 索引键。
+		err = l.svcCtx.MsgModel.MarkDeleteForAll(ctx, conversationID, seqs)
 		if err != nil {
-			l.Errorf("delete msg by seq failed, err: %v, conversationID: %s, seqs: %v", err, conversationID, seqs)
+			l.Errorf("mark delete msg for all failed, err: %v, conversationID: %s, seqs: %v", err, conversationID, seqs)
 			return err
 		}
 
 		convResp, _ := l.svcCtx.ConvService.GetConversation(ctx, &pbconv.GetConversationReq{
 			ConversationID: conversationID,
+			OwnerUserID:    userID,
 		})
 		conv := convResp.GetConversation()
 		if conv != nil {
 			// notify group members that msg is deleted
 			l.sendDeleteMsgsNotification(ctx, userID, conversationID, seqs, conv)
+		}
+		if isSyncSelf {
+			// notify user that msg is deleted
+			l.sendDeleteMsgsSelfNotification(ctx, userID, conversationID, seqs)
 		}
 	} else {
 		err = l.svcCtx.MsgModel.MarkDeleteBySeqs(ctx, userID, conversationID, seqs)
@@ -1207,6 +1218,10 @@ func (l *Logic) SearchMessage(ctx context.Context, req *pbmsg.SearchMessageReq) 
 	}
 
 	for _, msg := range msgs {
+		if msg.Deleted {
+			// 全员逻辑删除的消息不参与搜索结果
+			continue
+		}
 		pbchatLog := mconvert.ModelToPbChatLog(msg)
 		if msg.Msg.SenderNickname == "" {
 			pbchatLog.SenderNickname = sendNicknameMap[msg.Msg.SendID]
