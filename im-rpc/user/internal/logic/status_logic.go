@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
@@ -11,11 +13,63 @@ import (
 )
 
 func (l *Logic) SubscribeOrCancelUsersStatus(ctx context.Context, req *pbuser.SubscribeOrCancelUsersStatusReq) (*pbuser.SubscribeOrCancelUsersStatusResp, error) {
-	return &pbuser.SubscribeOrCancelUsersStatusResp{}, nil
+	userID := req.GetUserID()
+	if userID == "" {
+		userID = mcontext.GetOpUserIDFromContext(ctx)
+	}
+	if userID == "" {
+		return nil, errx.ArgsError.Wrap("user id is empty")
+	}
+
+	var subscribe bool
+	switch req.GetGenre() {
+	case constant.SubscriberUser:
+		subscribe = true
+	case constant.Unsubscribe:
+		subscribe = false
+	default:
+		return nil, errx.ArgsError.Wrap("invalid genre")
+	}
+
+	if err := l.svcCtx.UserModel.SubscribeUsersStatus(ctx, userID, req.GetUserIDs(), subscribe); err != nil {
+		l.Errorf("subscribe or cancel users status failed, userID: %s, genre: %d, targetUserIDs: %v, err: %v",
+			userID, req.GetGenre(), req.GetUserIDs(), err)
+		return nil, errx.InternalError.WrapWithError(err)
+	}
+
+	statusResp, err := l.GetUserStatus(ctx, &pbuser.GetUserStatusReq{
+		UserID:  userID,
+		UserIDs: req.GetUserIDs(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pbuser.SubscribeOrCancelUsersStatusResp{StatusList: statusResp.GetStatusList()}, nil
 }
 
 func (l *Logic) GetSubscribeUsersStatus(ctx context.Context, req *pbuser.GetSubscribeUsersStatusReq) (*pbuser.GetSubscribeUsersStatusResp, error) {
-	return &pbuser.GetSubscribeUsersStatusResp{}, nil
+	userID := req.GetUserID()
+	if userID == "" {
+		userID = mcontext.GetOpUserIDFromContext(ctx)
+	}
+	if userID == "" {
+		return nil, errx.ArgsError.Wrap("user id is empty")
+	}
+
+	userIDs, err := l.svcCtx.UserModel.GetSubscribedUserIDs(ctx, userID)
+	if err != nil {
+		l.Errorf("get subscribed user ids failed, userID: %s, err: %v", userID, err)
+		return nil, errx.InternalError.WrapWithError(err)
+	}
+
+	statusResp, err := l.GetUserStatus(ctx, &pbuser.GetUserStatusReq{
+		UserID:  userID,
+		UserIDs: userIDs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pbuser.GetSubscribeUsersStatusResp{StatusList: statusResp.GetStatusList()}, nil
 }
 
 func (l *Logic) GetUserStatus(ctx context.Context, req *pbuser.GetUserStatusReq) (*pbuser.GetUserStatusResp, error) {
@@ -98,6 +152,8 @@ func (l *Logic) SetUserStatus(ctx context.Context, req *pbuser.SetUserStatusReq)
 
 	l.Infof("set user status success, userID: %s, platformID: %d, status: %d",
 		req.GetUserID(), req.GetPlatformID(), req.GetStatus())
+
+	l.notifyUserStatusChanged(ctx, req.GetUserID(), int(req.GetStatus()), int(req.GetPlatformID()))
 	return &pbuser.SetUserStatusResp{}, nil
 }
 
@@ -149,7 +205,36 @@ func (l *Logic) SetUserOnlineStatus(ctx context.Context, req *pbuser.SetUserOnli
 	}
 
 	l.Infof("set user online status success, statusCount: %d", len(statuses))
+
+	for _, status := range req.GetStatus() {
+		for _, platform := range status.GetOnline() {
+			l.notifyUserStatusChanged(ctx, status.GetUserID(), constant.Online, int(platform))
+		}
+		for _, platform := range status.GetOffline() {
+			l.notifyUserStatusChanged(ctx, status.GetUserID(), constant.Offline, int(platform))
+		}
+	}
 	return &pbuser.SetUserOnlineStatusResp{}, nil
+}
+
+// notifyUserStatusChanged 向订阅了该用户在线状态的所有订阅者投递 1304 通知。
+// 通知失败只记录日志，不影响状态写入主链路。
+func (l *Logic) notifyUserStatusChanged(ctx context.Context, userID string, status, platformID int) {
+	subscribers, err := l.svcCtx.UserModel.GetUserStatusSubscribers(ctx, userID)
+	if err != nil {
+		l.Errorf("get user status subscribers failed, userID: %s, err: %v", userID, err)
+		return
+	}
+
+	for _, subscriberID := range subscribers {
+		if subscriberID == "" || subscriberID == userID {
+			continue
+		}
+		if err := l.svcCtx.NotificationSender.UserStatusChangedNotification(ctx, userID, subscriberID, int32(status), int32(platformID)); err != nil {
+			l.Errorf("send user status changed notification failed, userID: %s, subscriberID: %s, status: %d, platformID: %d, err: %v",
+				userID, subscriberID, status, platformID, err)
+		}
+	}
 }
 
 func (l *Logic) GetAllOnlineUsers(ctx context.Context, req *pbuser.GetAllOnlineUsersReq) (*pbuser.GetAllOnlineUsersResp, error) {

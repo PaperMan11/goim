@@ -65,6 +65,10 @@ func (l *Logic) UpdateUserInfo(ctx context.Context, req *pbuser.UpdateUserInfoRe
 	}
 
 	l.Infof("update user info success, userID: %s", userInfo.GetUserID())
+
+	if err := l.svcCtx.NotificationSender.UserInfoUpdatedNotification(ctx, userInfo.GetUserID()); err != nil {
+		l.Errorf("send user info updated notification failed, userID: %s, err: %v", userInfo.GetUserID(), err)
+	}
 	return &pbuser.UpdateUserInfoResp{}, nil
 }
 
@@ -95,6 +99,9 @@ func (l *Logic) UpdateUserInfoEx(ctx context.Context, req *pbuser.UpdateUserInfo
 		return nil, err
 	}
 
+	if err := l.svcCtx.NotificationSender.UserInfoUpdatedNotification(ctx, userInfo.GetUserID()); err != nil {
+		l.Errorf("send user info updated notification failed, userID: %s, err: %v", userInfo.GetUserID(), err)
+	}
 	return &pbuser.UpdateUserInfoExResp{}, nil
 }
 

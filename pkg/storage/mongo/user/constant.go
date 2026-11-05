@@ -18,7 +18,11 @@ const (
 // -------------------------- 用户在线状态 Redis Key 常量 --------------------------
 
 const (
-	KeyUserStatusZSet = "mongo:user:status:z:%s"
+	// KeyUserStatusSubscribers 记录订阅某用户在线状态的订阅者集合（member=订阅者 userID）。
+	KeyUserStatusSubscribers = "mongo:user:status:subscribers:%s"
+	// KeyUserStatusSubscribed 记录某订阅者已订阅的用户集合（member=被订阅 userID）。
+	KeyUserStatusSubscribed = "mongo:user:status:subscribed:%s"
+	KeyUserStatusZSet       = "mongo:user:status:z:%s"
 	// 对"查过 DB 确认该 user 无任何在线平台"的用户，打一个短 TTL 的 STRING 标记，
 	// 防止 ZRANGE 返回空（语义上既可能是没上线过，也可能是刚从全离线变过来）导致每次都打 DB。
 	KeyUserStatusZNil = "mongo:user:status:zn:%s"
@@ -46,6 +50,16 @@ func GetIMAdminKey(userID string) string {
 }
 
 // -------------------------- 用户在线状态 Key 生成函数 --------------------------
+
+// GetUserStatusSubscribersKey 返回某用户的订阅者集合 key。
+func GetUserStatusSubscribersKey(userID string) string {
+	return fmt.Sprintf(KeyUserStatusSubscribers, userID)
+}
+
+// GetUserStatusSubscribedKey 返回某订阅者已订阅用户集合 key。
+func GetUserStatusSubscribedKey(userID string) string {
+	return fmt.Sprintf(KeyUserStatusSubscribed, userID)
+}
 
 // GetUserStatusZKey 返回用户在线状态 ZSET 的缓存 key。
 // 同一 user 的不同平台在 ZSET 里以 member=PlatformID 形式存在，

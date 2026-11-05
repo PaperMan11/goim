@@ -46,6 +46,13 @@ type UserModel interface {
 	SetUserOnlineStatus(ctx context.Context, statuses []*model.UserStatus) error
 	GetAllOnlineUsers(ctx context.Context) ([]string, error)
 
+	// SubscribeUsersStatus 订阅/取消订阅目标用户的在线状态。
+	SubscribeUsersStatus(ctx context.Context, subscriberUserID string, targetUserIDs []string, subscribe bool) error
+	// GetUserStatusSubscribers 返回订阅某用户在线状态的所有订阅者。
+	GetUserStatusSubscribers(ctx context.Context, userID string) ([]string, error)
+	// GetSubscribedUserIDs 返回某订阅者已订阅的所有用户。
+	GetSubscribedUserIDs(ctx context.Context, userID string) ([]string, error)
+
 	InsertUserCommand(ctx context.Context, cmd *model.UserCommand) error
 	UpdateUserCommand(ctx context.Context, userID, uuid string, value, extra string) error
 	DeleteUserCommand(ctx context.Context, userID, uuid string) error
@@ -67,6 +74,7 @@ type defaultUserModel struct {
 	cmdMod          *mon.Model
 	clientConfigMod *mon.Model
 	barrier         syncx.SingleFlight
+	rdb             goredis.UniversalClient
 }
 
 func NewUserModel(userMod, statusMod, cmdMod, clientConfigMod *mon.Model, barrier syncx.SingleFlight, rdb goredis.UniversalClient, enableCache bool) UserModel {
@@ -76,6 +84,7 @@ func NewUserModel(userMod, statusMod, cmdMod, clientConfigMod *mon.Model, barrie
 		cmdMod:          cmdMod,
 		clientConfigMod: clientConfigMod,
 		barrier:         barrier,
+		rdb:             rdb,
 	}
 	_ = m.ensureUserStatusIndexes(context.Background())
 	_ = m.ensureClientConfigIndexes(context.Background())
@@ -634,6 +643,43 @@ func (m *defaultUserModel) GetAllOnlineUsers(ctx context.Context) ([]string, err
 		userIDs = append(userIDs, s.UserID)
 	}
 	return userIDs, nil
+}
+
+// SubscribeUsersStatus 写入/删除订阅关系（Redis 双向集合，便于按被订阅人查订阅者、按订阅人查订阅列表）。
+func (m *defaultUserModel) SubscribeUsersStatus(ctx context.Context, subscriberUserID string, targetUserIDs []string, subscribe bool) error {
+	if m.rdb == nil || subscriberUserID == "" || len(targetUserIDs) == 0 {
+		return nil
+	}
+
+	pipe := m.rdb.Pipeline()
+	for _, targetUserID := range targetUserIDs {
+		if targetUserID == "" || targetUserID == subscriberUserID {
+			continue
+		}
+		if subscribe {
+			pipe.SAdd(ctx, GetUserStatusSubscribersKey(targetUserID), subscriberUserID)
+			pipe.SAdd(ctx, GetUserStatusSubscribedKey(subscriberUserID), targetUserID)
+		} else {
+			pipe.SRem(ctx, GetUserStatusSubscribersKey(targetUserID), subscriberUserID)
+			pipe.SRem(ctx, GetUserStatusSubscribedKey(subscriberUserID), targetUserID)
+		}
+	}
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+func (m *defaultUserModel) GetUserStatusSubscribers(ctx context.Context, userID string) ([]string, error) {
+	if m.rdb == nil || userID == "" {
+		return nil, nil
+	}
+	return m.rdb.SMembers(ctx, GetUserStatusSubscribersKey(userID)).Result()
+}
+
+func (m *defaultUserModel) GetSubscribedUserIDs(ctx context.Context, userID string) ([]string, error) {
+	if m.rdb == nil || userID == "" {
+		return nil, nil
+	}
+	return m.rdb.SMembers(ctx, GetUserStatusSubscribedKey(userID)).Result()
 }
 
 // =====================================================

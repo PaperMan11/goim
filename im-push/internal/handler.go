@@ -45,12 +45,16 @@ func (p *Pusher) consumePushMsg(ctx context.Context, msg queuex.Message) error {
 	case constant.ReadGroupChatType:
 		return p.pushToGroup(ctx, pushMsg.MsgData.GroupID, pushMsg.MsgData)
 	default:
-		pushUserIDs := make([]string, 0)
+		pushUserIDs := make([]string, 0, 2)
 		isSenderSync := msgprocessor.Options(pushMsg.MsgData.Options).IsSenderSync()
-		if !isSenderSync || pushMsg.MsgData.SendID == pushMsg.MsgData.RecvID {
+		if pushMsg.MsgData.SendID == pushMsg.MsgData.RecvID {
 			pushUserIDs = append(pushUserIDs, pushMsg.MsgData.SendID)
 		} else {
-			pushUserIDs = append(pushUserIDs, pushMsg.MsgData.SendID, pushMsg.MsgData.RecvID)
+			// 接收方必达；仅在开启发送端同步时才额外推送给发送方
+			if isSenderSync {
+				pushUserIDs = append(pushUserIDs, pushMsg.MsgData.SendID)
+			}
+			pushUserIDs = append(pushUserIDs, pushMsg.MsgData.RecvID)
 		}
 		return p.pushToUser(ctx, pushUserIDs, pushMsg.MsgData)
 	}

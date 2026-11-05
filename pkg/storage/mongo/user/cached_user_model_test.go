@@ -133,6 +133,16 @@ func (s *stubUserModel) SetUserOnlineStatus(_ context.Context, statuses []*model
 
 func (s *stubUserModel) GetAllOnlineUsers(context.Context) ([]string, error) { return nil, nil }
 
+func (s *stubUserModel) SubscribeUsersStatus(context.Context, string, []string, bool) error {
+	panic("not implemented")
+}
+func (s *stubUserModel) GetUserStatusSubscribers(context.Context, string) ([]string, error) {
+	panic("not implemented")
+}
+func (s *stubUserModel) GetSubscribedUserIDs(context.Context, string) ([]string, error) {
+	panic("not implemented")
+}
+
 func (s *stubUserModel) Insert(context.Context, []*model.User) error {
 	panic("stubUserModel.Insert not implemented in test")
 }
