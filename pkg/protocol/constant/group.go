@@ -45,7 +45,7 @@ const (
 // 群组加入验证模式
 const (
 	ApplyNeedVerificationInviteDirectly = 0 // 申请需要验证，邀请直接加入
-	AllNeedVerification                 = 1 // 所有人都需要验证 (除非群主或管理员邀请)
+	AllNeedVerification                 = 1 // 所有人都需要验证
 	Directly                            = 2 // 直接加入，无需验证
 )
 

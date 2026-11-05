@@ -3,7 +3,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"slices"
 	"time"
 
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
@@ -72,7 +71,7 @@ func (l *Logic) CreateGroup(ctx context.Context, req *pbgroup.CreateGroupReq) (*
 		Introduction:           groupInfo.GetIntroduction(),
 		FaceURL:                groupInfo.GetFaceURL(),
 		OwnerUserID:            ownerUserID,
-		MemberCount:            len(memberUserIDs),
+		MemberCount:            len(memberUserIDs) + len(adminUserIDs) + 1,
 		Extra:                  groupInfo.GetEx(),
 		Status:                 int(groupInfo.GetStatus()),
 		GroupType:              int(groupInfo.GetGroupType()),
@@ -98,24 +97,30 @@ func (l *Logic) CreateGroup(ctx context.Context, req *pbgroup.CreateGroupReq) (*
 		RoleLevel:      constant.GroupOwner,
 		Nickname:       groupInfo.GetGroupName(),
 		JoinTime:       now,
-		JoinSource:     1,
+		JoinSource:     constant.JoinByAdmin,
 		OperatorUserID: ownerUserID,
 		UpdatedAt:      now,
 	})
-	for _, userID := range memberUserIDs {
-		roleLevel := constant.GroupOrdinaryUsers
-		if userID == ownerUserID {
-			roleLevel = constant.GroupOwner
-		} else if slices.Contains(adminUserIDs, userID) {
-			roleLevel = constant.GroupAdmin
-		}
+	for _, userID := range adminUserIDs {
 		members = append(members, &model.GroupMember{
 			GroupID:        group.GroupID,
 			UserID:         userID,
-			RoleLevel:      roleLevel,
+			RoleLevel:      constant.GroupAdmin,
 			Nickname:       groupInfo.GetGroupName(),
 			JoinTime:       now,
-			JoinSource:     1,
+			JoinSource:     constant.JoinByAdmin,
+			OperatorUserID: ownerUserID,
+			UpdatedAt:      now,
+		})
+	}
+	for _, userID := range memberUserIDs {
+		members = append(members, &model.GroupMember{
+			GroupID:        group.GroupID,
+			UserID:         userID,
+			RoleLevel:      constant.GroupOrdinaryUsers,
+			Nickname:       groupInfo.GetGroupName(),
+			JoinTime:       now,
+			JoinSource:     constant.JoinByAdmin,
 			OperatorUserID: ownerUserID,
 			UpdatedAt:      now,
 		})
@@ -1053,7 +1058,7 @@ func (l *Logic) DismissGroup(ctx context.Context, req *pbgroup.DismissGroupReq) 
 		return nil, err
 	}
 
-	l.svcCtx.NotificationSender.GroupDismissedNotification(ctx, group, groupOwner)
+	l.svcCtx.NotificationSender.GroupDismissedNotification(ctx, group, groupOwner, memberIDs, req.GetDeleteMember())
 	return &pbgroup.DismissGroupResp{}, nil
 }
 
@@ -1119,7 +1124,7 @@ func (l *Logic) MuteGroupMember(ctx context.Context, req *pbgroup.MuteGroupMembe
 		l.Errorf("incr version log for member update failed, groupID: %s, userID: %s, err: %v", groupID, mutedUser.UserID, err)
 		return nil, err
 	}
-	l.svcCtx.NotificationSender.GroupMemberMutedNotification(ctx, group, mutedUser, mutedUser, uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
+	l.svcCtx.NotificationSender.GroupMemberMutedNotification(ctx, group, opUser, mutedUser, mutedSeconds, uint64(groupVersionLog.Version), groupVersionLog.ID.Hex())
 
 	return &pbgroup.MuteGroupMemberResp{}, nil
 }

@@ -148,7 +148,9 @@ func (s *NotificationSender) GroupInfoSetNotification(ctx context.Context, group
 	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.GroupInfoSetNotification), tips)
 }
 
-// MemberQuitNotification 发送成员退出群聊通知
+// MemberQuitNotification 发送成员退出群聊通知。
+// 退群成员发送通知前已被移出群成员列表，群维度推送无法触达其本人（含其他登录端），
+// 因此额外按单聊通知补发给退群者。
 func (s *NotificationSender) MemberQuitNotification(ctx context.Context, group *model.Group, quitMember *model.GroupMember, version uint64, versionID string) error {
 	tips := &sdkws.MemberQuitTips{
 		Group:                mconvert.ModelToPbGroupInfo(group),
@@ -157,7 +159,16 @@ func (s *NotificationSender) MemberQuitNotification(ctx context.Context, group *
 		GroupMemberVersion:   version,
 		GroupMemberVersionID: versionID,
 	}
-	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.MemberQuitNotification), tips)
+
+	groupErr := s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.MemberQuitNotification), tips)
+
+	// 自投递到退群者本人，携带 GroupID 为空，覆盖其多端同步
+	quitErr := s.MsgDispatcher.SendNotification(ctx, quitMember.UserID, quitMember.UserID, "", int32(constant.MemberQuitNotification), msgdispatcher.SessionTypeSingle, tips)
+
+	if groupErr != nil {
+		return groupErr
+	}
+	return quitErr
 }
 
 // MemberEnterNotification 发送成员加入群聊通知
@@ -172,11 +183,15 @@ func (s *NotificationSender) MemberEnterNotification(ctx context.Context, group 
 	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.MemberEnterNotification), tips)
 }
 
-// MemberKickedNotification 发送成员被踢出群聊通知
+// MemberKickedNotification 发送成员被踢出群聊通知。
+// 群维度通知按推送时的群成员列表投递，被踢成员此时已被移出群成员列表，
+// 收不到群维度推送，因此额外按单聊通知逐个补发给被踢成员本人。
 func (s *NotificationSender) MemberKickedNotification(ctx context.Context, group *model.Group, kickedMember []*model.GroupMember, version uint64, versionID string) error {
-	kickedUserList := make([]*sdkws.GroupMemberFullInfo, 0)
+	kickedUserList := make([]*sdkws.GroupMemberFullInfo, 0, len(kickedMember))
+	kickedUserIDs := make([]string, 0, len(kickedMember))
 	for _, member := range kickedMember {
 		kickedUserList = append(kickedUserList, mconvert.ModelToPbGroupMemberInfo(member))
+		kickedUserIDs = append(kickedUserIDs, member.UserID)
 	}
 	tips := &sdkws.MemberKickedTips{
 		Group:                mconvert.ModelToPbGroupInfo(group),
@@ -185,7 +200,24 @@ func (s *NotificationSender) MemberKickedNotification(ctx context.Context, group
 		GroupMemberVersion:   version,
 		GroupMemberVersionID: versionID,
 	}
-	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.MemberKickedNotification), tips)
+	if opUserID := mcontext.GetOpUserIDFromContext(ctx); opUserID != "" {
+		if opMember, err := s.GroupModel.FindMember(ctx, group.GroupID, opUserID); err != nil {
+			logx.Errorf("find kick operator failed, groupID: %s, opUserID: %s, err: %v", group.GroupID, opUserID, err)
+		} else {
+			tips.OpUser = mconvert.ModelToPbGroupMemberInfo(opMember)
+		}
+	}
+
+	groupErr := s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.MemberKickedNotification), tips)
+
+	// 被踢成员已不在群内，需单独投递才能收到通知
+	opUserID := mcontext.GetOpUserIDFromContext(ctx)
+	kickedErr := s.MsgDispatcher.SendBatchNotification(ctx, opUserID, kickedUserIDs, int32(constant.MemberKickedNotification), msgdispatcher.SessionTypeSingle, tips)
+
+	if groupErr != nil {
+		return groupErr
+	}
+	return kickedErr
 }
 
 // AcceptGroupApplicationNotification 发送群聊申请接受通知。
@@ -280,12 +312,18 @@ func (s *NotificationSender) GroupOwnerTransferredNotification(ctx context.Conte
 	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.GroupOwnerTransferredNotification), tips)
 }
 
-// GroupDismissedNotification 发送群聊解散通知
-func (s *NotificationSender) GroupDismissedNotification(ctx context.Context, group *model.Group, groupOwner *model.GroupMember) error {
+// GroupDismissedNotification 发送群聊解散通知。
+// memberDeleted 为 true 时成员记录已被删除，群维度推送按成员列表扇出会无人可收，
+// 此时改为按单聊逐个投递给解散前的全体成员。
+func (s *NotificationSender) GroupDismissedNotification(ctx context.Context, group *model.Group, groupOwner *model.GroupMember, memberIDs []string, memberDeleted bool) error {
 	tips := &sdkws.GroupDismissedTips{
 		Group:         mconvert.ModelToPbGroupInfo(group),
 		OpUser:        mconvert.ModelToPbGroupMemberInfo(groupOwner),
 		OperationTime: time.Now().UnixMilli(),
+	}
+	if memberDeleted {
+		opUserID := mcontext.GetOpUserIDFromContext(ctx)
+		return s.MsgDispatcher.SendBatchNotification(ctx, opUserID, memberIDs, int32(constant.GroupDismissedNotification), msgdispatcher.SessionTypeSingle, tips)
 	}
 	return s.sendNotificationToGroup(ctx, group.GroupID, int32(constant.GroupDismissedNotification), tips)
 }
@@ -315,12 +353,13 @@ func (s *NotificationSender) GroupCancelMutedNotification(ctx context.Context, g
 }
 
 // GroupMemberMutedNotification 发送群组成员禁言通知
-func (s *NotificationSender) GroupMemberMutedNotification(ctx context.Context, group *model.Group, opUser, mutedUser *model.GroupMember, version uint64, versionID string) error {
+func (s *NotificationSender) GroupMemberMutedNotification(ctx context.Context, group *model.Group, opUser, mutedUser *model.GroupMember, mutedSeconds uint32, version uint64, versionID string) error {
 	tips := &sdkws.GroupMemberMutedTips{
 		Group:                mconvert.ModelToPbGroupInfo(group),
 		OpUser:               mconvert.ModelToPbGroupMemberInfo(opUser),
 		MutedUser:            mconvert.ModelToPbGroupMemberInfo(mutedUser),
 		OperationTime:        time.Now().UnixMilli(),
+		MutedSeconds:         mutedSeconds,
 		GroupMemberVersion:   version,
 		GroupMemberVersionID: versionID,
 	}
