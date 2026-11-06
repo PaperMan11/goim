@@ -482,10 +482,10 @@ func (l *Logic) RemoveBlack(ctx context.Context, req *pbrelation.RemoveBlackReq)
 		return nil, err
 	}
 
-	// 检查是否已被对方拉黑
-	inBlack, err := l.svcCtx.FriendModel.IsBlack(ctx, blackUserID, ownerUserID)
+	// 检查本人黑名单中是否存在该记录（AddBlack 的反向检查是「是否被对方拉黑」，此处语义不同）
+	inBlack, err := l.svcCtx.FriendModel.IsBlack(ctx, ownerUserID, blackUserID)
 	if err != nil {
-		l.Errorf("check black failed, owner: %s, target: %s, err: %v", blackUserID, ownerUserID, err)
+		l.Errorf("check black failed, owner: %s, target: %s, err: %v", ownerUserID, blackUserID, err)
 		return nil, err
 	}
 	if !inBlack {

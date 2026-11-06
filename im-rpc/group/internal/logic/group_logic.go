@@ -710,6 +710,17 @@ func (l *Logic) QuitGroup(ctx context.Context, req *pbgroup.QuitGroupReq) (*pbgr
 	if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), groupID, model.VersionStateDelete); err != nil {
 		l.Errorf("incr version log for member delete failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
 	}
+	// 剩余成员的群实体（memberCount）已变化：推进其 JoinGroupDID(Update)，
+	// 否则其成员列表缓存感知不到退群者的移除
+	if remainIDs, err := l.svcCtx.GroupModel.FindMemberIDsByGroup(ctx, groupID); err == nil && len(remainIDs) > 0 {
+		dids := make([]string, 0, len(remainIDs))
+		for _, id := range remainIDs {
+			dids = append(dids, model.JoinGroupDID(id))
+		}
+		if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, dids, groupID, model.VersionStateUpdate); err != nil {
+			l.Errorf("incr version log for remaining members join group update failed, groupID: %s, err: %v", groupID, err)
+		}
+	}
 
 	l.svcCtx.NotificationSender.MemberQuitNotification(ctx, group, member, uint64(groupVersionLog.Version), groupVersionLog.ID.String())
 
@@ -796,6 +807,9 @@ func (l *Logic) InviteUserToGroup(ctx context.Context, req *pbgroup.InviteUserTo
 	}
 
 	if len(members) > 0 {
+		// 邀请前的存量成员（成员数变化会改变其群实体，需推进其 JoinGroupDID 走增量）
+		oldMemberIDs, _ := l.svcCtx.GroupModel.FindMemberIDsByGroup(ctx, groupID)
+
 		if err := l.svcCtx.GroupModel.InsertMembers(ctx, members); err != nil {
 			l.Errorf("insert members failed, groupID: %s, err: %v", groupID, err)
 			return nil, err
@@ -823,6 +837,17 @@ func (l *Logic) InviteUserToGroup(ctx context.Context, req *pbgroup.InviteUserTo
 		for _, userID := range userIDs {
 			if _, err := l.svcCtx.VersionLogModel.IncrVersionLog(ctx, model.JoinGroupDID(userID), groupID, model.VersionStateInsert); err != nil {
 				l.Errorf("incr version log for join group insert failed, userID: %s, groupID: %s, err: %v", userID, groupID, err)
+			}
+		}
+		// 存量成员的群实体（memberCount）已变化：推进其 JoinGroupDID(Update)，
+		// 否则其 joinGroups 增量永远感知不到新成员，群信息与成员列表双双过期
+		if len(oldMemberIDs) > 0 {
+			dids := make([]string, 0, len(oldMemberIDs))
+			for _, id := range oldMemberIDs {
+				dids = append(dids, model.JoinGroupDID(id))
+			}
+			if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, dids, groupID, model.VersionStateUpdate); err != nil {
+				l.Errorf("incr version log for existing members join group update failed, groupID: %s, err: %v", groupID, err)
 			}
 		}
 		l.svcCtx.NotificationSender.InviteGroupMemberNotification(ctx, group, inviterUser, members, uint64(groupVersionLog.Version), groupVersionLog.ID.String())
@@ -925,6 +950,17 @@ func (l *Logic) KickGroupMember(ctx context.Context, req *pbgroup.KickGroupMembe
 				l.Errorf("incr version log for member delete failed, groupID: %s, userID: %s, err: %v", groupID, userID, err)
 			}
 		}
+		// 剩余成员的群实体（memberCount）已变化：推进其 JoinGroupDID(Update)，
+		// 否则其成员列表缓存感知不到被踢者的移除
+		if remainIDs, err := l.svcCtx.GroupModel.FindMemberIDsByGroup(ctx, groupID); err == nil && len(remainIDs) > 0 {
+			dids := make([]string, 0, len(remainIDs))
+			for _, id := range remainIDs {
+				dids = append(dids, model.JoinGroupDID(id))
+			}
+			if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, dids, groupID, model.VersionStateUpdate); err != nil {
+				l.Errorf("incr version log for remaining members join group update failed, groupID: %s, err: %v", groupID, err)
+			}
+		}
 		l.svcCtx.NotificationSender.MemberKickedNotification(ctx, group, kickedMembers, uint64(groupVersionLog.Version), groupVersionLog.ID.String())
 	}
 
@@ -999,6 +1035,18 @@ func (l *Logic) TransferGroupOwner(ctx context.Context, req *pbgroup.TransferGro
 	if err != nil {
 		l.Errorf("incr version log batch for transfer owner failed, groupID: %s, err: %v", groupID, err)
 		return nil, err
+	}
+
+	// 群主变更属于群实体变更：推进全体成员 JoinGroupDID(Update)，
+	// 否则各端 joinGroups 增量感知不到 owner 变化（本地缓存群主过期）
+	if memberIDs, err := l.svcCtx.GroupModel.FindMemberIDsByGroup(ctx, groupID); err == nil && len(memberIDs) > 0 {
+		dids := make([]string, 0, len(memberIDs))
+		for _, id := range memberIDs {
+			dids = append(dids, model.JoinGroupDID(id))
+		}
+		if err := l.svcCtx.VersionLogModel.IncrVersionLogBatchDIDs(ctx, dids, groupID, model.VersionStateUpdate); err != nil {
+			l.Errorf("incr version log for members join group update failed, groupID: %s, err: %v", groupID, err)
+		}
 	}
 
 	l.svcCtx.NotificationSender.GroupOwnerTransferredNotification(ctx, group, oldGroupOwner, newGroupOwner, uint64(groupVersionLog.Version), groupVersionLog.ID.String())
