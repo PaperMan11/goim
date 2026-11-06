@@ -14,6 +14,10 @@ Prometheus:
 CronTask:
   MsgRetentionDays: 7
   ConvRetentionDays: 7
+  # 自毁消息清理间隔（秒），默认 300
+  DestructMsgIntervalSeconds: 300
+  # 在线用户集合对账间隔（秒），默认 300
+  OnlineReconcileIntervalSeconds: 300
 
 Redis:
   Host: 127.0.0.1:6379
@@ -33,5 +37,13 @@ MsgRpc:
     Hosts:
       - 127.0.0.1:2379
     Key: msg.rpc
+  Stub: false
+  EnableCache: false
+
+UserRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: user.rpc
   Stub: false
   EnableCache: false

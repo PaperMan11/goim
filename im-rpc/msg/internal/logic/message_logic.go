@@ -1273,14 +1273,71 @@ func (l *Logic) GetServerTime(ctx context.Context, req *pbmsg.GetServerTimeReq) 
 	}, nil
 }
 
+// clearMsgDefaultBatch 单次按会话清理的最大会话数，避免单次请求扫描过多历史文档
+const clearMsgDefaultBatch = 200
+
+// ClearMsg 清理自毁会话的历史消息。
+// 对每个会话按 msg_destruct_time 物理删除过期消息（整文档删除），
+// 删除后的 seq 缓存失效由 cachedMsgModel.DeleteByTimestamp 统一处理。
 func (l *Logic) ClearMsg(ctx context.Context, req *pbmsg.ClearMsgReq) (*pbmsg.ClearMsgResp, error) {
+	convs := req.GetConversations()
+	if len(convs) == 0 {
+		return &pbmsg.ClearMsgResp{}, nil
+	}
+
+	for _, conv := range convs {
+		convID := conv.GetConversationID()
+		if convID == "" {
+			continue
+		}
+		timestamp := conv.GetMsgDestructTime()
+		if timestamp <= 0 {
+			// 未设置销毁时间的会话不清理，避免误删全量历史
+			continue
+		}
+		if _, err := l.svcCtx.MsgModel.DeleteByTimestamp(ctx, []string{convID}, timestamp); err != nil {
+			l.Errorf("clear msg by timestamp failed, conversationID: %s, timestamp: %d, err: %v", convID, timestamp, err)
+			return nil, err
+		}
+	}
+
 	return &pbmsg.ClearMsgResp{}, nil
 }
 
+// DestructMsgs 按时间戳销毁过期消息（消息保留策略）。
+// 分批取出"整文档消息都已过期"的会话，再对这批会话执行整文档删除，返回被删除的消息条数。
 func (l *Logic) DestructMsgs(ctx context.Context, req *pbmsg.DestructMsgsReq) (*pbmsg.DestructMsgsResp, error) {
-	return &pbmsg.DestructMsgsResp{
-		Count: 0,
-	}, nil
+	timestamp := req.GetTimestamp()
+	if timestamp <= 0 {
+		return &pbmsg.DestructMsgsResp{}, nil
+	}
+
+	limit := int(req.GetLimit())
+	if limit <= 0 {
+		limit = clearMsgDefaultBatch
+	}
+
+	convIDs, err := l.svcCtx.MsgModel.FindExpiredConversationIDs(ctx, timestamp, limit)
+	if err != nil {
+		l.Errorf("find expired conversation ids failed, timestamp: %d, limit: %d, err: %v", timestamp, limit, err)
+		return nil, err
+	}
+	if len(convIDs) == 0 {
+		return &pbmsg.DestructMsgsResp{}, nil
+	}
+
+	deleted, err := l.svcCtx.MsgModel.DeleteByTimestamp(ctx, convIDs, timestamp)
+	if err != nil {
+		l.Errorf("destruct msgs failed, timestamp: %d, convIDs: %v, err: %v", timestamp, convIDs, err)
+		return nil, err
+	}
+
+	count := 0
+	for _, seqs := range deleted {
+		count += len(seqs)
+	}
+	l.Infof("destruct msgs done, convCount: %d, msgCount: %d, timestamp: %d", len(convIDs), count, timestamp)
+	return &pbmsg.DestructMsgsResp{Count: int32(count)}, nil
 }
 
 func (l *Logic) GetActiveConversation(ctx context.Context, req *pbmsg.GetActiveConversationReq) (*pbmsg.GetActiveConversationResp, error) {

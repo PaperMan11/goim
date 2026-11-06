@@ -57,6 +57,8 @@ type MsgModel interface {
 	DeleteBySeq(ctx context.Context, conversationID string, seqs []int64) error
 	// DeleteByTimestamp 按时间戳物理删除过期文档，返回 conversationID -> 被删除消息的 seq 列表
 	DeleteByTimestamp(ctx context.Context, conversationIDs []string, timestamp int64) (map[string][]int64, error)
+	// FindExpiredConversationIDs 查询存在"整文档消息都已过期"的会话ID列表，用于分批清理
+	FindExpiredConversationIDs(ctx context.Context, timestamp int64, limit int) ([]string, error)
 	// 标记删除（将 userID 加入目标槽位的 del_list）
 	MarkDeleteBySeqs(ctx context.Context, userID string, conversationID string, seqs []int64) error
 	// MarkDeleteForAll 全员逻辑删除（将目标槽位的 deleted 置为 true，不修改原始 Msg）
@@ -609,6 +611,57 @@ func (m *defaultMsgModel) DeleteByTimestamp(ctx context.Context, conversationIDs
 	}
 
 	return deleted, nil
+}
+
+// FindExpiredConversationIDs 查询存在"整文档消息全部过期"的会话ID列表。
+// 判定条件与 DeleteByTimestamp 一致：文档内所有非空消息的 send_time 都 <= timestamp；
+// 只有这类文档才会被整文档删除，因此按会话去重后分批交给 DeleteByTimestamp 即可，
+// 不会出现"一直查到同一批会话但删不掉"的无效循环。
+func (m *defaultMsgModel) FindExpiredConversationIDs(ctx context.Context, timestamp int64, limit int) ([]string, error) {
+	if timestamp <= 0 {
+		return nil, nil
+	}
+
+	pipeline := bson.A{
+		// 先做索引友好粗筛：文档内至少有一条消息早于 timestamp
+		bson.M{"$match": bson.M{"msgs.msg.send_time": bson.M{"$lte": timestamp}}},
+		// 再精确判定：不存在任何晚于 timestamp 的真实消息（稀疏占位槽位忽略）
+		bson.M{"$match": bson.M{"$expr": bson.M{"$eq": bson.A{
+			bson.M{"$size": bson.M{"$filter": bson.M{
+				"input": bson.M{"$ifNull": bson.A{"$msgs", bson.A{}}},
+				"as":    "m",
+				"cond": bson.M{"$and": bson.A{
+					bson.M{"$ne": bson.A{"$$m", nil}},
+					bson.M{"$ne": bson.A{"$$m.msg", nil}},
+					bson.M{"$gt": bson.A{"$$m.msg.send_time", timestamp}},
+				}},
+			}}},
+			0,
+		}}}},
+		bson.M{"$project": bson.M{
+			"conversation_id": bson.M{"$arrayElemAt": bson.A{
+				bson.M{"$split": bson.A{"$doc_id", ":"}}, 0,
+			}},
+		}},
+		bson.M{"$group": bson.M{"_id": "$conversation_id"}},
+		bson.M{"$limit": int64(limit)},
+		bson.M{"$project": bson.M{"_id": 0, "conversation_id": "$_id"}},
+	}
+
+	var rows []struct {
+		ConversationID string `bson:"conversation_id"`
+	}
+	if err := m.mod.Aggregate(ctx, &rows, pipeline); err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.ConversationID != "" {
+			ids = append(ids, row.ConversationID)
+		}
+	}
+	return ids, nil
 }
 
 // MarkDeleteBySeqs 标记删除（将 userID 加入目标槽位的 del_list）

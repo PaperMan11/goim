@@ -3,6 +3,7 @@ package conversation
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
@@ -35,6 +36,8 @@ type ConversationModel interface {
 	// 获取不进行推送的会话用户列表
 	FindNoRecvConversationUserIDs(ctx context.Context, conversationID string) ([]string, error)
 	FindUserNotNotifyConversationIDs(ctx context.Context, ownerUserID string) ([]string, error)
+	// FindConversationsNeedClearMsg 查询已开启消息销毁且 msg_destruct_time 已到期（<= timestamp）的会话
+	FindConversationsNeedClearMsg(ctx context.Context, timestampMs int64, limit int) ([]*model.Conversation, error)
 
 	UpsertConversationLatestMsg(ctx context.Context, latest *model.ConversationLatestMsg) error
 	FindLatestMsg(ctx context.Context, owner, convID string) (*model.ConversationLatestMsg, error)
@@ -247,6 +250,36 @@ func (m *defaultConversationModel) FindUserNotNotifyConversationIDs(ctx context.
 		return nil, err
 	}
 	return filterUserIDs, nil
+}
+
+// FindConversationsNeedClearMsg 查询已开启消息销毁且 msg_destruct_time 已到期（<= timestamp）的会话。
+// 按 msg_destruct_time 升序取出，保证按到期先后分批清理。
+func (m *defaultConversationModel) FindConversationsNeedClearMsg(ctx context.Context, timestampMs int64, limit int) ([]*model.Conversation, error) {
+	if timestampMs <= 0 {
+		return nil, nil
+	}
+	filter := bson.M{
+		"is_msg_destruct": true,
+		"msg_destruct_time": bson.M{
+			"$gt":  time.UnixMilli(0),
+			"$lte": time.UnixMilli(timestampMs),
+		},
+	}
+	findOpts := options.Find().SetSort(bson.M{"msg_destruct_time": 1})
+	if limit > 0 {
+		findOpts.SetLimit(int64(limit))
+	}
+
+	var convs []*model.Conversation
+	cursor, err := m.convMod.Collection.Find(ctx, filter, findOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	if err := cursor.All(ctx, &convs); err != nil {
+		return nil, err
+	}
+	return convs, nil
 }
 
 func (m *defaultConversationModel) UpsertConversationLatestMsg(ctx context.Context, latest *model.ConversationLatestMsg) error {

@@ -588,17 +588,19 @@ func (l *Logic) GetPinnedConversationIDs(ctx context.Context, req *pbconversatio
 }
 
 // GetConversationsNeedClearMsg 获取需要清理消息的会话（is_msg_destruct=true 且 msg_destruct_time 已到期）。
+// 供定时任务扫描使用，不做管理员校验（与 msg.DestructMsgs 一致，仅由内部服务调用）。
 func (l *Logic) GetConversationsNeedClearMsg(ctx context.Context, req *pbconversation.GetConversationsNeedClearMsgReq) (*pbconversation.GetConversationsNeedClearMsgResp, error) {
-	if err := l.requireAdmin(); err != nil {
+	convs, err := l.svcCtx.ConversationModel.FindConversationsNeedClearMsg(ctx, timex.UnixMilli(), 0)
+	if err != nil {
+		l.Errorf("find conversations need clear msg failed, err: %v", err)
 		return nil, err
 	}
 
-	now := timex.Now()
-	// 由于 conversation model 不支持跨用户聚合查询，这里返回空列表占位。
-	// 实际清理消息的批量扫描应在定时任务中按 user 维度进行。
-	_ = now
-
-	return &pbconversation.GetConversationsNeedClearMsgResp{}, nil
+	pbConvs := make([]*pbconversation.Conversation, 0, len(convs))
+	for _, conv := range convs {
+		pbConvs = append(pbConvs, mconvert.ModelToPbConversation(conv))
+	}
+	return &pbconversation.GetConversationsNeedClearMsgResp{Conversations: pbConvs}, nil
 }
 
 // ==================== 写入方法 ====================
@@ -1217,13 +1219,80 @@ func (l *Logic) DeleteConversations(ctx context.Context, req *pbconversation.Del
 	return &pbconversation.DeleteConversationsResp{}, nil
 }
 
-// ClearUserConversationMsg 清理用户会话消息（仅占位，实际由 msg 模块处理）。
+// clearUserConversationMsgDefaultBatch 单次清理的最大会话行数
+const clearUserConversationMsgDefaultBatch = 200
+
+// ClearUserConversationMsg 清理已到期的自毁会话消息。
+//  1. 按 msg_destruct_time <= timestamp 分批取出会话（会话表按 owner 存多行，同一会话可能重复）；
+//  2. 按 conversationID 去重后调用 msg.ClearMsg 物理删除过期消息；
+//  3. 推进会话的销毁状态，避免同一批会话被反复扫描：有更新的销毁时间则后移，
+//     否则关闭 is_msg_destruct（一次性销毁完成）。
 func (l *Logic) ClearUserConversationMsg(ctx context.Context, req *pbconversation.ClearUserConversationMsgReq) (*pbconversation.ClearUserConversationMsgResp, error) {
-	//if err := l.requireAdmin(); err != nil {
-	//	return nil, err
-	//}
-	// 占位实现：实际清理逻辑由 msg 模块负责
-	return &pbconversation.ClearUserConversationMsgResp{}, nil
+	timestamp := req.GetTimestamp()
+	if timestamp <= 0 {
+		timestamp = timex.UnixMilli()
+	}
+	limit := int(req.GetLimit())
+	if limit <= 0 {
+		limit = clearUserConversationMsgDefaultBatch
+	}
+
+	convs, err := l.svcCtx.ConversationModel.FindConversationsNeedClearMsg(ctx, timestamp, limit)
+	if err != nil {
+		l.Errorf("find conversations need clear msg failed, timestamp: %d, limit: %d, err: %v", timestamp, limit, err)
+		return nil, err
+	}
+	if len(convs) == 0 {
+		return &pbconversation.ClearUserConversationMsgResp{}, nil
+	}
+
+	// 同一 conversationID 可能对应多个 owner 行：消息是会话级共享的，只需清理一次；
+	// 取所有 owner 行里最早的销毁时间，确保不会漏删。
+	first := make(map[string]*model.Conversation, len(convs))
+	earliest := make(map[string]time.Time, len(convs))
+	order := make([]string, 0, len(convs))
+	for _, conv := range convs {
+		curTime, ok := earliest[conv.ConversationID]
+		if !ok {
+			first[conv.ConversationID] = conv
+			order = append(order, conv.ConversationID)
+			earliest[conv.ConversationID] = conv.MsgDestructTime
+			continue
+		}
+		if conv.MsgDestructTime.Before(curTime) {
+			earliest[conv.ConversationID] = conv.MsgDestructTime
+		}
+	}
+
+	pbConvs := make([]*pbconversation.Conversation, 0, len(order))
+	for _, convID := range order {
+		convCopy := *first[convID]
+		convCopy.MsgDestructTime = earliest[convID]
+		pbConvs = append(pbConvs, mconvert.ModelToPbConversation(&convCopy))
+	}
+
+	if _, err := l.svcCtx.MsgService.ClearMsg(ctx, &msg.ClearMsgReq{Conversations: pbConvs}); err != nil {
+		l.Errorf("clear conversation msg failed, convCount: %d, err: %v", len(pbConvs), err)
+		return nil, err
+	}
+
+	// 推进销毁状态，防止下一轮重复清理同一批会话
+	for _, conv := range convs {
+		updates := map[string]any{"updated_at": timex.Now()}
+		if conv.LatestMsgDestructTime.After(conv.MsgDestructTime) {
+			updates["msg_destruct_time"] = conv.LatestMsgDestructTime
+			if !conv.LatestMsgDestructTime.After(time.Now()) {
+				updates["is_msg_destruct"] = false
+			}
+		} else {
+			updates["is_msg_destruct"] = false
+		}
+		if err := l.svcCtx.ConversationModel.UpdateConversation(ctx, conv.OwnerUserID, conv.ConversationID, updates); err != nil {
+			l.Errorf("update conversation destruct state failed, owner: %s, conv: %s, err: %v", conv.OwnerUserID, conv.ConversationID, err)
+		}
+	}
+
+	return &pbconversation.ClearUserConversationMsgResp{Count: int32(len(convs))}, nil
 }
 
 // ==================== 增量同步方法 ====================

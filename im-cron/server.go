@@ -2,12 +2,14 @@ package imcron
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/PaperMan11/goim/pkg/lock"
 	redLocker "github.com/PaperMan11/goim/pkg/lock/redis"
 	"github.com/PaperMan11/goim/pkg/rpcclient"
 	convservice "github.com/PaperMan11/goim/pkg/rpcclient/conversationservice"
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
+	userservice "github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
 	"github.com/redis/go-redis/v9"
@@ -26,6 +28,7 @@ type CronServer struct {
 	redisClient redis.UniversalClient
 	convService convservice.ConversationService
 	msgService  msgservice.MsgService
+	userService userservice.UserService
 }
 
 func NewCronServer(cfg *Config) *CronServer {
@@ -41,6 +44,7 @@ func NewCronServer(cfg *Config) *CronServer {
 	var (
 		convService convservice.ConversationService
 		msgService  msgservice.MsgService
+		userService userservice.UserService
 	)
 	if !cfg.ConvRpc.Stub {
 		convService = convservice.NewConversationService(rpcclient.MustNewClient(cfg.ConvRpc.RpcClientConf, clientOpts...))
@@ -52,13 +56,20 @@ func NewCronServer(cfg *Config) *CronServer {
 	} else {
 		msgService = msgservice.NewStubMsgService()
 	}
+	if !cfg.UserRpc.Stub {
+		userService = userservice.NewUserService(rpcclient.MustNewClient(cfg.UserRpc.RpcClientConf, clientOpts...))
+	} else {
+		userService = userservice.NewStubUserService()
+	}
 
 	return &CronServer{
 		cfg:         cfg,
 		locker:      locker,
 		cron:        cron.New(),
+		redisClient: redisClient,
 		convService: convService,
 		msgService:  msgService,
+		userService: userService,
 	}
 }
 
@@ -66,6 +77,8 @@ func (s *CronServer) Start() {
 	if s.cron != nil {
 		s.registerClearUserMessageJob()
 		s.registerDeleteMessageJob()
+		s.registerDestructMsgJob()
+		s.registerOnlineReconcileJob()
 		s.cron.Start()
 	}
 }
@@ -105,4 +118,45 @@ func (s *CronServer) registerDeleteMessageJob() {
 			return nil
 		})
 	})
+}
+
+// registerDestructMsgJob 注册自毁消息清理任务：按会话的 msg_destruct_time 物理删除已过期消息。
+func (s *CronServer) registerDestructMsgJob() {
+	interval := s.cfg.CronTask.DestructMsgIntervalSeconds
+	if interval <= 0 {
+		logx.Errorf("DestructMsgIntervalSeconds is 0, skip destruct message job")
+		return
+	}
+	spec := fmt.Sprintf("@every %ds", interval)
+	if _, err := s.cron.AddFunc(spec, func() {
+		s.locker.ExecWithLock(context.Background(), "cron:destruct-message", func() error {
+			s.ClearDestructMsg()
+			return nil
+		})
+	}); err != nil {
+		logx.Errorf("register destruct message job failed, spec: %s, err: %v", spec, err)
+	}
+}
+
+// registerOnlineReconcileJob 注册在线用户集合对账任务：清理 mongo:user:online:set 中的僵尸成员。
+// user RPC 为 stub 时无法校验在线状态，直接跳过，避免把全部在线用户误删。
+func (s *CronServer) registerOnlineReconcileJob() {
+	interval := s.cfg.CronTask.OnlineReconcileIntervalSeconds
+	if interval <= 0 {
+		logx.Errorf("OnlineReconcileIntervalSeconds is 0, skip online reconcile job")
+		return
+	}
+	if s.cfg.UserRpc.Stub {
+		logx.Errorf("UserRpc is stub, skip online reconcile job")
+		return
+	}
+	spec := fmt.Sprintf("@every %ds", interval)
+	if _, err := s.cron.AddFunc(spec, func() {
+		s.locker.ExecWithLock(context.Background(), "cron:reconcile-online-users", func() error {
+			s.ReconcileOnlineUsers()
+			return nil
+		})
+	}); err != nil {
+		logx.Errorf("register online reconcile job failed, spec: %s, err: %v", spec, err)
+	}
 }
