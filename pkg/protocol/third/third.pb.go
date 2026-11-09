@@ -352,7 +352,7 @@ func (x *PartSizeReq) GetSize() int64 {
 
 type PartSizeResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Size          int64                  `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
+	Size          int64                  `protobuf:"varint,1,opt,name=size,proto3" json:"size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -672,6 +672,7 @@ type AuthSignResp struct {
 	Query         []*KeyValues           `protobuf:"bytes,2,rep,name=query,proto3" json:"query,omitempty"`
 	Header        []*KeyValues           `protobuf:"bytes,3,rep,name=header,proto3" json:"header,omitempty"`
 	Parts         []*SignPart            `protobuf:"bytes,4,rep,name=parts,proto3" json:"parts,omitempty"`
+	ExpireTime    int64                  `protobuf:"varint,5,opt,name=expireTime,proto3" json:"expireTime,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -734,10 +735,69 @@ func (x *AuthSignResp) GetParts() []*SignPart {
 	return nil
 }
 
+func (x *AuthSignResp) GetExpireTime() int64 {
+	if x != nil {
+		return x.ExpireTime
+	}
+	return 0
+}
+
+type CompletedPart struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PartNumber    int32                  `protobuf:"varint,1,opt,name=partNumber,proto3" json:"partNumber,omitempty"`
+	ETag          string                 `protobuf:"bytes,2,opt,name=eTag,proto3" json:"eTag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompletedPart) Reset() {
+	*x = CompletedPart{}
+	mi := &file_third_third_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompletedPart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompletedPart) ProtoMessage() {}
+
+func (x *CompletedPart) ProtoReflect() protoreflect.Message {
+	mi := &file_third_third_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompletedPart.ProtoReflect.Descriptor instead.
+func (*CompletedPart) Descriptor() ([]byte, []int) {
+	return file_third_third_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *CompletedPart) GetPartNumber() int32 {
+	if x != nil {
+		return x.PartNumber
+	}
+	return 0
+}
+
+func (x *CompletedPart) GetETag() string {
+	if x != nil {
+		return x.ETag
+	}
+	return ""
+}
+
 type CompleteMultipartUploadReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UploadID      string                 `protobuf:"bytes,1,opt,name=uploadID,proto3" json:"uploadID,omitempty"`
-	Parts         []string               `protobuf:"bytes,2,rep,name=parts,proto3" json:"parts,omitempty"`
+	Parts         []*CompletedPart       `protobuf:"bytes,2,rep,name=parts,proto3" json:"parts,omitempty"`
 	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	ContentType   string                 `protobuf:"bytes,4,opt,name=contentType,proto3" json:"contentType,omitempty"`
 	Cause         string                 `protobuf:"bytes,5,opt,name=cause,proto3" json:"cause,omitempty"`
@@ -748,7 +808,7 @@ type CompleteMultipartUploadReq struct {
 
 func (x *CompleteMultipartUploadReq) Reset() {
 	*x = CompleteMultipartUploadReq{}
-	mi := &file_third_third_proto_msgTypes[12]
+	mi := &file_third_third_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -760,7 +820,7 @@ func (x *CompleteMultipartUploadReq) String() string {
 func (*CompleteMultipartUploadReq) ProtoMessage() {}
 
 func (x *CompleteMultipartUploadReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[12]
+	mi := &file_third_third_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -773,7 +833,7 @@ func (x *CompleteMultipartUploadReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteMultipartUploadReq.ProtoReflect.Descriptor instead.
 func (*CompleteMultipartUploadReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{12}
+	return file_third_third_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CompleteMultipartUploadReq) GetUploadID() string {
@@ -783,7 +843,7 @@ func (x *CompleteMultipartUploadReq) GetUploadID() string {
 	return ""
 }
 
-func (x *CompleteMultipartUploadReq) GetParts() []string {
+func (x *CompleteMultipartUploadReq) GetParts() []*CompletedPart {
 	if x != nil {
 		return x.Parts
 	}
@@ -827,7 +887,7 @@ type CompleteMultipartUploadResp struct {
 
 func (x *CompleteMultipartUploadResp) Reset() {
 	*x = CompleteMultipartUploadResp{}
-	mi := &file_third_third_proto_msgTypes[13]
+	mi := &file_third_third_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -839,7 +899,7 @@ func (x *CompleteMultipartUploadResp) String() string {
 func (*CompleteMultipartUploadResp) ProtoMessage() {}
 
 func (x *CompleteMultipartUploadResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[13]
+	mi := &file_third_third_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -852,7 +912,7 @@ func (x *CompleteMultipartUploadResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteMultipartUploadResp.ProtoReflect.Descriptor instead.
 func (*CompleteMultipartUploadResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{13}
+	return file_third_third_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CompleteMultipartUploadResp) GetUrl() string {
@@ -872,7 +932,7 @@ type AccessURLReq struct {
 
 func (x *AccessURLReq) Reset() {
 	*x = AccessURLReq{}
-	mi := &file_third_third_proto_msgTypes[14]
+	mi := &file_third_third_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -884,7 +944,7 @@ func (x *AccessURLReq) String() string {
 func (*AccessURLReq) ProtoMessage() {}
 
 func (x *AccessURLReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[14]
+	mi := &file_third_third_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -897,7 +957,7 @@ func (x *AccessURLReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessURLReq.ProtoReflect.Descriptor instead.
 func (*AccessURLReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{14}
+	return file_third_third_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AccessURLReq) GetName() string {
@@ -924,7 +984,7 @@ type AccessURLResp struct {
 
 func (x *AccessURLResp) Reset() {
 	*x = AccessURLResp{}
-	mi := &file_third_third_proto_msgTypes[15]
+	mi := &file_third_third_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -936,7 +996,7 @@ func (x *AccessURLResp) String() string {
 func (*AccessURLResp) ProtoMessage() {}
 
 func (x *AccessURLResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[15]
+	mi := &file_third_third_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -949,7 +1009,7 @@ func (x *AccessURLResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessURLResp.ProtoReflect.Descriptor instead.
 func (*AccessURLResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{15}
+	return file_third_third_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AccessURLResp) GetUrl() string {
@@ -980,7 +1040,7 @@ type InitiateFormDataReq struct {
 
 func (x *InitiateFormDataReq) Reset() {
 	*x = InitiateFormDataReq{}
-	mi := &file_third_third_proto_msgTypes[16]
+	mi := &file_third_third_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -992,7 +1052,7 @@ func (x *InitiateFormDataReq) String() string {
 func (*InitiateFormDataReq) ProtoMessage() {}
 
 func (x *InitiateFormDataReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[16]
+	mi := &file_third_third_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1005,7 +1065,7 @@ func (x *InitiateFormDataReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitiateFormDataReq.ProtoReflect.Descriptor instead.
 func (*InitiateFormDataReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{16}
+	return file_third_third_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *InitiateFormDataReq) GetName() string {
@@ -1065,7 +1125,7 @@ type InitiateFormDataResp struct {
 
 func (x *InitiateFormDataResp) Reset() {
 	*x = InitiateFormDataResp{}
-	mi := &file_third_third_proto_msgTypes[17]
+	mi := &file_third_third_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1077,7 +1137,7 @@ func (x *InitiateFormDataResp) String() string {
 func (*InitiateFormDataResp) ProtoMessage() {}
 
 func (x *InitiateFormDataResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[17]
+	mi := &file_third_third_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1090,7 +1150,7 @@ func (x *InitiateFormDataResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitiateFormDataResp.ProtoReflect.Descriptor instead.
 func (*InitiateFormDataResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{17}
+	return file_third_third_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *InitiateFormDataResp) GetId() string {
@@ -1152,7 +1212,7 @@ type CompleteFormDataReq struct {
 
 func (x *CompleteFormDataReq) Reset() {
 	*x = CompleteFormDataReq{}
-	mi := &file_third_third_proto_msgTypes[18]
+	mi := &file_third_third_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1164,7 +1224,7 @@ func (x *CompleteFormDataReq) String() string {
 func (*CompleteFormDataReq) ProtoMessage() {}
 
 func (x *CompleteFormDataReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[18]
+	mi := &file_third_third_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1177,7 +1237,7 @@ func (x *CompleteFormDataReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteFormDataReq.ProtoReflect.Descriptor instead.
 func (*CompleteFormDataReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{18}
+	return file_third_third_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CompleteFormDataReq) GetId() string {
@@ -1203,7 +1263,7 @@ type CompleteFormDataResp struct {
 
 func (x *CompleteFormDataResp) Reset() {
 	*x = CompleteFormDataResp{}
-	mi := &file_third_third_proto_msgTypes[19]
+	mi := &file_third_third_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1215,7 +1275,7 @@ func (x *CompleteFormDataResp) String() string {
 func (*CompleteFormDataResp) ProtoMessage() {}
 
 func (x *CompleteFormDataResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[19]
+	mi := &file_third_third_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1228,7 +1288,7 @@ func (x *CompleteFormDataResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteFormDataResp.ProtoReflect.Descriptor instead.
 func (*CompleteFormDataResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{19}
+	return file_third_third_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CompleteFormDataResp) GetUrl() string {
@@ -1236,6 +1296,102 @@ func (x *CompleteFormDataResp) GetUrl() string {
 		return x.Url
 	}
 	return ""
+}
+
+type AbortMultipartUploadReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UploadID      string                 `protobuf:"bytes,1,opt,name=uploadID,proto3" json:"uploadID,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	UrlPrefix     string                 `protobuf:"bytes,3,opt,name=urlPrefix,proto3" json:"urlPrefix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbortMultipartUploadReq) Reset() {
+	*x = AbortMultipartUploadReq{}
+	mi := &file_third_third_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbortMultipartUploadReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbortMultipartUploadReq) ProtoMessage() {}
+
+func (x *AbortMultipartUploadReq) ProtoReflect() protoreflect.Message {
+	mi := &file_third_third_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbortMultipartUploadReq.ProtoReflect.Descriptor instead.
+func (*AbortMultipartUploadReq) Descriptor() ([]byte, []int) {
+	return file_third_third_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *AbortMultipartUploadReq) GetUploadID() string {
+	if x != nil {
+		return x.UploadID
+	}
+	return ""
+}
+
+func (x *AbortMultipartUploadReq) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AbortMultipartUploadReq) GetUrlPrefix() string {
+	if x != nil {
+		return x.UrlPrefix
+	}
+	return ""
+}
+
+type AbortMultipartUploadResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbortMultipartUploadResp) Reset() {
+	*x = AbortMultipartUploadResp{}
+	mi := &file_third_third_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbortMultipartUploadResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbortMultipartUploadResp) ProtoMessage() {}
+
+func (x *AbortMultipartUploadResp) ProtoReflect() protoreflect.Message {
+	mi := &file_third_third_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbortMultipartUploadResp.ProtoReflect.Descriptor instead.
+func (*AbortMultipartUploadResp) Descriptor() ([]byte, []int) {
+	return file_third_third_proto_rawDescGZIP(), []int{22}
 }
 
 type DeleteOutdatedDataReq struct {
@@ -1249,7 +1405,7 @@ type DeleteOutdatedDataReq struct {
 
 func (x *DeleteOutdatedDataReq) Reset() {
 	*x = DeleteOutdatedDataReq{}
-	mi := &file_third_third_proto_msgTypes[20]
+	mi := &file_third_third_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1261,7 +1417,7 @@ func (x *DeleteOutdatedDataReq) String() string {
 func (*DeleteOutdatedDataReq) ProtoMessage() {}
 
 func (x *DeleteOutdatedDataReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[20]
+	mi := &file_third_third_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1274,7 +1430,7 @@ func (x *DeleteOutdatedDataReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteOutdatedDataReq.ProtoReflect.Descriptor instead.
 func (*DeleteOutdatedDataReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{20}
+	return file_third_third_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DeleteOutdatedDataReq) GetExpireTime() int64 {
@@ -1307,7 +1463,7 @@ type DeleteOutdatedDataResp struct {
 
 func (x *DeleteOutdatedDataResp) Reset() {
 	*x = DeleteOutdatedDataResp{}
-	mi := &file_third_third_proto_msgTypes[21]
+	mi := &file_third_third_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1319,7 +1475,7 @@ func (x *DeleteOutdatedDataResp) String() string {
 func (*DeleteOutdatedDataResp) ProtoMessage() {}
 
 func (x *DeleteOutdatedDataResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[21]
+	mi := &file_third_third_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1332,7 +1488,7 @@ func (x *DeleteOutdatedDataResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteOutdatedDataResp.ProtoReflect.Descriptor instead.
 func (*DeleteOutdatedDataResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{21}
+	return file_third_third_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *DeleteOutdatedDataResp) GetCount() int32 {
@@ -1354,7 +1510,7 @@ type FcmUpdateTokenReq struct {
 
 func (x *FcmUpdateTokenReq) Reset() {
 	*x = FcmUpdateTokenReq{}
-	mi := &file_third_third_proto_msgTypes[22]
+	mi := &file_third_third_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1366,7 +1522,7 @@ func (x *FcmUpdateTokenReq) String() string {
 func (*FcmUpdateTokenReq) ProtoMessage() {}
 
 func (x *FcmUpdateTokenReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[22]
+	mi := &file_third_third_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1379,7 +1535,7 @@ func (x *FcmUpdateTokenReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FcmUpdateTokenReq.ProtoReflect.Descriptor instead.
 func (*FcmUpdateTokenReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{22}
+	return file_third_third_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *FcmUpdateTokenReq) GetPlatformID() int32 {
@@ -1418,7 +1574,7 @@ type FcmUpdateTokenResp struct {
 
 func (x *FcmUpdateTokenResp) Reset() {
 	*x = FcmUpdateTokenResp{}
-	mi := &file_third_third_proto_msgTypes[23]
+	mi := &file_third_third_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1430,7 +1586,7 @@ func (x *FcmUpdateTokenResp) String() string {
 func (*FcmUpdateTokenResp) ProtoMessage() {}
 
 func (x *FcmUpdateTokenResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[23]
+	mi := &file_third_third_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1443,7 +1599,7 @@ func (x *FcmUpdateTokenResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FcmUpdateTokenResp.ProtoReflect.Descriptor instead.
 func (*FcmUpdateTokenResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{23}
+	return file_third_third_proto_rawDescGZIP(), []int{26}
 }
 
 type SetAppBadgeReq struct {
@@ -1456,7 +1612,7 @@ type SetAppBadgeReq struct {
 
 func (x *SetAppBadgeReq) Reset() {
 	*x = SetAppBadgeReq{}
-	mi := &file_third_third_proto_msgTypes[24]
+	mi := &file_third_third_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1468,7 +1624,7 @@ func (x *SetAppBadgeReq) String() string {
 func (*SetAppBadgeReq) ProtoMessage() {}
 
 func (x *SetAppBadgeReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[24]
+	mi := &file_third_third_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1481,7 +1637,7 @@ func (x *SetAppBadgeReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAppBadgeReq.ProtoReflect.Descriptor instead.
 func (*SetAppBadgeReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{24}
+	return file_third_third_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *SetAppBadgeReq) GetUserID() string {
@@ -1506,7 +1662,7 @@ type SetAppBadgeResp struct {
 
 func (x *SetAppBadgeResp) Reset() {
 	*x = SetAppBadgeResp{}
-	mi := &file_third_third_proto_msgTypes[25]
+	mi := &file_third_third_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1518,7 +1674,7 @@ func (x *SetAppBadgeResp) String() string {
 func (*SetAppBadgeResp) ProtoMessage() {}
 
 func (x *SetAppBadgeResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[25]
+	mi := &file_third_third_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1531,20 +1687,20 @@ func (x *SetAppBadgeResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAppBadgeResp.ProtoReflect.Descriptor instead.
 func (*SetAppBadgeResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{25}
+	return file_third_third_proto_rawDescGZIP(), []int{28}
 }
 
 type FileURL struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Filename      string                 `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
-	URL           string                 `protobuf:"bytes,2,opt,name=URL,proto3" json:"URL,omitempty"`
+	FileName      string                 `protobuf:"bytes,1,opt,name=fileName,proto3" json:"fileName,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *FileURL) Reset() {
 	*x = FileURL{}
-	mi := &file_third_third_proto_msgTypes[26]
+	mi := &file_third_third_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1556,7 +1712,7 @@ func (x *FileURL) String() string {
 func (*FileURL) ProtoMessage() {}
 
 func (x *FileURL) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[26]
+	mi := &file_third_third_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1569,19 +1725,19 @@ func (x *FileURL) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileURL.ProtoReflect.Descriptor instead.
 func (*FileURL) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{26}
+	return file_third_third_proto_rawDescGZIP(), []int{29}
 }
 
-func (x *FileURL) GetFilename() string {
+func (x *FileURL) GetFileName() string {
 	if x != nil {
-		return x.Filename
+		return x.FileName
 	}
 	return ""
 }
 
-func (x *FileURL) GetURL() string {
+func (x *FileURL) GetUrl() string {
 	if x != nil {
-		return x.URL
+		return x.Url
 	}
 	return ""
 }
@@ -1591,15 +1747,15 @@ type UploadLogsReq struct {
 	Platform      int32                  `protobuf:"varint,1,opt,name=platform,proto3" json:"platform,omitempty"`
 	FileURLs      []*FileURL             `protobuf:"bytes,2,rep,name=fileURLs,proto3" json:"fileURLs,omitempty"`
 	AppFramework  string                 `protobuf:"bytes,3,opt,name=appFramework,proto3" json:"appFramework,omitempty"`
-	Version       string                 `protobuf:"bytes,5,opt,name=version,proto3" json:"version,omitempty"`
-	Ex            string                 `protobuf:"bytes,4,opt,name=ex,proto3" json:"ex,omitempty"`
+	Version       string                 `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`
+	Ex            string                 `protobuf:"bytes,5,opt,name=ex,proto3" json:"ex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UploadLogsReq) Reset() {
 	*x = UploadLogsReq{}
-	mi := &file_third_third_proto_msgTypes[27]
+	mi := &file_third_third_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1611,7 +1767,7 @@ func (x *UploadLogsReq) String() string {
 func (*UploadLogsReq) ProtoMessage() {}
 
 func (x *UploadLogsReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[27]
+	mi := &file_third_third_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1624,7 +1780,7 @@ func (x *UploadLogsReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadLogsReq.ProtoReflect.Descriptor instead.
 func (*UploadLogsReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{27}
+	return file_third_third_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *UploadLogsReq) GetPlatform() int32 {
@@ -1670,7 +1826,7 @@ type UploadLogsResp struct {
 
 func (x *UploadLogsResp) Reset() {
 	*x = UploadLogsResp{}
-	mi := &file_third_third_proto_msgTypes[28]
+	mi := &file_third_third_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1682,7 +1838,7 @@ func (x *UploadLogsResp) String() string {
 func (*UploadLogsResp) ProtoMessage() {}
 
 func (x *UploadLogsResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[28]
+	mi := &file_third_third_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1695,7 +1851,7 @@ func (x *UploadLogsResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadLogsResp.ProtoReflect.Descriptor instead.
 func (*UploadLogsResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{28}
+	return file_third_third_proto_rawDescGZIP(), []int{31}
 }
 
 type DeleteLogsReq struct {
@@ -1707,7 +1863,7 @@ type DeleteLogsReq struct {
 
 func (x *DeleteLogsReq) Reset() {
 	*x = DeleteLogsReq{}
-	mi := &file_third_third_proto_msgTypes[29]
+	mi := &file_third_third_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1719,7 +1875,7 @@ func (x *DeleteLogsReq) String() string {
 func (*DeleteLogsReq) ProtoMessage() {}
 
 func (x *DeleteLogsReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[29]
+	mi := &file_third_third_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1732,7 +1888,7 @@ func (x *DeleteLogsReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLogsReq.ProtoReflect.Descriptor instead.
 func (*DeleteLogsReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{29}
+	return file_third_third_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *DeleteLogsReq) GetLogIDs() []string {
@@ -1750,7 +1906,7 @@ type DeleteLogsResp struct {
 
 func (x *DeleteLogsResp) Reset() {
 	*x = DeleteLogsResp{}
-	mi := &file_third_third_proto_msgTypes[30]
+	mi := &file_third_third_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1762,7 +1918,7 @@ func (x *DeleteLogsResp) String() string {
 func (*DeleteLogsResp) ProtoMessage() {}
 
 func (x *DeleteLogsResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[30]
+	mi := &file_third_third_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1775,7 +1931,7 @@ func (x *DeleteLogsResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLogsResp.ProtoReflect.Descriptor instead.
 func (*DeleteLogsResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{30}
+	return file_third_third_proto_rawDescGZIP(), []int{33}
 }
 
 type SearchLogsReq struct {
@@ -1790,7 +1946,7 @@ type SearchLogsReq struct {
 
 func (x *SearchLogsReq) Reset() {
 	*x = SearchLogsReq{}
-	mi := &file_third_third_proto_msgTypes[31]
+	mi := &file_third_third_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1802,7 +1958,7 @@ func (x *SearchLogsReq) String() string {
 func (*SearchLogsReq) ProtoMessage() {}
 
 func (x *SearchLogsReq) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[31]
+	mi := &file_third_third_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1815,7 +1971,7 @@ func (x *SearchLogsReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchLogsReq.ProtoReflect.Descriptor instead.
 func (*SearchLogsReq) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{31}
+	return file_third_third_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SearchLogsReq) GetKeyword() string {
@@ -1864,7 +2020,7 @@ type LogInfo struct {
 
 func (x *LogInfo) Reset() {
 	*x = LogInfo{}
-	mi := &file_third_third_proto_msgTypes[32]
+	mi := &file_third_third_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1876,7 +2032,7 @@ func (x *LogInfo) String() string {
 func (*LogInfo) ProtoMessage() {}
 
 func (x *LogInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[32]
+	mi := &file_third_third_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1889,7 +2045,7 @@ func (x *LogInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogInfo.ProtoReflect.Descriptor instead.
 func (*LogInfo) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{32}
+	return file_third_third_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *LogInfo) GetUserID() string {
@@ -1964,7 +2120,7 @@ func (x *LogInfo) GetVersion() string {
 
 type SearchLogsResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	LogsInfos     []*LogInfo             `protobuf:"bytes,1,rep,name=logsInfos,proto3" json:"logsInfos,omitempty"`
+	Logs          []*LogInfo             `protobuf:"bytes,1,rep,name=logs,proto3" json:"logs,omitempty"`
 	Total         uint32                 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1972,7 +2128,7 @@ type SearchLogsResp struct {
 
 func (x *SearchLogsResp) Reset() {
 	*x = SearchLogsResp{}
-	mi := &file_third_third_proto_msgTypes[33]
+	mi := &file_third_third_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1984,7 +2140,7 @@ func (x *SearchLogsResp) String() string {
 func (*SearchLogsResp) ProtoMessage() {}
 
 func (x *SearchLogsResp) ProtoReflect() protoreflect.Message {
-	mi := &file_third_third_proto_msgTypes[33]
+	mi := &file_third_third_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1997,12 +2153,12 @@ func (x *SearchLogsResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchLogsResp.ProtoReflect.Descriptor instead.
 func (*SearchLogsResp) Descriptor() ([]byte, []int) {
-	return file_third_third_proto_rawDescGZIP(), []int{33}
+	return file_third_third_proto_rawDescGZIP(), []int{36}
 }
 
-func (x *SearchLogsResp) GetLogsInfos() []*LogInfo {
+func (x *SearchLogsResp) GetLogs() []*LogInfo {
 	if x != nil {
-		return x.LogsInfos
+		return x.Logs
 	}
 	return nil
 }
@@ -2044,7 +2200,7 @@ const file_third_third_proto_rawDesc = "" +
 	"\vPartSizeReq\x12\x12\n" +
 	"\x04size\x18\x01 \x01(\x03R\x04size\"\"\n" +
 	"\fPartSizeResp\x12\x12\n" +
-	"\x04size\x18\x02 \x01(\x03R\x04size\"\xe6\x01\n" +
+	"\x04size\x18\x01 \x01(\x03R\x04size\"\xe6\x01\n" +
 	"\x1aInitiateMultipartUploadReq\x12\x12\n" +
 	"\x04hash\x18\x01 \x01(\tR\x04hash\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\x12\x1a\n" +
@@ -2067,15 +2223,23 @@ const file_third_third_proto_rawDesc = "" +
 	"\x06upload\x18\x02 \x01(\v2\x18.openim.third.UploadInfoR\x06upload\"K\n" +
 	"\vAuthSignReq\x12\x1a\n" +
 	"\buploadID\x18\x01 \x01(\tR\buploadID\x12 \n" +
-	"\vpartNumbers\x18\x02 \x03(\x05R\vpartNumbers\"\xae\x01\n" +
+	"\vpartNumbers\x18\x02 \x03(\x05R\vpartNumbers\"\xce\x01\n" +
 	"\fAuthSignResp\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12-\n" +
 	"\x05query\x18\x02 \x03(\v2\x17.openim.third.KeyValuesR\x05query\x12/\n" +
 	"\x06header\x18\x03 \x03(\v2\x17.openim.third.KeyValuesR\x06header\x12,\n" +
-	"\x05parts\x18\x04 \x03(\v2\x16.openim.third.SignPartR\x05parts\"\xb8\x01\n" +
+	"\x05parts\x18\x04 \x03(\v2\x16.openim.third.SignPartR\x05parts\x12\x1e\n" +
+	"\n" +
+	"expireTime\x18\x05 \x01(\x03R\n" +
+	"expireTime\"C\n" +
+	"\rCompletedPart\x12\x1e\n" +
+	"\n" +
+	"partNumber\x18\x01 \x01(\x05R\n" +
+	"partNumber\x12\x12\n" +
+	"\x04eTag\x18\x02 \x01(\tR\x04eTag\"\xd5\x01\n" +
 	"\x1aCompleteMultipartUploadReq\x12\x1a\n" +
-	"\buploadID\x18\x01 \x01(\tR\buploadID\x12\x14\n" +
-	"\x05parts\x18\x02 \x03(\tR\x05parts\x12\x12\n" +
+	"\buploadID\x18\x01 \x01(\tR\buploadID\x121\n" +
+	"\x05parts\x18\x02 \x03(\v2\x1b.openim.third.CompletedPartR\x05parts\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
 	"\vcontentType\x18\x04 \x01(\tR\vcontentType\x12\x14\n" +
 	"\x05cause\x18\x05 \x01(\tR\x05cause\x12\x1c\n" +
@@ -2116,7 +2280,12 @@ const file_third_third_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\turlPrefix\x18\x02 \x01(\tR\turlPrefix\"(\n" +
 	"\x14CompleteFormDataResp\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\"o\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\"g\n" +
+	"\x17AbortMultipartUploadReq\x12\x1a\n" +
+	"\buploadID\x18\x01 \x01(\tR\buploadID\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
+	"\turlPrefix\x18\x03 \x01(\tR\turlPrefix\"\x1a\n" +
+	"\x18AbortMultipartUploadResp\"o\n" +
 	"\x15DeleteOutdatedDataReq\x12\x1e\n" +
 	"\n" +
 	"expireTime\x18\x01 \x01(\x03R\n" +
@@ -2139,15 +2308,15 @@ const file_third_third_proto_rawDesc = "" +
 	"\x06userID\x18\x01 \x01(\tR\x06userID\x12&\n" +
 	"\x0eappUnreadCount\x18\x02 \x01(\x05R\x0eappUnreadCount\"\x11\n" +
 	"\x0fSetAppBadgeResp\"7\n" +
-	"\afileURL\x12\x1a\n" +
-	"\bfilename\x18\x01 \x01(\tR\bfilename\x12\x10\n" +
-	"\x03URL\x18\x02 \x01(\tR\x03URL\"\xac\x01\n" +
+	"\aFileURL\x12\x1a\n" +
+	"\bfileName\x18\x01 \x01(\tR\bfileName\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\xac\x01\n" +
 	"\rUploadLogsReq\x12\x1a\n" +
 	"\bplatform\x18\x01 \x01(\x05R\bplatform\x121\n" +
-	"\bfileURLs\x18\x02 \x03(\v2\x15.openim.third.fileURLR\bfileURLs\x12\"\n" +
+	"\bfileURLs\x18\x02 \x03(\v2\x15.openim.third.FileURLR\bfileURLs\x12\"\n" +
 	"\fappFramework\x18\x03 \x01(\tR\fappFramework\x12\x18\n" +
-	"\aversion\x18\x05 \x01(\tR\aversion\x12\x0e\n" +
-	"\x02ex\x18\x04 \x01(\tR\x02ex\"\x10\n" +
+	"\aversion\x18\x04 \x01(\tR\aversion\x12\x0e\n" +
+	"\x02ex\x18\x05 \x01(\tR\x02ex\"\x10\n" +
 	"\x0eUploadLogsResp\"'\n" +
 	"\rDeleteLogsReq\x12\x16\n" +
 	"\x06logIDs\x18\x01 \x03(\tR\x06logIDs\"\x10\n" +
@@ -2174,16 +2343,17 @@ const file_third_third_proto_rawDesc = "" +
 	"systemType\x12\x0e\n" +
 	"\x02ex\x18\t \x01(\tR\x02ex\x12\x18\n" +
 	"\aversion\x18\n" +
-	" \x01(\tR\aversion\"[\n" +
-	"\x0eSearchLogsResp\x123\n" +
-	"\tlogsInfos\x18\x01 \x03(\v2\x15.openim.third.LogInfoR\tlogsInfos\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\rR\x05total2\x8c\t\n" +
-	"\x05third\x12D\n" +
+	" \x01(\tR\aversion\"Q\n" +
+	"\x0eSearchLogsResp\x12)\n" +
+	"\x04logs\x18\x01 \x03(\v2\x15.openim.third.LogInfoR\x04logs\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\rR\x05total2\xf3\t\n" +
+	"\x05Third\x12D\n" +
 	"\tPartLimit\x12\x1a.openim.third.PartLimitReq\x1a\x1b.openim.third.PartLimitResp\x12A\n" +
 	"\bPartSize\x12\x19.openim.third.PartSizeReq\x1a\x1a.openim.third.PartSizeResp\x12n\n" +
 	"\x17InitiateMultipartUpload\x12(.openim.third.InitiateMultipartUploadReq\x1a).openim.third.InitiateMultipartUploadResp\x12A\n" +
 	"\bAuthSign\x12\x19.openim.third.AuthSignReq\x1a\x1a.openim.third.AuthSignResp\x12n\n" +
-	"\x17CompleteMultipartUpload\x12(.openim.third.CompleteMultipartUploadReq\x1a).openim.third.CompleteMultipartUploadResp\x12D\n" +
+	"\x17CompleteMultipartUpload\x12(.openim.third.CompleteMultipartUploadReq\x1a).openim.third.CompleteMultipartUploadResp\x12e\n" +
+	"\x14AbortMultipartUpload\x12%.openim.third.AbortMultipartUploadReq\x1a&.openim.third.AbortMultipartUploadResp\x12D\n" +
 	"\tAccessURL\x12\x1a.openim.third.AccessURLReq\x1a\x1b.openim.third.AccessURLResp\x12Y\n" +
 	"\x10InitiateFormData\x12!.openim.third.InitiateFormDataReq\x1a\".openim.third.InitiateFormDataResp\x12Y\n" +
 	"\x10CompleteFormData\x12!.openim.third.CompleteFormDataReq\x1a\".openim.third.CompleteFormDataResp\x12_\n" +
@@ -2209,7 +2379,7 @@ func file_third_third_proto_rawDescGZIP() []byte {
 	return file_third_third_proto_rawDescData
 }
 
-var file_third_third_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
+var file_third_third_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_third_third_proto_goTypes = []any{
 	(*KeyValues)(nil),                   // 0: openim.third.KeyValues
 	(*SignPart)(nil),                    // 1: openim.third.SignPart
@@ -2223,31 +2393,34 @@ var file_third_third_proto_goTypes = []any{
 	(*InitiateMultipartUploadResp)(nil), // 9: openim.third.InitiateMultipartUploadResp
 	(*AuthSignReq)(nil),                 // 10: openim.third.AuthSignReq
 	(*AuthSignResp)(nil),                // 11: openim.third.AuthSignResp
-	(*CompleteMultipartUploadReq)(nil),  // 12: openim.third.CompleteMultipartUploadReq
-	(*CompleteMultipartUploadResp)(nil), // 13: openim.third.CompleteMultipartUploadResp
-	(*AccessURLReq)(nil),                // 14: openim.third.AccessURLReq
-	(*AccessURLResp)(nil),               // 15: openim.third.AccessURLResp
-	(*InitiateFormDataReq)(nil),         // 16: openim.third.InitiateFormDataReq
-	(*InitiateFormDataResp)(nil),        // 17: openim.third.InitiateFormDataResp
-	(*CompleteFormDataReq)(nil),         // 18: openim.third.CompleteFormDataReq
-	(*CompleteFormDataResp)(nil),        // 19: openim.third.CompleteFormDataResp
-	(*DeleteOutdatedDataReq)(nil),       // 20: openim.third.DeleteOutdatedDataReq
-	(*DeleteOutdatedDataResp)(nil),      // 21: openim.third.DeleteOutdatedDataResp
-	(*FcmUpdateTokenReq)(nil),           // 22: openim.third.FcmUpdateTokenReq
-	(*FcmUpdateTokenResp)(nil),          // 23: openim.third.FcmUpdateTokenResp
-	(*SetAppBadgeReq)(nil),              // 24: openim.third.SetAppBadgeReq
-	(*SetAppBadgeResp)(nil),             // 25: openim.third.SetAppBadgeResp
-	(*FileURL)(nil),                     // 26: openim.third.fileURL
-	(*UploadLogsReq)(nil),               // 27: openim.third.UploadLogsReq
-	(*UploadLogsResp)(nil),              // 28: openim.third.UploadLogsResp
-	(*DeleteLogsReq)(nil),               // 29: openim.third.DeleteLogsReq
-	(*DeleteLogsResp)(nil),              // 30: openim.third.DeleteLogsResp
-	(*SearchLogsReq)(nil),               // 31: openim.third.SearchLogsReq
-	(*LogInfo)(nil),                     // 32: openim.third.LogInfo
-	(*SearchLogsResp)(nil),              // 33: openim.third.SearchLogsResp
-	nil,                                 // 34: openim.third.AccessURLReq.QueryEntry
-	nil,                                 // 35: openim.third.InitiateFormDataResp.FormDataEntry
-	(*sdkws.RequestPagination)(nil),     // 36: openim.sdkws.RequestPagination
+	(*CompletedPart)(nil),               // 12: openim.third.CompletedPart
+	(*CompleteMultipartUploadReq)(nil),  // 13: openim.third.CompleteMultipartUploadReq
+	(*CompleteMultipartUploadResp)(nil), // 14: openim.third.CompleteMultipartUploadResp
+	(*AccessURLReq)(nil),                // 15: openim.third.AccessURLReq
+	(*AccessURLResp)(nil),               // 16: openim.third.AccessURLResp
+	(*InitiateFormDataReq)(nil),         // 17: openim.third.InitiateFormDataReq
+	(*InitiateFormDataResp)(nil),        // 18: openim.third.InitiateFormDataResp
+	(*CompleteFormDataReq)(nil),         // 19: openim.third.CompleteFormDataReq
+	(*CompleteFormDataResp)(nil),        // 20: openim.third.CompleteFormDataResp
+	(*AbortMultipartUploadReq)(nil),     // 21: openim.third.AbortMultipartUploadReq
+	(*AbortMultipartUploadResp)(nil),    // 22: openim.third.AbortMultipartUploadResp
+	(*DeleteOutdatedDataReq)(nil),       // 23: openim.third.DeleteOutdatedDataReq
+	(*DeleteOutdatedDataResp)(nil),      // 24: openim.third.DeleteOutdatedDataResp
+	(*FcmUpdateTokenReq)(nil),           // 25: openim.third.FcmUpdateTokenReq
+	(*FcmUpdateTokenResp)(nil),          // 26: openim.third.FcmUpdateTokenResp
+	(*SetAppBadgeReq)(nil),              // 27: openim.third.SetAppBadgeReq
+	(*SetAppBadgeResp)(nil),             // 28: openim.third.SetAppBadgeResp
+	(*FileURL)(nil),                     // 29: openim.third.FileURL
+	(*UploadLogsReq)(nil),               // 30: openim.third.UploadLogsReq
+	(*UploadLogsResp)(nil),              // 31: openim.third.UploadLogsResp
+	(*DeleteLogsReq)(nil),               // 32: openim.third.DeleteLogsReq
+	(*DeleteLogsResp)(nil),              // 33: openim.third.DeleteLogsResp
+	(*SearchLogsReq)(nil),               // 34: openim.third.SearchLogsReq
+	(*LogInfo)(nil),                     // 35: openim.third.LogInfo
+	(*SearchLogsResp)(nil),              // 36: openim.third.SearchLogsResp
+	nil,                                 // 37: openim.third.AccessURLReq.QueryEntry
+	nil,                                 // 38: openim.third.InitiateFormDataResp.FormDataEntry
+	(*sdkws.RequestPagination)(nil),     // 39: openim.sdkws.RequestPagination
 }
 var file_third_third_proto_depIdxs = []int32{
 	0,  // 0: openim.third.SignPart.query:type_name -> openim.third.KeyValues
@@ -2260,45 +2433,48 @@ var file_third_third_proto_depIdxs = []int32{
 	0,  // 7: openim.third.AuthSignResp.query:type_name -> openim.third.KeyValues
 	0,  // 8: openim.third.AuthSignResp.header:type_name -> openim.third.KeyValues
 	1,  // 9: openim.third.AuthSignResp.parts:type_name -> openim.third.SignPart
-	34, // 10: openim.third.AccessURLReq.query:type_name -> openim.third.AccessURLReq.QueryEntry
-	0,  // 11: openim.third.InitiateFormDataResp.header:type_name -> openim.third.KeyValues
-	35, // 12: openim.third.InitiateFormDataResp.formData:type_name -> openim.third.InitiateFormDataResp.FormDataEntry
-	26, // 13: openim.third.UploadLogsReq.fileURLs:type_name -> openim.third.fileURL
-	36, // 14: openim.third.SearchLogsReq.pagination:type_name -> openim.sdkws.RequestPagination
-	32, // 15: openim.third.SearchLogsResp.logsInfos:type_name -> openim.third.LogInfo
-	3,  // 16: openim.third.third.PartLimit:input_type -> openim.third.PartLimitReq
-	5,  // 17: openim.third.third.PartSize:input_type -> openim.third.PartSizeReq
-	7,  // 18: openim.third.third.InitiateMultipartUpload:input_type -> openim.third.InitiateMultipartUploadReq
-	10, // 19: openim.third.third.AuthSign:input_type -> openim.third.AuthSignReq
-	12, // 20: openim.third.third.CompleteMultipartUpload:input_type -> openim.third.CompleteMultipartUploadReq
-	14, // 21: openim.third.third.AccessURL:input_type -> openim.third.AccessURLReq
-	16, // 22: openim.third.third.InitiateFormData:input_type -> openim.third.InitiateFormDataReq
-	18, // 23: openim.third.third.CompleteFormData:input_type -> openim.third.CompleteFormDataReq
-	20, // 24: openim.third.third.DeleteOutdatedData:input_type -> openim.third.DeleteOutdatedDataReq
-	22, // 25: openim.third.third.FcmUpdateToken:input_type -> openim.third.FcmUpdateTokenReq
-	24, // 26: openim.third.third.SetAppBadge:input_type -> openim.third.SetAppBadgeReq
-	27, // 27: openim.third.third.UploadLogs:input_type -> openim.third.UploadLogsReq
-	29, // 28: openim.third.third.DeleteLogs:input_type -> openim.third.DeleteLogsReq
-	31, // 29: openim.third.third.SearchLogs:input_type -> openim.third.SearchLogsReq
-	4,  // 30: openim.third.third.PartLimit:output_type -> openim.third.PartLimitResp
-	6,  // 31: openim.third.third.PartSize:output_type -> openim.third.PartSizeResp
-	9,  // 32: openim.third.third.InitiateMultipartUpload:output_type -> openim.third.InitiateMultipartUploadResp
-	11, // 33: openim.third.third.AuthSign:output_type -> openim.third.AuthSignResp
-	13, // 34: openim.third.third.CompleteMultipartUpload:output_type -> openim.third.CompleteMultipartUploadResp
-	15, // 35: openim.third.third.AccessURL:output_type -> openim.third.AccessURLResp
-	17, // 36: openim.third.third.InitiateFormData:output_type -> openim.third.InitiateFormDataResp
-	19, // 37: openim.third.third.CompleteFormData:output_type -> openim.third.CompleteFormDataResp
-	21, // 38: openim.third.third.DeleteOutdatedData:output_type -> openim.third.DeleteOutdatedDataResp
-	23, // 39: openim.third.third.FcmUpdateToken:output_type -> openim.third.FcmUpdateTokenResp
-	25, // 40: openim.third.third.SetAppBadge:output_type -> openim.third.SetAppBadgeResp
-	28, // 41: openim.third.third.UploadLogs:output_type -> openim.third.UploadLogsResp
-	30, // 42: openim.third.third.DeleteLogs:output_type -> openim.third.DeleteLogsResp
-	33, // 43: openim.third.third.SearchLogs:output_type -> openim.third.SearchLogsResp
-	30, // [30:44] is the sub-list for method output_type
-	16, // [16:30] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	12, // 10: openim.third.CompleteMultipartUploadReq.parts:type_name -> openim.third.CompletedPart
+	37, // 11: openim.third.AccessURLReq.query:type_name -> openim.third.AccessURLReq.QueryEntry
+	0,  // 12: openim.third.InitiateFormDataResp.header:type_name -> openim.third.KeyValues
+	38, // 13: openim.third.InitiateFormDataResp.formData:type_name -> openim.third.InitiateFormDataResp.FormDataEntry
+	29, // 14: openim.third.UploadLogsReq.fileURLs:type_name -> openim.third.FileURL
+	39, // 15: openim.third.SearchLogsReq.pagination:type_name -> openim.sdkws.RequestPagination
+	35, // 16: openim.third.SearchLogsResp.logs:type_name -> openim.third.LogInfo
+	3,  // 17: openim.third.Third.PartLimit:input_type -> openim.third.PartLimitReq
+	5,  // 18: openim.third.Third.PartSize:input_type -> openim.third.PartSizeReq
+	7,  // 19: openim.third.Third.InitiateMultipartUpload:input_type -> openim.third.InitiateMultipartUploadReq
+	10, // 20: openim.third.Third.AuthSign:input_type -> openim.third.AuthSignReq
+	13, // 21: openim.third.Third.CompleteMultipartUpload:input_type -> openim.third.CompleteMultipartUploadReq
+	21, // 22: openim.third.Third.AbortMultipartUpload:input_type -> openim.third.AbortMultipartUploadReq
+	15, // 23: openim.third.Third.AccessURL:input_type -> openim.third.AccessURLReq
+	17, // 24: openim.third.Third.InitiateFormData:input_type -> openim.third.InitiateFormDataReq
+	19, // 25: openim.third.Third.CompleteFormData:input_type -> openim.third.CompleteFormDataReq
+	23, // 26: openim.third.Third.DeleteOutdatedData:input_type -> openim.third.DeleteOutdatedDataReq
+	25, // 27: openim.third.Third.FcmUpdateToken:input_type -> openim.third.FcmUpdateTokenReq
+	27, // 28: openim.third.Third.SetAppBadge:input_type -> openim.third.SetAppBadgeReq
+	30, // 29: openim.third.Third.UploadLogs:input_type -> openim.third.UploadLogsReq
+	32, // 30: openim.third.Third.DeleteLogs:input_type -> openim.third.DeleteLogsReq
+	34, // 31: openim.third.Third.SearchLogs:input_type -> openim.third.SearchLogsReq
+	4,  // 32: openim.third.Third.PartLimit:output_type -> openim.third.PartLimitResp
+	6,  // 33: openim.third.Third.PartSize:output_type -> openim.third.PartSizeResp
+	9,  // 34: openim.third.Third.InitiateMultipartUpload:output_type -> openim.third.InitiateMultipartUploadResp
+	11, // 35: openim.third.Third.AuthSign:output_type -> openim.third.AuthSignResp
+	14, // 36: openim.third.Third.CompleteMultipartUpload:output_type -> openim.third.CompleteMultipartUploadResp
+	22, // 37: openim.third.Third.AbortMultipartUpload:output_type -> openim.third.AbortMultipartUploadResp
+	16, // 38: openim.third.Third.AccessURL:output_type -> openim.third.AccessURLResp
+	18, // 39: openim.third.Third.InitiateFormData:output_type -> openim.third.InitiateFormDataResp
+	20, // 40: openim.third.Third.CompleteFormData:output_type -> openim.third.CompleteFormDataResp
+	24, // 41: openim.third.Third.DeleteOutdatedData:output_type -> openim.third.DeleteOutdatedDataResp
+	26, // 42: openim.third.Third.FcmUpdateToken:output_type -> openim.third.FcmUpdateTokenResp
+	28, // 43: openim.third.Third.SetAppBadge:output_type -> openim.third.SetAppBadgeResp
+	31, // 44: openim.third.Third.UploadLogs:output_type -> openim.third.UploadLogsResp
+	33, // 45: openim.third.Third.DeleteLogs:output_type -> openim.third.DeleteLogsResp
+	36, // 46: openim.third.Third.SearchLogs:output_type -> openim.third.SearchLogsResp
+	32, // [32:47] is the sub-list for method output_type
+	17, // [17:32] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_third_third_proto_init() }
@@ -2312,7 +2488,7 @@ func file_third_third_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_third_third_proto_rawDesc), len(file_third_third_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   36,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

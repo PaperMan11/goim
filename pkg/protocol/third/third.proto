@@ -37,7 +37,7 @@ message PartSizeReq {
 }
 
 message PartSizeResp {
-  int64 size = 2;
+  int64 size = 1;
 }
 
 message InitiateMultipartUploadReq {
@@ -73,11 +73,17 @@ message AuthSignResp {
   repeated KeyValues query = 2;
   repeated KeyValues header = 3;
   repeated SignPart parts = 4;
+  int64 expireTime = 5;
+}
+
+message CompletedPart {
+  int32 partNumber = 1;
+  string eTag = 2;
 }
 
 message CompleteMultipartUploadReq {
   string uploadID = 1;
-  repeated string parts = 2;
+  repeated CompletedPart parts = 2;
   string name = 3;
   string contentType = 4;
   string cause = 5;
@@ -126,6 +132,14 @@ message CompleteFormDataResp {
   string url = 1;
 }
 
+message AbortMultipartUploadReq {
+  string uploadID = 1;
+  string name = 2;
+  string urlPrefix = 3;
+}
+
+message AbortMultipartUploadResp {}
+
 message DeleteOutdatedDataReq {
   int64 expireTime = 1;
   repeated string objectGroup = 2;
@@ -152,17 +166,17 @@ message SetAppBadgeReq {
 
 message SetAppBadgeResp {}
 
-message fileURL {
-  string filename = 1;
-  string URL = 2;
+message FileURL {
+  string fileName = 1;
+  string url = 2;
 }
 
 message UploadLogsReq {
   int32 platform = 1;
-  repeated fileURL fileURLs = 2;
+  repeated FileURL fileURLs = 2;
   string appFramework = 3;
-  string version = 5;
-  string ex = 4;
+  string version = 4;
+  string ex = 5;
 }
 
 message UploadLogsResp {}
@@ -194,16 +208,17 @@ message LogInfo {
 }
 
 message SearchLogsResp {
-  repeated LogInfo logsInfos = 1;
+  repeated LogInfo logs = 1;
   uint32 total = 2;
 }
 
-service third {
+service Third {
   rpc PartLimit(PartLimitReq) returns (PartLimitResp);
   rpc PartSize(PartSizeReq) returns (PartSizeResp);
   rpc InitiateMultipartUpload(InitiateMultipartUploadReq) returns (InitiateMultipartUploadResp);
   rpc AuthSign(AuthSignReq) returns (AuthSignResp);
   rpc CompleteMultipartUpload(CompleteMultipartUploadReq) returns (CompleteMultipartUploadResp);
+  rpc AbortMultipartUpload(AbortMultipartUploadReq) returns (AbortMultipartUploadResp);
   rpc AccessURL(AccessURLReq) returns (AccessURLResp);
   rpc InitiateFormData(InitiateFormDataReq) returns (InitiateFormDataResp);
   rpc CompleteFormData(CompleteFormDataReq) returns (CompleteFormDataResp);

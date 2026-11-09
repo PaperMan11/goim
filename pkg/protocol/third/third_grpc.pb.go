@@ -19,20 +19,21 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Third_PartLimit_FullMethodName               = "/openim.third.third/PartLimit"
-	Third_PartSize_FullMethodName                = "/openim.third.third/PartSize"
-	Third_InitiateMultipartUpload_FullMethodName = "/openim.third.third/InitiateMultipartUpload"
-	Third_AuthSign_FullMethodName                = "/openim.third.third/AuthSign"
-	Third_CompleteMultipartUpload_FullMethodName = "/openim.third.third/CompleteMultipartUpload"
-	Third_AccessURL_FullMethodName               = "/openim.third.third/AccessURL"
-	Third_InitiateFormData_FullMethodName        = "/openim.third.third/InitiateFormData"
-	Third_CompleteFormData_FullMethodName        = "/openim.third.third/CompleteFormData"
-	Third_DeleteOutdatedData_FullMethodName      = "/openim.third.third/DeleteOutdatedData"
-	Third_FcmUpdateToken_FullMethodName          = "/openim.third.third/FcmUpdateToken"
-	Third_SetAppBadge_FullMethodName             = "/openim.third.third/SetAppBadge"
-	Third_UploadLogs_FullMethodName              = "/openim.third.third/UploadLogs"
-	Third_DeleteLogs_FullMethodName              = "/openim.third.third/DeleteLogs"
-	Third_SearchLogs_FullMethodName              = "/openim.third.third/SearchLogs"
+	Third_PartLimit_FullMethodName               = "/openim.third.Third/PartLimit"
+	Third_PartSize_FullMethodName                = "/openim.third.Third/PartSize"
+	Third_InitiateMultipartUpload_FullMethodName = "/openim.third.Third/InitiateMultipartUpload"
+	Third_AuthSign_FullMethodName                = "/openim.third.Third/AuthSign"
+	Third_CompleteMultipartUpload_FullMethodName = "/openim.third.Third/CompleteMultipartUpload"
+	Third_AbortMultipartUpload_FullMethodName    = "/openim.third.Third/AbortMultipartUpload"
+	Third_AccessURL_FullMethodName               = "/openim.third.Third/AccessURL"
+	Third_InitiateFormData_FullMethodName        = "/openim.third.Third/InitiateFormData"
+	Third_CompleteFormData_FullMethodName        = "/openim.third.Third/CompleteFormData"
+	Third_DeleteOutdatedData_FullMethodName      = "/openim.third.Third/DeleteOutdatedData"
+	Third_FcmUpdateToken_FullMethodName          = "/openim.third.Third/FcmUpdateToken"
+	Third_SetAppBadge_FullMethodName             = "/openim.third.Third/SetAppBadge"
+	Third_UploadLogs_FullMethodName              = "/openim.third.Third/UploadLogs"
+	Third_DeleteLogs_FullMethodName              = "/openim.third.Third/DeleteLogs"
+	Third_SearchLogs_FullMethodName              = "/openim.third.Third/SearchLogs"
 )
 
 // ThirdClient is the client API for Third service.
@@ -44,6 +45,7 @@ type ThirdClient interface {
 	InitiateMultipartUpload(ctx context.Context, in *InitiateMultipartUploadReq, opts ...grpc.CallOption) (*InitiateMultipartUploadResp, error)
 	AuthSign(ctx context.Context, in *AuthSignReq, opts ...grpc.CallOption) (*AuthSignResp, error)
 	CompleteMultipartUpload(ctx context.Context, in *CompleteMultipartUploadReq, opts ...grpc.CallOption) (*CompleteMultipartUploadResp, error)
+	AbortMultipartUpload(ctx context.Context, in *AbortMultipartUploadReq, opts ...grpc.CallOption) (*AbortMultipartUploadResp, error)
 	AccessURL(ctx context.Context, in *AccessURLReq, opts ...grpc.CallOption) (*AccessURLResp, error)
 	InitiateFormData(ctx context.Context, in *InitiateFormDataReq, opts ...grpc.CallOption) (*InitiateFormDataResp, error)
 	CompleteFormData(ctx context.Context, in *CompleteFormDataReq, opts ...grpc.CallOption) (*CompleteFormDataResp, error)
@@ -108,6 +110,16 @@ func (c *thirdClient) CompleteMultipartUpload(ctx context.Context, in *CompleteM
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CompleteMultipartUploadResp)
 	err := c.cc.Invoke(ctx, Third_CompleteMultipartUpload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *thirdClient) AbortMultipartUpload(ctx context.Context, in *AbortMultipartUploadReq, opts ...grpc.CallOption) (*AbortMultipartUploadResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AbortMultipartUploadResp)
+	err := c.cc.Invoke(ctx, Third_AbortMultipartUpload_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +225,7 @@ type ThirdServer interface {
 	InitiateMultipartUpload(context.Context, *InitiateMultipartUploadReq) (*InitiateMultipartUploadResp, error)
 	AuthSign(context.Context, *AuthSignReq) (*AuthSignResp, error)
 	CompleteMultipartUpload(context.Context, *CompleteMultipartUploadReq) (*CompleteMultipartUploadResp, error)
+	AbortMultipartUpload(context.Context, *AbortMultipartUploadReq) (*AbortMultipartUploadResp, error)
 	AccessURL(context.Context, *AccessURLReq) (*AccessURLResp, error)
 	InitiateFormData(context.Context, *InitiateFormDataReq) (*InitiateFormDataResp, error)
 	CompleteFormData(context.Context, *CompleteFormDataReq) (*CompleteFormDataResp, error)
@@ -247,6 +260,9 @@ func (UnimplementedThirdServer) AuthSign(context.Context, *AuthSignReq) (*AuthSi
 }
 func (UnimplementedThirdServer) CompleteMultipartUpload(context.Context, *CompleteMultipartUploadReq) (*CompleteMultipartUploadResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompleteMultipartUpload not implemented")
+}
+func (UnimplementedThirdServer) AbortMultipartUpload(context.Context, *AbortMultipartUploadReq) (*AbortMultipartUploadResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AbortMultipartUpload not implemented")
 }
 func (UnimplementedThirdServer) AccessURL(context.Context, *AccessURLReq) (*AccessURLResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AccessURL not implemented")
@@ -382,6 +398,24 @@ func _Third_CompleteMultipartUpload_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ThirdServer).CompleteMultipartUpload(ctx, req.(*CompleteMultipartUploadReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Third_AbortMultipartUpload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AbortMultipartUploadReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ThirdServer).AbortMultipartUpload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Third_AbortMultipartUpload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ThirdServer).AbortMultipartUpload(ctx, req.(*AbortMultipartUploadReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -552,7 +586,7 @@ func _Third_SearchLogs_Handler(srv interface{}, ctx context.Context, dec func(in
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Third_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "openim.third.third",
+	ServiceName: "openim.third.Third",
 	HandlerType: (*ThirdServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -574,6 +608,10 @@ var Third_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompleteMultipartUpload",
 			Handler:    _Third_CompleteMultipartUpload_Handler,
+		},
+		{
+			MethodName: "AbortMultipartUpload",
+			Handler:    _Third_AbortMultipartUpload_Handler,
 		},
 		{
 			MethodName: "AccessURL",
