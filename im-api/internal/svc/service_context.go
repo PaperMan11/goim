@@ -15,6 +15,7 @@ import (
 	groupservice "github.com/PaperMan11/goim/pkg/rpcclient/groupservice"
 	msgservice "github.com/PaperMan11/goim/pkg/rpcclient/msgservice"
 	relationservice "github.com/PaperMan11/goim/pkg/rpcclient/relationservice"
+	thirdservice "github.com/PaperMan11/goim/pkg/rpcclient/thirdservice"
 	"github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -37,6 +38,7 @@ type ServiceContext struct {
 	GroupService    groupservice.GroupService
 	MsgService      msgservice.MsgService
 	AuthService     authservice.AuthService
+	ThirdService    thirdservice.ThirdService
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -60,6 +62,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		msgServiceWrapperCache      msgServiceCache.MsgServiceWrapperCache
 		authService                 authservice.AuthService
 		authServiceWrapperCache     authserviceCache.AuthServiceWrapperCache
+		thirdService                thirdservice.ThirdService
 	)
 	if c.UserRpc.Stub {
 		userService = userservice.NewStubUserService()
@@ -91,6 +94,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	} else {
 		authService = authservice.NewAuthService(rpcclient.MustNewClient(c.AuthRpc.RpcClientConf, clientOpts...))
 	}
+	if c.ThirdRpc.Stub {
+		thirdService = thirdservice.NewStubThirdService()
+	} else {
+		thirdService = thirdservice.NewThirdService(rpcclient.MustNewClient(c.ThirdRpc.RpcClientConf, clientOpts...))
+	}
 	redisCli := sredis.MustNewRedis(c.Redis)
 	localCache := localcache.MustNewLocalCache(c.LocalCacheConf, redisCli)
 	localCache.Start()
@@ -115,6 +123,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		GroupService:    groupServiceWrapperCache,
 		MsgService:      msgServiceWrapperCache,
 		AuthService:     authServiceWrapperCache,
+		ThirdService:    thirdService,
 	}
 }
 

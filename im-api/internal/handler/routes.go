@@ -6,6 +6,7 @@ import (
 	"github.com/PaperMan11/goim/im-api/internal/handler/group"
 	"github.com/PaperMan11/goim/im-api/internal/handler/msg"
 	"github.com/PaperMan11/goim/im-api/internal/handler/relation"
+	"github.com/PaperMan11/goim/im-api/internal/handler/third"
 	"github.com/PaperMan11/goim/im-api/internal/handler/user"
 	"github.com/PaperMan11/goim/im-api/internal/middlewares"
 	"github.com/PaperMan11/goim/im-api/internal/svc"
@@ -26,5 +27,6 @@ func InitRoutes(svc *svc.ServiceContext) *gin.Engine {
 	group.InitRoutes(baseRoute, svc)
 	relation.InitRoutes(baseRoute, svc)
 	conversation.InitRoutes(baseRoute, svc)
+	third.InitRoutes(baseRoute, svc)
 	return r
 }

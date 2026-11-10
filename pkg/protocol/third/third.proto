@@ -66,6 +66,8 @@ message InitiateMultipartUploadResp {
 message AuthSignReq {
   string uploadID = 1;
   repeated int32 partNumbers = 2;
+  string name = 3;        // S3 object key（不含 bucket）
+  string urlPrefix = 4;   // 可选，与 InitiateMultipartUploadReq.urlPrefix 对齐
 }
 
 message AuthSignResp {
@@ -97,6 +99,7 @@ message CompleteMultipartUploadResp {
 message AccessURLReq {
   string name = 1;
   map<string, string> query = 2;
+  string urlPrefix = 3;   // 可选，与 InitiateMultipartUploadReq.urlPrefix 对齐
 }
 
 message AccessURLResp {

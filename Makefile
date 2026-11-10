@@ -1,9 +1,9 @@
 # =============================================================================
 # GoIM Makefile
 #
-# 服务清单（11 个）：
+# 服务清单（12 个）：
 #   应用层 : api msggateway cron msgtransfer push   （入口 ./im-<name>/cmd）
-#   RPC 层 : auth conversation group msg relation user（入口 ./im-rpc/<name>）
+#   RPC 层 : auth conversation group msg relation user third（入口 ./im-rpc/<name>）
 #
 # 注意：各服务配置中的日志路径为相对路径（如 logs/im-api），因此启动时
 #       工作目录必须为服务目录，本文件已通过 Start-Process -WorkingDirectory
@@ -30,7 +30,7 @@ endif
 # 应用层服务（二进制名 = 服务名）
 APPS := api msggateway cron msgtransfer push
 # RPC 服务（二进制名统一加 rpc- 前缀）
-RPCS := auth conversation group msg relation user
+RPCS := auth conversation group msg relation user third
 
 ALL_SVC := $(APPS) $(RPCS)
 
@@ -133,7 +133,7 @@ $(foreach s,$(RPCS),\
 # -----------------------------------------------------------------------------
 # 目标声明
 # -----------------------------------------------------------------------------
-.PHONY: all help build start stop restart status dirs test vet fmt tidy proto clean clean-logs clean-all
+.PHONY: all help build start stop restart status dirs test test-e2e test-e2e-s3 vet fmt tidy proto clean clean-logs clean-all
 .PHONY: $(addprefix build-,$(ALL_SVC)) $(addprefix start-,$(ALL_SVC)) \
         $(addprefix stop-,$(ALL_SVC))  $(addprefix restart-,$(ALL_SVC)) \
         $(addprefix status-,$(ALL_SVC)) $(addprefix logs-,$(ALL_SVC))
@@ -195,6 +195,17 @@ status: $(addprefix status-,$(ALL_SVC))
 test:
 	$(GO) test ./...
 
+# ----- E2E 集成测试（需要外部依赖，不在 CI 里自动跑） -------------------------
+# RustFS / MinIO / AWS S3 必须先启动，默认 endpoint http://192.168.241.128:9000
+# 可通过环境变量覆盖：RUSTFS_ENDPOINT RUSTFS_ACCESS_KEY RUSTFS_SECRET_KEY RUSTFS_BUCKET
+
+test-e2e-s3:
+	@echo "[e2e] running S3 / RustFS adapter integration test..."
+	$(GO) run ./test/e2e-s3
+
+test-e2e: test-e2e-s3
+	@echo "[e2e] all integration tests passed"
+
 vet:
 	$(GO) vet ./...
 
@@ -235,18 +246,20 @@ $(BIN_DIR) $(LOG_DIR) $(RUN_DIR):
 
 help:
 	@echo GoIM Makefile - available targets:
-	@echo   build            Build all 11 binaries into $(BIN_DIR)/
-	@echo   build-SVC        Build a single service, e.g. build-api / build-msg
+	@echo   build            Build all 12 binaries into $(BIN_DIR)/
+	@echo   build-SVC        Build a single service, e.g. build-api / build-third
 	@echo   start            Build and start all services [background, pid in $(RUN_DIR)/]
 	@echo   stop             Stop all services
 	@echo   restart          Stop then start all services
 	@echo   status           Show running status of all services
 	@echo   start-SVC        Start one service: api msggateway cron msgtransfer push
-	@echo                    auth conversation group msg relation user
+	@echo                    auth conversation group msg relation user third
 	@echo   stop-SVC         Stop one service
 	@echo   restart-SVC      Restart one service
 	@echo   logs-SVC         Follow one service stdout log [$(LOG_DIR)/SVC.out.log]
 	@echo   test             Run go test ./...
+	@echo   test-e2e-s3      Run S3 / RustFS adapter integration test (requires RustFS)
+	@echo   test-e2e         Run all integration tests
 	@echo   vet              Run go vet ./...
 	@echo   fmt              Run gofmt -s -w .
 	@echo   tidy             Run go mod tidy

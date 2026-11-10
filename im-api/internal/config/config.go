@@ -20,6 +20,7 @@ type Config struct {
 	RelationRpc rpcclient.RpcConf
 	GroupRpc    rpcclient.RpcConf
 	MsgRpc      rpcclient.RpcConf
+	ThirdRpc    rpcclient.RpcConf
 }
 
 type ServerConf struct {

@@ -1,0 +1,30 @@
+Name: third.rpc
+ListenOn: 0.0.0.0:18020
+Mode: dev
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: third.rpc
+
+Log:
+  ServiceName: third.rpc
+  Stat: false
+  Mode: console
+  Encoding: plain
+  Level: debug
+
+Prometheus:
+  Host: 0.0.0.0
+  Port: 28020
+  Path: /metrics
+
+# RustFS / S3 兼容对象存储配置
+RustFS:
+  Endpoint: "http://127.0.0.1:9000"
+  PublicEndpoint: "http://127.0.0.1:9000"
+  AccessKey: "ah0inZPqYH4ur2vZdZMG"
+  SecretKey: "vZqRJJz7DA8fvHBoTJYIEhLcWSUd1k7V1r2e0m1i"
+  Region: "us-east-1"
+  Bucket: "goim-files"
+  UsePathStyle: true
+  PresignExpire: 3600

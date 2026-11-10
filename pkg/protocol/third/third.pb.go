@@ -618,6 +618,8 @@ type AuthSignReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UploadID      string                 `protobuf:"bytes,1,opt,name=uploadID,proto3" json:"uploadID,omitempty"`
 	PartNumbers   []int32                `protobuf:"varint,2,rep,packed,name=partNumbers,proto3" json:"partNumbers,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`           // S3 object key（不含 bucket）
+	UrlPrefix     string                 `protobuf:"bytes,4,opt,name=urlPrefix,proto3" json:"urlPrefix,omitempty"` // 可选，与 InitiateMultipartUploadReq.urlPrefix 对齐
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -664,6 +666,20 @@ func (x *AuthSignReq) GetPartNumbers() []int32 {
 		return x.PartNumbers
 	}
 	return nil
+}
+
+func (x *AuthSignReq) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AuthSignReq) GetUrlPrefix() string {
+	if x != nil {
+		return x.UrlPrefix
+	}
+	return ""
 }
 
 type AuthSignResp struct {
@@ -926,6 +942,7 @@ type AccessURLReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Query         map[string]string      `protobuf:"bytes,2,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	UrlPrefix     string                 `protobuf:"bytes,3,opt,name=urlPrefix,proto3" json:"urlPrefix,omitempty"` // 可选，与 InitiateMultipartUploadReq.urlPrefix 对齐
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -972,6 +989,13 @@ func (x *AccessURLReq) GetQuery() map[string]string {
 		return x.Query
 	}
 	return nil
+}
+
+func (x *AccessURLReq) GetUrlPrefix() string {
+	if x != nil {
+		return x.UrlPrefix
+	}
+	return ""
 }
 
 type AccessURLResp struct {
@@ -2220,10 +2244,12 @@ const file_third_third_proto_rawDesc = "" +
 	"expireTime\"a\n" +
 	"\x1bInitiateMultipartUploadResp\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x120\n" +
-	"\x06upload\x18\x02 \x01(\v2\x18.openim.third.UploadInfoR\x06upload\"K\n" +
+	"\x06upload\x18\x02 \x01(\v2\x18.openim.third.UploadInfoR\x06upload\"}\n" +
 	"\vAuthSignReq\x12\x1a\n" +
 	"\buploadID\x18\x01 \x01(\tR\buploadID\x12 \n" +
-	"\vpartNumbers\x18\x02 \x03(\x05R\vpartNumbers\"\xce\x01\n" +
+	"\vpartNumbers\x18\x02 \x03(\x05R\vpartNumbers\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1c\n" +
+	"\turlPrefix\x18\x04 \x01(\tR\turlPrefix\"\xce\x01\n" +
 	"\fAuthSignResp\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12-\n" +
 	"\x05query\x18\x02 \x03(\v2\x17.openim.third.KeyValuesR\x05query\x12/\n" +
@@ -2245,10 +2271,11 @@ const file_third_third_proto_rawDesc = "" +
 	"\x05cause\x18\x05 \x01(\tR\x05cause\x12\x1c\n" +
 	"\turlPrefix\x18\x06 \x01(\tR\turlPrefix\"/\n" +
 	"\x1bCompleteMultipartUploadResp\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\"\x99\x01\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\"\xb7\x01\n" +
 	"\fAccessURLReq\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12;\n" +
-	"\x05query\x18\x02 \x03(\v2%.openim.third.AccessURLReq.QueryEntryR\x05query\x1a8\n" +
+	"\x05query\x18\x02 \x03(\v2%.openim.third.AccessURLReq.QueryEntryR\x05query\x12\x1c\n" +
+	"\turlPrefix\x18\x03 \x01(\tR\turlPrefix\x1a8\n" +
 	"\n" +
 	"QueryEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
