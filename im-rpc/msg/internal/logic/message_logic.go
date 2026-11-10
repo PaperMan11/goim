@@ -14,6 +14,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
 	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/mconvert"
+	"github.com/PaperMan11/goim/pkg/msgcontent"
 	"github.com/PaperMan11/goim/pkg/msgprocessor"
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/protocol/conversation"
@@ -593,16 +594,6 @@ func (l *Logic) handleDeletedAndRevoked(userID string, msgs []*model.MsgInfoMode
 	}
 }
 
-// quoteMsgData 引用消息中 quoteMessage 字段的结构，只关心撤回判断与改写所需字段
-type quoteMsgData struct {
-	ClientMsgID string `json:"clientMsgID,omitempty"`
-	Seq         int64  `json:"seq,omitempty"`
-	ContentType int32  `json:"contentType,omitempty"`
-	Content     string `json:"content,omitempty"`
-	SendID      string `json:"sendID,omitempty"`
-	SendTime    int64  `json:"sendTime,omitempty"`
-}
-
 // handleQuote 处理引用消息：若被引用消息已被撤回，把引用体改写为撤回通知，
 // 使客户端展示"原消息已撤回"而非原始内容。cache 在批量消息间复用回源结果，避免同一 seq 重复回源。
 func (l *Logic) handleQuote(ctx context.Context, conversationID, userID string, msgs []*model.MsgInfoModel) {
@@ -620,46 +611,40 @@ func (l *Logic) handleQuote(ctx context.Context, conversationID, userID string, 
 			continue
 		}
 
-		// 引用消息的 content 结构：{text, quoteMessage, messageEntityList}
-		var quoteMsg struct {
-			Text              string          `json:"text,omitempty"`
-			QuoteMessage      *quoteMsgData   `json:"quoteMessage,omitempty"`
-			MessageEntityList json.RawMessage `json:"messageEntityList,omitempty"`
-		}
-		if err := json.Unmarshal([]byte(msg.Msg.Content), &quoteMsg); err != nil {
-			l.Errorf("handleQuote unmarshal failed, err=%v, conversationID=%s", err, conversationID)
+		quote, err := msgcontent.ParseQuote(msg.Msg.Content)
+		if err != nil {
+			l.Errorf("handleQuote ParseQuote failed, err=%v, conversationID=%s", err, conversationID)
 			continue
 		}
-		if quoteMsg.QuoteMessage == nil {
+		if quote.QuoteMessage == nil {
 			continue
 		}
 
 		// 兼容部分客户端把空对象 {} 以 base64("e30=") 编码
-		if quoteMsg.QuoteMessage.Content == "e30=" {
-			quoteMsg.QuoteMessage.Content = "{}"
-			if data, err := json.Marshal(&quoteMsg); err == nil {
-				msg.Msg.Content = string(data)
+		if quote.FixQuoteEmptyObjectEncoding() {
+			if fixed, err := quote.Marshal(); err == nil {
+				msg.Msg.Content = fixed
 			}
 		}
 
 		// 无 seq 且已是撤回通知：无法回源，跳过
-		if quoteMsg.QuoteMessage.Seq <= 0 && quoteMsg.QuoteMessage.ContentType == constant.MsgRevokeNotification {
+		if quote.QuoteMessage.Seq <= 0 && quote.QuoteMessage.ContentType == constant.MsgRevokeNotification {
 			continue
 		}
 
 		// 回源取被引用消息（带 Revoke）
 		var quoted *model.MsgInfoModel
-		if v, ok := quoteCache[quoteMsg.QuoteMessage.Seq]; ok {
+		if v, ok := quoteCache[quote.QuoteMessage.Seq]; ok {
 			quoted = v
-		} else if quoteMsg.QuoteMessage.Seq > 0 {
-			info, err := l.svcCtx.MsgModel.FindInfoBySeq(ctx, conversationID, quoteMsg.QuoteMessage.Seq)
+		} else if quote.QuoteMessage.Seq > 0 {
+			info, err := l.svcCtx.MsgModel.FindInfoBySeq(ctx, conversationID, quote.QuoteMessage.Seq)
 			if err != nil && !errors.Is(err, msgModel.ErrMsgNotFound) {
 				l.Errorf("handleQuote FindInfoBySeq failed, err=%v, conversationID=%s, seq=%d",
-					err, conversationID, quoteMsg.QuoteMessage.Seq)
+					err, conversationID, quote.QuoteMessage.Seq)
 				continue
 			}
 			quoted = info
-			quoteCache[quoteMsg.QuoteMessage.Seq] = quoted // nil 也缓存，避免重复回源
+			quoteCache[quote.QuoteMessage.Seq] = quoted // nil 也缓存，避免重复回源
 		}
 
 		// 被引用消息未撤回：不改写（查不到时保持原样，不误标为撤回）
@@ -668,15 +653,15 @@ func (l *Logic) handleQuote(ctx context.Context, conversationID, userID string, 
 		}
 
 		// 已撤回：改写引用体为撤回通知（复用 handleDeletedAndRevoked 的撤回内容构造）
-		quoteMsg.QuoteMessage.ContentType = constant.MsgRevokeNotification
-		quoteMsg.QuoteMessage.Content = quoted.Msg.Content
+		quote.QuoteMessage.ContentType = constant.MsgRevokeNotification
+		quote.QuoteMessage.Content = quoted.Msg.Content
 
-		data, err := json.Marshal(&quoteMsg)
+		data, err := quote.Marshal()
 		if err != nil {
-			l.Errorf("handleQuote marshal quoteMsg failed, err=%v", err)
+			l.Errorf("handleQuote marshal quote failed, err=%v", err)
 			continue
 		}
-		msg.Msg.Content = string(data)
+		msg.Msg.Content = data
 	}
 }
 
