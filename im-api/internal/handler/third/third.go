@@ -3,6 +3,7 @@ package third
 import (
 	"github.com/PaperMan11/goim/im-api/internal/svc"
 	"github.com/PaperMan11/goim/pkg/a2r"
+	thirdpb "github.com/PaperMan11/goim/pkg/protocol/third"
 	"github.com/gin-gonic/gin"
 )
 
@@ -68,10 +69,18 @@ func CompleteFormData(svc *svc.ServiceContext) gin.HandlerFunc {
 
 // ===== 下载 =====
 
-// AccessURL  GET /api/v1/third/access_url
+// accessURLQuery GET 请求使用 query 参数，需要 form tag 才能按小写字段名绑定。
+type accessURLQuery struct {
+	Name      string `form:"name"`
+	URLPrefix string `form:"urlPrefix"`
+}
+
+// AccessURL  GET /api/v1/third/access_url?name=xxx&urlPrefix=yyy
 func AccessURL(svc *svc.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		a2r.Call(c, svc.ThirdService.AccessURL)
+		a2r.CallQuery(c, func(q accessURLQuery) *thirdpb.AccessURLReq {
+			return &thirdpb.AccessURLReq{Name: q.Name, UrlPrefix: q.URLPrefix}
+		}, svc.ThirdService.AccessURL)
 	}
 }
 
