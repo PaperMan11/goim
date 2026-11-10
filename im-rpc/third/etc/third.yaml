@@ -1,5 +1,5 @@
 Name: third.rpc
-ListenOn: 0.0.0.0:18020
+ListenOn: 0.0.0.0:18070
 Mode: dev
 Etcd:
   Hosts:
@@ -15,7 +15,7 @@ Log:
 
 Prometheus:
   Host: 0.0.0.0
-  Port: 28020
+  Port: 28070
   Path: /metrics
 
 # RustFS / S3 兼容对象存储配置
@@ -27,4 +27,5 @@ RustFS:
   Region: "us-east-1"
   Bucket: "goim-files"
   UsePathStyle: true
-  PresignExpire: 3600
+  # 预签名 URL 过期时间，time.Duration 类型，必须带单位
+  PresignExpire: "1h"

@@ -21,6 +21,7 @@
 | msg.rpc | `msg.rpc` | **18040** | 28040 |
 | relation.rpc | `relation.rpc` | **18050** | 28050 |
 | user.rpc | `user.rpc` | **18060** | 28060 |
+| third.rpc | `third.rpc` | **18070** | 28070 |
 
 ### 后台任务服务（无对外端口）
 
@@ -48,6 +49,7 @@
 | MongoDB | 127.0.0.1:27017 |
 | Etcd | 127.0.0.1:2379 |
 | Kafka | 127.0.0.1:9092 |
+| RustFS (S3 对象存储) | 127.0.0.1:9000（third.rpc 配置项 `RustFS.Endpoint`） |
 
 ## Kafka Topic 一览
 

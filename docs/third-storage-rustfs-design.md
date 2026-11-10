@@ -146,7 +146,7 @@ third RPC 服务沿用 auth/msg/group 等已有服务的模式，减少新服务
 | 模块 | 位置 | 单一职责 | 依赖 |
 |------|------|---------|------|
 | **S3 适配层** | `pkg/storage/s3/` | 把 S3 API 调用封装成 goim 内部语义（生成签名 URL、发起/完成分片上传、生成下载 URL） | AWS SDK v2 |
-| **third RPC 服务** | `im-rpc/third/` | 按 proto 契约对外提供 `third.Third` gRPC 实现 | 适配层、Redis、config |
+| **third RPC 服务** | `im-rpc/third/` | 按 proto 契约对外提供 `third.Third` gRPC 实现 | 适配层、config |
 | **third RPC Client** | `pkg/rpcclient/thirdservice/` | 封装对 third RPC 的调用，屏蔽 gRPC stub 细节 | third.pb.go |
 | **im-api third handler** | `im-api/internal/handler/third/` | 接收 HTTP 请求，鉴权后调用 third RPC | thirdservice、auth middleware |
 | **配置** | `im-rpc/third/etc/third.yaml` + `im-api/etc/api.yml` | RustFS endpoint / credentials / bucket / 过期时间 / Etcd key | — |
@@ -194,9 +194,9 @@ im-rpc/third/
   third.go                              # main 入口（参考 im-rpc/auth/auth.go）
   etc/third.yaml                        # 服务配置
   internal/
-    config/config.go                    # Config 结构（RustFS + Redis + Etcd）
+    config/config.go                    # Config 结构（zrpc.RpcServerConf + s3.Config）
     server/third_server.go              # gRPC server，每个 RPC → logic
-    svc/service_context.go              # 注入 S3Client、Redis、Etcd 注册
+    svc/service_context.go              # 注入 S3Client、Etcd 注册
     logic/
       logic.go
       part_limit_logic.go
@@ -233,29 +233,64 @@ im-api/internal/handler/routes.go      # 注册 third.InitRoutes(...)
 ```yaml
 # im-rpc/third/etc/third.yaml
 Name: third.rpc
-ListenOn: 0.0.0.0:18885
+ListenOn: 0.0.0.0:18070
+Mode: dev
 
 Etcd:
   Hosts:
     - 127.0.0.1:2379
   Key: third.rpc
 
-Redis:
-  Host: 127.0.0.1:6379
-  Pass: "123456"
+Log:
+  ServiceName: third.rpc
+  Stat: false
+  Mode: console
+  Encoding: plain
+  Level: debug
 
-# RustFS/S3 配置
+Prometheus:
+  Host: 0.0.0.0
+  Port: 28070
+  Path: /metrics
+
+# RustFS/S3 兼容对象存储配置
 RustFS:
-  Endpoint: "http://127.0.0.1:9000"
-  PublicEndpoint: "https://files.example.com"
-  AccessKey: "rustfsadmin"
-  SecretKey: "rustfsadmin"
-  Region: "us-east-1"
+  Endpoint: "http://127.0.0.1:9000"        # 服务端访问 RustFS 的地址
+  PublicEndpoint: "http://127.0.0.1:9000"  # 客户端直传地址（生产环境换成公网域名 / CDN）
+  AccessKey: "<RUSTFS_ACCESS_KEY>"
+  SecretKey: "<RUSTFS_SECRET_KEY>"
+  Region: "us-east-1"                      # RustFS/MinIO 填任意非空值
   Bucket: "goim-files"
-  UsePathStyle: true
-  PresignExpire: 3600     # 预签名过期时间（秒）
-  FormExpire: 1800        # POST form 签名过期时间
+  UsePathStyle: true                       # RustFS/MinIO 必须为 true
+  PresignExpire: "1h"                      # 预签名过期时间
 ```
+
+> **注意：`PresignExpire` 的单位**
+>
+> 该字段在 Go 里的类型是 `time.Duration`，go-zero 的配置解析对 `time.Duration` **只接受带单位的字符串**。
+> 写成 `PresignExpire: 3600` 会导致 `conf.MustLoad` 直接报错退出：
+>
+> ```
+> error: config file etc/third.yaml, expect string for field RustFS.presignExpire, but got type json.Number
+> ```
+>
+> 正确写法：`"1h"`、`"30m"`、`"3600s"`。
+
+> **密钥通过环境变量注入**
+>
+> 配置文件中的 `AccessKey` / `SecretKey` 只是占位值，实际密钥由环境变量覆盖（优先级：环境变量 > 配置文件 > 默认值），
+> 覆盖逻辑见 `pkg/storage/s3/config.go` 的 `Config.ApplyEnvOverrides()`，在 third 服务启动时调用。
+>
+> | 环境变量 | 对应配置字段 |
+> |----------|-------------|
+> | `RUSTFS_ENDPOINT` | `RustFS.Endpoint` |
+> | `RUSTFS_PUBLIC_ENDPOINT` | `RustFS.PublicEndpoint` |
+> | `RUSTFS_ACCESS_KEY` | `RustFS.AccessKey` |
+> | `RUSTFS_SECRET_KEY` | `RustFS.SecretKey` |
+> | `RUSTFS_REGION` | `RustFS.Region` |
+> | `RUSTFS_BUCKET` | `RustFS.Bucket` |
+> | `RUSTFS_USE_PATH_STYLE` | `RustFS.UsePathStyle` |
+> | `RUSTFS_PRESIGN_EXPIRE` | `RustFS.PresignExpire`（如 `"1h"`） |
 
 ---
 

@@ -92,3 +92,11 @@ ConvRpc:
     Key: conversation.rpc
   Stub: false
   EnableCache: false
+
+ThirdRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: third.rpc
+  Stub: false
+  EnableCache: false

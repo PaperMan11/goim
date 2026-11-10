@@ -24,6 +24,8 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	// 环境变量优先于配置文件，便于把 RustFS 密钥从配置文件里剥离
+	c.RustFS.ApplyEnvOverrides()
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
 
