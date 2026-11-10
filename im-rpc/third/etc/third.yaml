@@ -9,8 +9,9 @@ Etcd:
 Log:
   ServiceName: third.rpc
   Stat: false
-  Mode: console
+  Mode: file
   Encoding: plain
+  Path: /var/log/goim/third-rpc
   Level: debug
 
 Prometheus:
