@@ -12,6 +12,7 @@ func InitRoutes(r *gin.RouterGroup, svc *svc.ServiceContext) {
 	convRoute.POST("/get_all_conversations", GetAllConversations(svc))
 	convRoute.POST("/get_conversation", GetConversation(svc))
 	convRoute.POST("/get_conversations", GetConversations(svc))
+	convRoute.POST("/set_conversation", SetConversation(svc))
 	convRoute.POST("/set_conversations", SetConversations(svc))
 	convRoute.POST("/get_conversation_offline_push_user_ids", GetConversationOfflinePushUserIDs(svc))
 	convRoute.POST("/get_full_conversation_ids", GetFullConversationIDs(svc))

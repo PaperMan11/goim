@@ -2216,6 +2216,72 @@
         }
       }
     },
+    "/api/v1/conversation/set_conversation": {
+      "post": {
+        "tags": [
+          "conversation"
+        ],
+        "summary": "设置会话",
+        "description": "设置会话",
+        "operationId": "conv_setConversation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetConversationReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "统一响应结构",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "业务状态码，0 表示成功，非 0 表示错误"
+                    },
+                    "msg": {
+                      "type": "string",
+                      "description": "状态描述，成功为 success，失败为错误信息"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SetConversationResp"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "错误响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "description": "非零错误码"
+                    },
+                    "msg": {
+                      "type": "string",
+                      "description": "错误信息"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/conversation/set_conversations": {
       "post": {
         "tags": [
@@ -9533,6 +9599,19 @@
             "description": "会话列表"
           }
         }
+      },
+      "SetConversationReq": {
+        "type": "object",
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/Conversation"
+          }
+        }
+      },
+      "SetConversationResp": {
+        "type": "object",
+        "properties": {},
+        "description": "empty response"
       },
       "SetConversationsReq": {
         "type": "object",

@@ -30,6 +30,12 @@ func GetConversations(svc *svc.ServiceContext) gin.HandlerFunc {
 	}
 }
 
+func SetConversation(svc *svc.ServiceContext) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		a2r.Call(c, svc.ConvService.SetConversation)
+	}
+}
+
 func SetConversations(svc *svc.ServiceContext) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		a2r.Call(c, svc.ConvService.SetConversations)
