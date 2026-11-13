@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // 版本日志状态
@@ -59,12 +59,12 @@ type VersionLogElem struct {
 
 // VersionLogTable 版本日志表，存储某个DID（群ID或用户ID）的完整变更链
 type VersionLogTable struct {
-	ID         primitive.ObjectID `bson:"_id"`         // MongoDB 文档ID，对外作为 versionID 返回
-	DID        string             `bson:"d_id"`        // 群成员同步=groupID，加入群同步=userID
-	Logs       []VersionLogElem   `bson:"logs"`        // 变更日志链
-	Version    uint               `bson:"version"`     // 当前最新版本号
-	Deleted    uint               `bson:"deleted"`     // 累计删除数量
-	LastUpdate time.Time          `bson:"last_update"` // 最后更新时间
+	ID         bson.ObjectID    `bson:"_id"`         // MongoDB 文档ID，对外作为 versionID 返回
+	DID        string           `bson:"d_id"`        // 群成员同步=groupID，加入群同步=userID
+	Logs       []VersionLogElem `bson:"logs"`        // 变更日志链
+	Version    uint             `bson:"version"`     // 当前最新版本号
+	Deleted    uint             `bson:"deleted"`     // 累计删除数量
+	LastUpdate time.Time        `bson:"last_update"` // 最后更新时间
 }
 
 // VersionLog 返回带 LogLen 字段的版本日志视图
@@ -85,13 +85,13 @@ func (v *VersionLogTable) VersionLog() *VersionLog {
 
 // VersionLog 与 VersionLogTable 相同，额外提供 LogLen 字段方便消费端读取
 type VersionLog struct {
-	ID         primitive.ObjectID `bson:"_id"`
-	DID        string             `bson:"d_id"`
-	Logs       []VersionLogElem   `bson:"logs"`
-	Version    uint               `bson:"version"`
-	Deleted    uint               `bson:"deleted"`
-	LastUpdate time.Time          `bson:"last_update"`
-	LogLen     int                `bson:"log_len"`
+	ID         bson.ObjectID    `bson:"_id"`
+	DID        string           `bson:"d_id"`
+	Logs       []VersionLogElem `bson:"logs"`
+	Version    uint             `bson:"version"`
+	Deleted    uint             `bson:"deleted"`
+	LastUpdate time.Time        `bson:"last_update"`
+	LogLen     int              `bson:"log_len"`
 }
 
 // 查询最新 sort version
