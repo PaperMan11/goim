@@ -59,11 +59,12 @@ type VersionLogElem struct {
 
 // VersionLogTable 版本日志表，存储某个DID（群ID或用户ID）的完整变更链
 type VersionLogTable struct {
-	DID        string           `bson:"d_id"`        // 群成员同步=groupID，加入群同步=userID
-	Logs       []VersionLogElem `bson:"logs"`        // 变更日志链
-	Version    uint             `bson:"version"`     // 当前最新版本号
-	Deleted    uint             `bson:"deleted"`     // 累计删除数量
-	LastUpdate time.Time        `bson:"last_update"` // 最后更新时间
+	ID         primitive.ObjectID `bson:"_id"`         // MongoDB 文档ID，对外作为 versionID 返回
+	DID        string             `bson:"d_id"`        // 群成员同步=groupID，加入群同步=userID
+	Logs       []VersionLogElem   `bson:"logs"`        // 变更日志链
+	Version    uint               `bson:"version"`     // 当前最新版本号
+	Deleted    uint               `bson:"deleted"`     // 累计删除数量
+	LastUpdate time.Time          `bson:"last_update"` // 最后更新时间
 }
 
 // VersionLog 返回带 LogLen 字段的版本日志视图
@@ -72,6 +73,7 @@ func (v *VersionLogTable) VersionLog() *VersionLog {
 		return nil
 	}
 	return &VersionLog{
+		ID:         v.ID,
 		DID:        v.DID,
 		Logs:       v.Logs,
 		Version:    v.Version,

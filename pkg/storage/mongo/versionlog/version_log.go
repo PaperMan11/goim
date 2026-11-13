@@ -372,10 +372,10 @@ func (m *defaultVersionLogModel) FindChangeLog(ctx context.Context, did string, 
 		})
 	}
 
-	// 最终投影
+	// 最终投影（保留 _id，作为 versionID 返回给客户端）
 	pipeline = append(pipeline, bson.M{
 		"$project": bson.M{
-			"_id":         0,
+			"_id":         1,
 			"d_id":        1,
 			"version":     1,
 			"deleted":     1,
