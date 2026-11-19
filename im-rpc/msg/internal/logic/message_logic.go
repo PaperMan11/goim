@@ -516,7 +516,7 @@ func (l *Logic) pullMessage(ctx context.Context, userID string, conversationID s
 		}, msgprocessor.IsNotification(conversationID), nil
 	}
 
-	dbMsgs, err := l.svcCtx.MsgModel.FindByConversationID(ctx, conversationID, minSeq, maxSeq, limit)
+	dbMsgs, err := l.svcCtx.MsgModel.FindByConversationID(ctx, conversationID, minSeq, maxSeq, limit, order == sdkws.PullOrder_PullOrderDesc)
 	if err != nil {
 		l.Errorf("find msg by conversation id failed, err: %v, conversationID: %s", err, conversationID)
 		return nil, false, err

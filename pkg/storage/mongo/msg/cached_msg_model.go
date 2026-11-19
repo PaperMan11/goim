@@ -357,8 +357,8 @@ func (m *cachedMsgModel) GetMinSeq(ctx context.Context, conversationID string) (
 	return v.(int64), nil
 }
 
-func (m *cachedMsgModel) FindByConversationID(ctx context.Context, conversationID string, seqStart int64, seqEnd int64, limit int) ([]*model.MsgInfoModel, error) {
-	return m.MsgModel.FindByConversationID(ctx, conversationID, seqStart, seqEnd, limit)
+func (m *cachedMsgModel) FindByConversationID(ctx context.Context, conversationID string, seqStart int64, seqEnd int64, limit int, desc bool) ([]*model.MsgInfoModel, error) {
+	return m.MsgModel.FindByConversationID(ctx, conversationID, seqStart, seqEnd, limit, desc)
 }
 
 func (m *cachedMsgModel) MarkReadBySeqRange(ctx context.Context, userID string, conversationID string, seqStart, seqEnd int64) error {

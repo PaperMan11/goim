@@ -44,7 +44,8 @@ type MsgModel interface {
 	// FindBySeqs 按 seq 列表查询消息
 	FindBySeqs(ctx context.Context, conversationID string, seqs []int64) (map[string][]*model.MsgDataModel, error)
 	// FindByConversationID 按 seq 范围查询消息（返回完整槽位，含 Revoke/DelList/IsRead）
-	FindByConversationID(ctx context.Context, conversationID string, seqStart int64, seqEnd int64, limit int) ([]*model.MsgInfoModel, error)
+	// desc=true 时从区间高位往低位取（返回最新的一批，结果降序）
+	FindByConversationID(ctx context.Context, conversationID string, seqStart int64, seqEnd int64, limit int, desc bool) ([]*model.MsgInfoModel, error)
 	// FindLatestMsg 查询会话最新消息
 	FindLatestMsg(ctx context.Context, conversationID string) (*model.MsgDataModel, error)
 	// GetMaxSeq 获取会话最大 seq（从最后一个文档的最后一个非空槽位获取）
@@ -381,7 +382,7 @@ func (m *defaultMsgModel) FindBySeqs(ctx context.Context, conversationID string,
 }
 
 // FindByConversationID 按 seq 范围查询消息：定位文档范围 → 遍历提取（返回完整槽位，含 Revoke/DelList/IsRead）
-func (m *defaultMsgModel) FindByConversationID(ctx context.Context, conversationID string, seqStart, seqEnd int64, limit int) ([]*model.MsgInfoModel, error) {
+func (m *defaultMsgModel) FindByConversationID(ctx context.Context, conversationID string, seqStart, seqEnd int64, limit int, desc bool) ([]*model.MsgInfoModel, error) {
 	doc := &model.MsgDocModel{}
 
 	// seqStart 和 seqEnd 都为 0 时查询全部
@@ -394,7 +395,11 @@ func (m *defaultMsgModel) FindByConversationID(ctx context.Context, conversation
 		filter = docIDPrefix(conversationID)
 	}
 
-	opts := options.Find().SetSort(bson.M{"doc_id": 1})
+	sortDir := 1
+	if desc {
+		sortDir = -1
+	}
+	opts := options.Find().SetSort(bson.M{"doc_id": sortDir})
 
 	var docs []*model.MsgDocModel
 	err := m.mod.Find(ctx, &docs, filter, opts)
@@ -403,15 +408,36 @@ func (m *defaultMsgModel) FindByConversationID(ctx context.Context, conversation
 	}
 
 	var result []*model.MsgInfoModel
+	// seq 范围过滤
+	inRange := func(seq int64) bool {
+		return (seqStart > 0 || seqEnd > 0) && (seq < seqStart || seq > seqEnd)
+	}
 	for _, d := range docs {
-		for _, info := range d.Msgs {
-			if info != nil && info.Msg != nil {
-				if (seqStart > 0 || seqEnd > 0) && (info.Msg.Seq < seqStart || info.Msg.Seq > seqEnd) {
+		if desc {
+			// 文档内槽位也按 seq 倒序扫描；命中上限即返回（结果为降序，最新在前）
+			for i := len(d.Msgs) - 1; i >= 0; i-- {
+				info := d.Msgs[i]
+				if info == nil || info.Msg == nil {
+					continue
+				}
+				if inRange(info.Msg.Seq) {
 					continue
 				}
 				result = append(result, info)
 				if limit > 0 && len(result) >= limit {
 					return result, nil
+				}
+			}
+		} else {
+			for _, info := range d.Msgs {
+				if info != nil && info.Msg != nil {
+					if inRange(info.Msg.Seq) {
+						continue
+					}
+					result = append(result, info)
+					if limit > 0 && len(result) >= limit {
+						return result, nil
+					}
 				}
 			}
 		}
