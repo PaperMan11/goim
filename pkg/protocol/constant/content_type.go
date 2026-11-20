@@ -119,10 +119,6 @@ const (
 	// 通知类型结束值
 	NotificationEnd = 5000
 
-	// 消息状态
-	MsgNormal  = 1 // 正常消息
-	MsgDeleted = 4 // 已删除消息
-
 	// 消息来源类型
 	UserMsgType = 100 // 用户消息
 	SysMsgType  = 200 // 系统消息

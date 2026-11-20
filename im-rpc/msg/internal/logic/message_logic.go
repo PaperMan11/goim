@@ -36,6 +36,10 @@ import (
 // 处理消息选项
 func (l *Logic) processMsgOptions(msgData *sdkws.MsgData) {
 	msgData.ServerMsgID = generateServerMsgID()
+	// 能进入发送流程的消息视为发送成功：状态由服务端统一置为 2，
+	// 避免沿用客户端传入的 1（发送中）/3（发送失败）/4（已删除）/5（已过滤）等本地瞬时状态，
+	// 也防止客户端传入 status>=4 后落库，导致消息被 FindLatestMsg 的 status<4 条件过滤掉。
+	msgData.Status = constant.MsgStatusSendSuccess
 	if msgData.SendTime == 0 {
 		msgData.SendTime = timex.UnixMilli()
 	}
@@ -560,7 +564,7 @@ func (l *Logic) handleDeletedAndRevoked(userID string, msgs []*model.MsgInfoMode
 		msg.Msg.IsRead = msg.IsRead
 		if msg.Deleted || slices.Contains(msg.DelList, userID) {
 			msg.Msg.Content = ""
-			msg.Msg.Status = constant.MsgDeleted
+			msg.Msg.Status = constant.MsgStatusHasDeleted
 			continue
 		}
 		if msg.Revoke != nil {
@@ -605,7 +609,7 @@ func (l *Logic) handleQuote(ctx context.Context, conversationID, userID string, 
 		msg.Msg.IsRead = msg.IsRead
 		if msg.Deleted || slices.Contains(msg.DelList, userID) {
 			msg.Msg.Content = ""
-			msg.Msg.Status = constant.MsgDeleted
+			msg.Msg.Status = constant.MsgStatusHasDeleted
 		}
 		if msg.Msg.ContentType != constant.Quote || msg.Msg.Content == "" {
 			continue
@@ -720,7 +724,7 @@ func (l *Logic) GetMsgByConversationIDs(ctx context.Context, req *pbmsg.GetMsgBy
 				sdkMsg := mconvert.ModelToPbMsgData(dbMsg.Msg)
 				if dbMsg.Deleted {
 					sdkMsg.Content = ""
-					sdkMsg.Status = constant.MsgDeleted
+					sdkMsg.Status = constant.MsgStatusHasDeleted
 				}
 				msgDatas[convID] = sdkMsg
 			}
