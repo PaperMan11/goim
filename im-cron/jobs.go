@@ -158,3 +158,19 @@ func (s *CronServer) ReconcileOnlineUsers() {
 
 	logx.Infof("ReconcileOnlineUsers end, total: %d, removed: %d, cost: %v", len(members), removed, timex.Since(now))
 }
+
+// CleanExpiredTokens 清理 token 索引 ZSet 中的僵尸数据：
+// 历史遗留的 token:user:* key 没有自身 TTL，token 字符串 key 过期后成员会永久残留。
+// 通过 SCAN 遍历这些 key，移除 score 已过期的成员，并在集合为空时删除整个 key。
+func (s *CronServer) CleanExpiredTokens() {
+	now := timex.Now()
+	ctx := context.Background()
+
+	scanned, removed, deleted, err := s.tokenStore.CleanExpiredTokensGlobal(ctx)
+	if err != nil {
+		logx.Errorf("CleanExpiredTokens failed, err: %v", err)
+		return
+	}
+	logx.Infof("CleanExpiredTokens end, keys: %d, removed: %d, deleted: %d, cost: %v",
+		scanned, removed, deleted, timex.Since(now))
+}

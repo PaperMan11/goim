@@ -10,6 +10,9 @@ const (
 	PlatformSuffix   = ":platform:"
 
 	TokenDeleteChannel = "token:delete"
+
+	// cleanScanBatchSize 全局清理时 SCAN 的单批条数
+	cleanScanBatchSize = 200
 )
 
 func GetTokenKey(token string) string {

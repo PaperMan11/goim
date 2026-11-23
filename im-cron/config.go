@@ -28,4 +28,7 @@ type CronTask struct {
 
 	// 在线用户集合对账间隔，单位秒，默认5分钟；<=0 时关闭该任务
 	OnlineReconcileIntervalSeconds int `json:",default=300"`
+
+	// token 索引僵尸数据清理间隔，单位秒，默认1小时；<=0 时关闭该任务
+	TokenCleanupIntervalSeconds int `json:",default=3600"`
 }

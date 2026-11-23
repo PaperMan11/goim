@@ -13,6 +13,24 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+// expireZSetAtMaxScoreScript 把 ZSet 的过期时间对齐到成员中的最大 score（秒）。
+// token 索引 ZSet 的 member score 就是 token 的过期时间，因此取最大 score 即为
+// "最后一个 token 的过期时刻"；key 到期后由 Redis 自动回收，避免索引永久驻留。
+// 单 key 脚本，兼容 Redis Cluster（不跨 slot）。
+var expireZSetAtMaxScoreScript = goredis.NewScript(`
+local top = redis.call('ZRANGE', KEYS[1], -1, -1, 'WITHSCORES')
+if not top[1] then
+    return 0
+end
+local expireAtMs = math.floor(tonumber(top[2]) * 1000)
+if expireAtMs <= 0 then
+    redis.call('PERSIST', KEYS[1])
+    return 0
+end
+redis.call('PEXPIREAT', KEYS[1], tostring(expireAtMs))
+return expireAtMs
+`)
+
 type RedisStore struct {
 	redisClient goredis.UniversalClient
 }
@@ -68,7 +86,21 @@ func (rs *RedisStore) StoreToken(ctx context.Context, info *TokenInfo) error {
 		return err
 	}
 
+	// 给两个索引 ZSet 设置"最大 token 过期时刻"作为自身 TTL，
+	// 保证最后一个 token 过期后索引 key 被 Redis 自动删除，不产生僵尸数据。
+	if err = rs.setZSetExpireAtMaxScore(ctx, GetUserTokensKey(info.UserID)); err != nil {
+		return err
+	}
+	if err = rs.setZSetExpireAtMaxScore(ctx, GetPlatformTokenKey(info.UserID, info.PlatformID)); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// setZSetExpireAtMaxScore 在 Redis 端原子读取 ZSet 最大 score 并设置 PEXPIREAT。
+func (rs *RedisStore) setZSetExpireAtMaxScore(ctx context.Context, key string) error {
+	return expireZSetAtMaxScoreScript.Run(ctx, rs.redisClient, []string{key}).Err()
 }
 
 func (rs *RedisStore) GetToken(ctx context.Context, uuid string) (*TokenInfo, error) {
@@ -303,13 +335,57 @@ func (rs *RedisStore) publishTokenDeleteBatch(ctx context.Context, uuids []strin
 
 func (rs *RedisStore) CleanExpiredTokens(ctx context.Context, userID string) error {
 	now := timex.Unix()
-	nowStr := convert.ToString(now - 1)
+	maxScore := convert.ToString(now - 1)
 
-	_, _ = rs.redisClient.ZRemRangeByScore(ctx, GetUserTokensKey(userID), "0", nowStr).Result()
+	keys := make([]string, 0, constant.BotPlatformID-constant.IOSPlatformID+2)
+	keys = append(keys, GetUserTokensKey(userID))
 	for pid := constant.IOSPlatformID; pid <= constant.BotPlatformID; pid++ {
-		_, _ = rs.redisClient.ZRemRangeByScore(ctx, GetPlatformTokenKey(userID, int32(pid)), "0", nowStr).Result()
+		keys = append(keys, GetPlatformTokenKey(userID, int32(pid)))
+	}
+
+	for _, key := range keys {
+		if err := rs.trimExpiredMembers(ctx, key, maxScore); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// trimExpiredMembers 删除 ZSet 中 score 已过期的成员；若删除后集合为空，直接删除整个 key。
+// key 不存在或类型不是 ZSet 时忽略错误（并发删除/类型异常不应阻塞清理）。
+func (rs *RedisStore) trimExpiredMembers(ctx context.Context, key, maxScore string) error {
+	if err := rs.redisClient.ZRemRangeByScore(ctx, key, "0", maxScore).Err(); err != nil {
+		return nil
+	}
+	if rs.redisClient.ZCard(ctx, key).Val() == 0 {
+		_ = rs.redisClient.Del(ctx, key).Err()
+	}
+	return nil
+}
+
+// CleanExpiredTokensGlobal 扫描所有用户 token 索引 ZSet，清理已过期成员并删除空 key。
+// 用于兜底清理历史遗留的僵尸索引（这些 key 在本次 TTL 修复前创建，自身没有过期时间）。
+// 使用 SCAN 游标遍历，避免 KEYS 阻塞 Redis；单批失败不中断整体扫描。
+func (rs *RedisStore) CleanExpiredTokensGlobal(ctx context.Context) (scanned, removed, deleted int64, err error) {
+	now := timex.Unix()
+	maxScore := convert.ToString(now - 1)
+
+	iter := rs.redisClient.Scan(ctx, 0, UserTokensPrefix+"*", cleanScanBatchSize).Iterator()
+	for iter.Next(ctx) {
+		key := iter.Val()
+		scanned++
+		n, e := rs.redisClient.ZRemRangeByScore(ctx, key, "0", maxScore).Result()
+		if e != nil {
+			continue
+		}
+		removed += n
+		if rs.redisClient.ZCard(ctx, key).Val() == 0 {
+			if rs.redisClient.Del(ctx, key).Val() > 0 {
+				deleted++
+			}
+		}
+	}
+	return scanned, removed, deleted, iter.Err()
 }
 
 func (rs *RedisStore) ClearAll(ctx context.Context) error {

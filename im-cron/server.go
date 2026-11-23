@@ -12,6 +12,7 @@ import (
 	userservice "github.com/PaperMan11/goim/pkg/rpcclient/userservice"
 	"github.com/PaperMan11/goim/pkg/rpcinterceptors/clientinterceptors"
 	sredis "github.com/PaperMan11/goim/pkg/storage/redis"
+	"github.com/PaperMan11/goim/pkg/storage/token"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -29,6 +30,7 @@ type CronServer struct {
 	convService convservice.ConversationService
 	msgService  msgservice.MsgService
 	userService userservice.UserService
+	tokenStore  *token.RedisStore
 }
 
 func NewCronServer(cfg *Config) *CronServer {
@@ -70,6 +72,7 @@ func NewCronServer(cfg *Config) *CronServer {
 		convService: convService,
 		msgService:  msgService,
 		userService: userService,
+		tokenStore:  token.NewRedisStore(redisClient),
 	}
 }
 
@@ -79,6 +82,7 @@ func (s *CronServer) Start() {
 		s.registerDeleteMessageJob()
 		s.registerDestructMsgJob()
 		s.registerOnlineReconcileJob()
+		s.registerTokenCleanupJob()
 		s.cron.Start()
 	}
 }
@@ -158,5 +162,24 @@ func (s *CronServer) registerOnlineReconcileJob() {
 		})
 	}); err != nil {
 		logx.Errorf("register online reconcile job failed, spec: %s, err: %v", spec, err)
+	}
+}
+
+// registerTokenCleanupJob 注册 token 索引僵尸数据清理任务：
+// 扫描 token:user:* 索引 ZSet，清理已过期成员并删除空 key。
+func (s *CronServer) registerTokenCleanupJob() {
+	interval := s.cfg.CronTask.TokenCleanupIntervalSeconds
+	if interval <= 0 {
+		logx.Errorf("TokenCleanupIntervalSeconds is 0, skip token cleanup job")
+		return
+	}
+	spec := fmt.Sprintf("@every %ds", interval)
+	if _, err := s.cron.AddFunc(spec, func() {
+		s.locker.ExecWithLock(context.Background(), "cron:clean-expired-tokens", func() error {
+			s.CleanExpiredTokens()
+			return nil
+		})
+	}); err != nil {
+		logx.Errorf("register token cleanup job failed, spec: %s, err: %v", spec, err)
 	}
 }
