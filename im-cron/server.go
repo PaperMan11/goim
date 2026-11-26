@@ -82,6 +82,7 @@ func (s *CronServer) Start() {
 		s.registerDeleteMessageJob()
 		s.registerDestructMsgJob()
 		s.registerOnlineReconcileJob()
+		s.registerStaleStatusSweepJob()
 		s.registerTokenCleanupJob()
 		s.cron.Start()
 	}
@@ -143,6 +144,8 @@ func (s *CronServer) registerDestructMsgJob() {
 }
 
 // registerOnlineReconcileJob 注册在线用户集合对账任务：清理 mongo:user:online:set 中的僵尸成员。
+// 只负责「缓存索引兜底」（仅 SRem，不写 DB、不发 1304），处理状态行已被 TTL 删除、
+// 仅剩集合成员的场景；业务状态修复见 registerStaleStatusSweepJob。
 // user RPC 为 stub 时无法校验在线状态，直接跳过，避免把全部在线用户误删。
 func (s *CronServer) registerOnlineReconcileJob() {
 	interval := s.cfg.CronTask.OnlineReconcileIntervalSeconds
@@ -162,6 +165,31 @@ func (s *CronServer) registerOnlineReconcileJob() {
 		})
 	}); err != nil {
 		logx.Errorf("register online reconcile job failed, spec: %s, err: %v", spec, err)
+	}
+}
+
+// registerStaleStatusSweepJob 注册僵尸在线状态清扫任务：
+// 扫描超过 ZombieThresholdMs 未心跳的在线快照行，置为离线并补发 1304 通知，
+// 覆盖进程异常退出（kill -9 / OOM）或网络分区导致 onConnRemove 未执行的情况。
+// 只负责「业务状态修复」；仅剩 Redis 集合成员的缓存不一致由 registerOnlineReconcileJob 兜底。
+func (s *CronServer) registerStaleStatusSweepJob() {
+	interval := s.cfg.CronTask.StaleStatusSweepIntervalSeconds
+	if interval <= 0 {
+		logx.Errorf("StaleStatusSweepIntervalSeconds is 0, skip stale status sweep job")
+		return
+	}
+	if s.cfg.UserRpc.Stub {
+		logx.Errorf("UserRpc is stub, skip stale status sweep job")
+		return
+	}
+	spec := fmt.Sprintf("@every %ds", interval)
+	if _, err := s.cron.AddFunc(spec, func() {
+		s.locker.ExecWithLock(context.Background(), "cron:mark-stale-users-offline", func() error {
+			s.MarkStaleUsersOffline()
+			return nil
+		})
+	}); err != nil {
+		logx.Errorf("register stale status sweep job failed, spec: %s, err: %v", spec, err)
 	}
 }
 

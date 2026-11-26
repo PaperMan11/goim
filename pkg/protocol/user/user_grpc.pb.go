@@ -36,6 +36,7 @@ const (
 	User_GetSubscribeUsersStatus_FullMethodName       = "/openim.user.user/getSubscribeUsersStatus"
 	User_GetUserStatus_FullMethodName                 = "/openim.user.user/getUserStatus"
 	User_SetUserStatus_FullMethodName                 = "/openim.user.user/setUserStatus"
+	User_GetStaleOnlineStatuses_FullMethodName        = "/openim.user.user/getStaleOnlineStatuses"
 	User_ProcessUserCommandAdd_FullMethodName         = "/openim.user.user/processUserCommandAdd"
 	User_ProcessUserCommandUpdate_FullMethodName      = "/openim.user.user/processUserCommandUpdate"
 	User_ProcessUserCommandDelete_FullMethodName      = "/openim.user.user/processUserCommandDelete"
@@ -89,6 +90,8 @@ type UserClient interface {
 	GetUserStatus(ctx context.Context, in *GetUserStatusReq, opts ...grpc.CallOption) (*GetUserStatusResp, error)
 	// 网关同步用户在线状态到Redis
 	SetUserStatus(ctx context.Context, in *SetUserStatusReq, opts ...grpc.CallOption) (*SetUserStatusResp, error)
+	// 获取心跳超时的在线状态行（im-cron 兜底清扫僵尸在线）
+	GetStaleOnlineStatuses(ctx context.Context, in *GetStaleOnlineStatusesReq, opts ...grpc.CallOption) (*GetStaleOnlineStatusesResp, error)
 	// 添加用户命令
 	ProcessUserCommandAdd(ctx context.Context, in *ProcessUserCommandAddReq, opts ...grpc.CallOption) (*ProcessUserCommandAddResp, error)
 	// 更新用户命令
@@ -267,6 +270,16 @@ func (c *userClient) SetUserStatus(ctx context.Context, in *SetUserStatusReq, op
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetUserStatusResp)
 	err := c.cc.Invoke(ctx, User_SetUserStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userClient) GetStaleOnlineStatuses(ctx context.Context, in *GetStaleOnlineStatusesReq, opts ...grpc.CallOption) (*GetStaleOnlineStatusesResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetStaleOnlineStatusesResp)
+	err := c.cc.Invoke(ctx, User_GetStaleOnlineStatuses_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -477,6 +490,8 @@ type UserServer interface {
 	GetUserStatus(context.Context, *GetUserStatusReq) (*GetUserStatusResp, error)
 	// 网关同步用户在线状态到Redis
 	SetUserStatus(context.Context, *SetUserStatusReq) (*SetUserStatusResp, error)
+	// 获取心跳超时的在线状态行（im-cron 兜底清扫僵尸在线）
+	GetStaleOnlineStatuses(context.Context, *GetStaleOnlineStatusesReq) (*GetStaleOnlineStatusesResp, error)
 	// 添加用户命令
 	ProcessUserCommandAdd(context.Context, *ProcessUserCommandAddReq) (*ProcessUserCommandAddResp, error)
 	// 更新用户命令
@@ -562,6 +577,9 @@ func (UnimplementedUserServer) GetUserStatus(context.Context, *GetUserStatusReq)
 }
 func (UnimplementedUserServer) SetUserStatus(context.Context, *SetUserStatusReq) (*SetUserStatusResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetUserStatus not implemented")
+}
+func (UnimplementedUserServer) GetStaleOnlineStatuses(context.Context, *GetStaleOnlineStatusesReq) (*GetStaleOnlineStatusesResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetStaleOnlineStatuses not implemented")
 }
 func (UnimplementedUserServer) ProcessUserCommandAdd(context.Context, *ProcessUserCommandAddReq) (*ProcessUserCommandAddResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ProcessUserCommandAdd not implemented")
@@ -883,6 +901,24 @@ func _User_SetUserStatus_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(UserServer).SetUserStatus(ctx, req.(*SetUserStatusReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _User_GetStaleOnlineStatuses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetStaleOnlineStatusesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServer).GetStaleOnlineStatuses(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: User_GetStaleOnlineStatuses_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServer).GetStaleOnlineStatuses(ctx, req.(*GetStaleOnlineStatusesReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1255,6 +1291,10 @@ var User_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "setUserStatus",
 			Handler:    _User_SetUserStatus_Handler,
+		},
+		{
+			MethodName: "getStaleOnlineStatuses",
+			Handler:    _User_GetStaleOnlineStatuses_Handler,
 		},
 		{
 			MethodName: "processUserCommandAdd",

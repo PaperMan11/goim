@@ -253,10 +253,34 @@ message userOnlineStatus {
 // 批量设置用户在线状态请求
 message setUserOnlineStatusReq {
   repeated userOnlineStatus status = 1;  // 用户在线状态列表
+  // silent=true 表示心跳静默续期：只刷新在线快照，不向订阅者推送 1304 状态变更通知。
+  bool silent = 2;
 }
 
 // 批量设置用户在线状态响应
 message setUserOnlineStatusResp {}
+
+// ================================ 在线状态兜底清扫 ================================
+
+// 心跳超时的在线状态行
+message staleOnlineStatus {
+  string userID = 1;      // 用户ID
+  string deviceID = 2;    // 设备ID
+  string connID = 3;      // 连接ID
+  int32 platformID = 4;   // 平台ID
+  int64 lastSeenAt = 5;   // 最后心跳时间（UnixMilli）
+}
+
+// 获取心跳超时的在线状态行请求
+message getStaleOnlineStatusesReq {
+  int64 lastSeenBefore = 1;  // UnixMilli，last_seen_at 早于该时间点视为僵尸
+  int64 limit = 2;           // 单次最多返回行数
+}
+
+// 获取心跳超时的在线状态行响应
+message getStaleOnlineStatusesResp {
+  repeated staleOnlineStatus status = 1;
+}
 
 // ================================ 用户命令处理 ================================
 
@@ -512,6 +536,8 @@ service user {
   rpc getUserStatus(getUserStatusReq) returns (getUserStatusResp);
   // 网关同步用户在线状态到Redis
   rpc setUserStatus(setUserStatusReq) returns (setUserStatusResp);
+  // 获取心跳超时的在线状态行（im-cron 兜底清扫僵尸在线）
+  rpc getStaleOnlineStatuses(getStaleOnlineStatusesReq) returns (getStaleOnlineStatusesResp);
   // 添加用户命令
   rpc processUserCommandAdd(processUserCommandAddReq) returns (processUserCommandAddResp);
   // 更新用户命令

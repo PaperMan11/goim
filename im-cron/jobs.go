@@ -19,6 +19,9 @@ const (
 	deleteCount          = 10000
 	deleteLimit          = 50
 	onlineReconcileBatch = 200
+	// 僵尸在线状态清扫：单轮拉取行数，以及一次任务内最多轮数（避免单次执行过久）。
+	staleStatusSweepBatch  = 500
+	staleStatusSweepRounds = 10
 )
 
 func (s *CronServer) DeleteMessage() {
@@ -101,6 +104,14 @@ func (s *CronServer) ClearDestructMsg() {
 
 // ReconcileOnlineUsers 对账全局在线用户集合，清理僵尸成员：
 // 从 Redis 集合取出所有成员，通过 user RPC 校验在线状态，离线成员从集合中移除。
+//
+// 与 MarkStaleUsersOffline 的分工：
+//   - 本任务只修「缓存索引」：仅 SRem 集合成员，不写 DB 状态、不发 1304；
+//   - 本任务负责清扫任务覆盖不到的情况——集合里存在成员、但对应状态行已不存在
+//     （状态行 10 分钟租约到期被 TTL 删除、手工清理、DB 与 Redis 不一致），
+//     此时只有这里能通过 getUserStatus 发现并移除。
+//   - 进程异常退出这类"状态行还在"的场景由 MarkStaleUsersOffline 负责，
+//     它置离线的顺带效果也会移出集合，因此两者在同一场景下会有交集，但互不可替代。
 func (s *CronServer) ReconcileOnlineUsers() {
 	now := timex.Now()
 	ctx := context.Background()
@@ -157,6 +168,57 @@ func (s *CronServer) ReconcileOnlineUsers() {
 	}
 
 	logx.Infof("ReconcileOnlineUsers end, total: %d, removed: %d, cost: %v", len(members), removed, timex.Since(now))
+}
+
+// MarkStaleUsersOffline 清扫僵尸在线状态：把超过 ZombieThresholdMs 未心跳的在线快照行置为离线。
+// 置离线会同步刷新 Redis、清理全局在线集合，并向订阅者补发 1304 通知，
+// 覆盖进程异常退出（kill -9 / OOM）或网络分区导致 onConnRemove 未执行的情况。
+//
+// 与 ReconcileOnlineUsers 的分工：
+//   - 本任务负责「业务状态修复」：写回 DB 离线状态、清理 Redis、补发 1304；
+//   - 只有本任务会向订阅者发状态变更通知，对账任务不会，因此不会重复通知；
+//   - 本任务只扫 status=1 的状态行，状态行已被 TTL 删除、仅剩集合成员的场景由
+//     ReconcileOnlineUsers 兜底。
+func (s *CronServer) MarkStaleUsersOffline() {
+	now := timex.Now()
+	cutoff := now.Add(-time.Duration(usermodel.ZombieThresholdMs) * time.Millisecond)
+	ctx := context.Background()
+
+	total := 0
+	for round := 0; round < staleStatusSweepRounds; round++ {
+		resp, err := s.userService.GetStaleOnlineStatuses(ctx, &pbuser.GetStaleOnlineStatusesReq{
+			LastSeenBefore: cutoff.UnixMilli(),
+			Limit:          staleStatusSweepBatch,
+		})
+		if err != nil {
+			logx.Errorf("MarkStaleUsersOffline query stale statuses failed, err: %v", err)
+			break
+		}
+		staleList := resp.GetStatus()
+		if len(staleList) == 0 {
+			break
+		}
+
+		statuses := make([]*pbuser.UserOnlineStatus, 0, len(staleList))
+		for _, st := range staleList {
+			statuses = append(statuses, &pbuser.UserOnlineStatus{
+				UserID:   st.GetUserID(),
+				ConnID:   st.GetConnID(),
+				DeviceID: st.GetDeviceID(),
+				Offline:  []int32{st.GetPlatformID()},
+			})
+		}
+		if _, err := s.userService.SetUserOnlineStatus(ctx, &pbuser.SetUserOnlineStatusReq{Status: statuses}); err != nil {
+			logx.Errorf("MarkStaleUsersOffline mark offline failed, count: %d, err: %v", len(statuses), err)
+			break
+		}
+		total += len(statuses)
+		if len(staleList) < staleStatusSweepBatch {
+			break
+		}
+	}
+
+	logx.Infof("MarkStaleUsersOffline end, total: %d, cost: %v", total, timex.Since(now))
 }
 
 // CleanExpiredTokens 清理 token 索引 ZSet 中的僵尸数据：

@@ -518,11 +518,10 @@ func (m *cachedUserModel) SetUserOnlineStatus(ctx context.Context, statuses []*m
 		}
 		for _, member := range pu.offline {
 			if _, ok := pu.online[member]; !ok {
+				// SetOffline 内部只在 ZSET 真正清空时才删 key / 置 nil 标记 / 移出全局在线集合，
+				// 不能在此无条件 SetNilMarker：同一用户的其他平台可能仍然在线。
 				m.userStatus.SetOffline(ctx, userID, ParsePlatformZMember(member))
 			}
-		}
-		if len(pu.online) == 0 && len(pu.offline) > 0 {
-			m.userStatus.SetNilMarker(ctx, userID)
 		}
 	}
 

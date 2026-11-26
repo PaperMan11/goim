@@ -62,6 +62,8 @@ type UserService interface {
 	SetUserOnlineStatus(ctx context.Context, in *pbuser.SetUserOnlineStatusReq, opts ...grpc.CallOption) (*pbuser.SetUserOnlineStatusResp, error)
 	// 获取所有在线用户
 	GetAllOnlineUsers(ctx context.Context, in *pbuser.GetAllOnlineUsersReq, opts ...grpc.CallOption) (*pbuser.GetAllOnlineUsersResp, error)
+	// 获取心跳超时的在线状态行（im-cron 兜底清扫）
+	GetStaleOnlineStatuses(ctx context.Context, in *pbuser.GetStaleOnlineStatusesReq, opts ...grpc.CallOption) (*pbuser.GetStaleOnlineStatusesResp, error)
 	// 获取用户客户端配置
 	GetUserClientConfig(ctx context.Context, in *pbuser.GetUserClientConfigReq, opts ...grpc.CallOption) (*pbuser.GetUserClientConfigResp, error)
 	// 设置用户客户端配置
@@ -240,6 +242,12 @@ func (s *defaultUserService) GetAllOnlineUsers(ctx context.Context, in *pbuser.G
 	return userClient.GetAllOnlineUsers(ctx, in, opts...)
 }
 
+// 获取心跳超时的在线状态行（im-cron 兜底清扫）
+func (s *defaultUserService) GetStaleOnlineStatuses(ctx context.Context, in *pbuser.GetStaleOnlineStatusesReq, opts ...grpc.CallOption) (*pbuser.GetStaleOnlineStatusesResp, error) {
+	userClient := pbuser.NewUserClient(s.cli.Conn())
+	return userClient.GetStaleOnlineStatuses(ctx, in, opts...)
+}
+
 // 获取用户客户端配置
 func (s *defaultUserService) GetUserClientConfig(ctx context.Context, in *pbuser.GetUserClientConfigReq, opts ...grpc.CallOption) (*pbuser.GetUserClientConfigResp, error) {
 	userClient := pbuser.NewUserClient(s.cli.Conn())
@@ -408,6 +416,11 @@ func (s *stubUserService) SetUserOnlineStatus(ctx context.Context, in *pbuser.Se
 // 获取所有在线用户
 func (s *stubUserService) GetAllOnlineUsers(ctx context.Context, in *pbuser.GetAllOnlineUsersReq, opts ...grpc.CallOption) (*pbuser.GetAllOnlineUsersResp, error) {
 	return &pbuser.GetAllOnlineUsersResp{}, nil
+}
+
+// 获取心跳超时的在线状态行（im-cron 兜底清扫）
+func (s *stubUserService) GetStaleOnlineStatuses(ctx context.Context, in *pbuser.GetStaleOnlineStatusesReq, opts ...grpc.CallOption) (*pbuser.GetStaleOnlineStatusesResp, error) {
+	return &pbuser.GetStaleOnlineStatusesResp{}, nil
 }
 
 // 获取用户客户端配置

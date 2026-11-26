@@ -24,15 +24,18 @@ type HubServerConf struct {
 }
 
 type WsServerConf struct {
-	Host          string `json:",default=0.0.0.0"`
-	Port          int    `json:",default=50003"`
-	MaxConns      int64  `json:",default=1024096"`
-	MaxMsgSize    int64  `json:",default=1024096"` // 最大消息大小
-	WriteWait     int64  `json:",default=10"`      // 写入超时时间
-	PongWait      int64  `json:",default=60"`      // 读取超时时间
-	PingPeriod    int64  `json:",default=5"`       // 心跳周期
-	EnableAuth    bool   `json:",default=true"`    // 是否开启认证，默认开启
-	LoginStrategy LoginStrategyConf
+	Host       string `json:",default=0.0.0.0"`
+	Port       int    `json:",default=50003"`
+	MaxConns   int64  `json:",default=1024096"`
+	MaxMsgSize int64  `json:",default=1024096"` // 最大消息大小
+	WriteWait  int64  `json:",default=10"`      // 写入超时时间
+	PongWait   int64  `json:",default=60"`      // 读取超时时间
+	PingPeriod int64  `json:",default=5"`       // 心跳周期
+	// StatusHeartbeatSeconds 在线状态续期周期（秒）：定期把本网关存活连接的用户状态
+	// 重新写回 user-rpc，刷新 last_seen_at / Redis score。<=0 关闭。
+	StatusHeartbeatSeconds int64 `json:",default=30"`
+	EnableAuth             bool  `json:",default=true"` // 是否开启认证，默认开启
+	LoginStrategy          LoginStrategyConf
 }
 
 type LoginStrategyConf = loginstrategy.LoginStrategyConf

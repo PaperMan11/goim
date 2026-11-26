@@ -73,6 +73,10 @@ func (s *UserServer) SetUserStatus(ctx context.Context, req *pbuser.SetUserStatu
 	return logic.NewLogic(ctx, s.svcCtx).SetUserStatus(ctx, req)
 }
 
+func (s *UserServer) GetStaleOnlineStatuses(ctx context.Context, req *pbuser.GetStaleOnlineStatusesReq) (*pbuser.GetStaleOnlineStatusesResp, error) {
+	return logic.NewLogic(ctx, s.svcCtx).GetStaleOnlineStatuses(ctx, req)
+}
+
 func (s *UserServer) ProcessUserCommandAdd(ctx context.Context, req *pbuser.ProcessUserCommandAddReq) (*pbuser.ProcessUserCommandAddResp, error) {
 	return logic.NewLogic(ctx, s.svcCtx).ProcessUserCommandAdd(ctx, req)
 }

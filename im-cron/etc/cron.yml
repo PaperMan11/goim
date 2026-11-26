@@ -18,6 +18,8 @@ CronTask:
   DestructMsgIntervalSeconds: 300
   # 在线用户集合对账间隔（秒），默认 300
   OnlineReconcileIntervalSeconds: 300
+  # 僵尸在线状态清扫间隔（秒），默认 60；<=0 关闭
+  StaleStatusSweepIntervalSeconds: 60
 
 Redis:
   Host: 127.0.0.1:6379

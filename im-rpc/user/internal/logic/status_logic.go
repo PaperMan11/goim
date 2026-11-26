@@ -9,6 +9,7 @@ import (
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	usermodel "github.com/PaperMan11/goim/pkg/storage/mongo/user"
 	"github.com/PaperMan11/goim/pkg/utils/timex"
 )
 
@@ -157,10 +158,14 @@ func (l *Logic) SetUserStatus(ctx context.Context, req *pbuser.SetUserStatusReq)
 	return &pbuser.SetUserStatusResp{}, nil
 }
 
+// userStatusOnlineLease 在线快照的租约：网关每 30s 心跳续期一次，
+// 租约只需覆盖连续多次漏心跳；进程异常退出后由 Mongo TTL 索引兜底清理。
+const userStatusOnlineLease = 10 * time.Minute
+
 func (l *Logic) SetUserOnlineStatus(ctx context.Context, req *pbuser.SetUserOnlineStatusReq) (*pbuser.SetUserOnlineStatusResp, error) {
 	var statuses []*model.UserStatus
 	now := timex.Now()
-	expireAt := now.Add(24 * time.Hour)
+	expireAt := now.Add(userStatusOnlineLease)
 
 	for _, status := range req.GetStatus() {
 		userID := status.GetUserID()
@@ -204,6 +209,12 @@ func (l *Logic) SetUserOnlineStatus(ctx context.Context, req *pbuser.SetUserOnli
 		return nil, err
 	}
 
+	// 心跳静默续期只刷新在线快照，不向订阅者重复推送状态变更。
+	if req.GetSilent() {
+		l.Debugf("heartbeat refresh online status, statusCount: %d", len(statuses))
+		return &pbuser.SetUserOnlineStatusResp{}, nil
+	}
+
 	l.Infof("set user online status success, statusCount: %d", len(statuses))
 
 	for _, status := range req.GetStatus() {
@@ -215,6 +226,33 @@ func (l *Logic) SetUserOnlineStatus(ctx context.Context, req *pbuser.SetUserOnli
 		}
 	}
 	return &pbuser.SetUserOnlineStatusResp{}, nil
+}
+
+// GetStaleOnlineStatuses 返回心跳超时的在线状态行，供 im-cron 兜底清扫。
+// 超过 ZombieThresholdMs 未续期的心跳视为进程已异常退出（kill -9 / OOM）或网络分区。
+func (l *Logic) GetStaleOnlineStatuses(ctx context.Context, req *pbuser.GetStaleOnlineStatusesReq) (*pbuser.GetStaleOnlineStatusesResp, error) {
+	lastSeenBefore := timex.ParseUnixMilli(req.GetLastSeenBefore())
+	if lastSeenBefore.IsZero() {
+		lastSeenBefore = timex.Now().Add(-time.Duration(usermodel.ZombieThresholdMs) * time.Millisecond)
+	}
+
+	rows, err := l.svcCtx.UserModel.GetStaleOnlineStatuses(ctx, lastSeenBefore, req.GetLimit())
+	if err != nil {
+		l.Errorf("get stale online statuses failed, lastSeenBefore: %d, err: %v", req.GetLastSeenBefore(), err)
+		return nil, errx.InternalError.WrapWithError(err)
+	}
+
+	statusList := make([]*pbuser.StaleOnlineStatus, 0, len(rows))
+	for _, r := range rows {
+		statusList = append(statusList, &pbuser.StaleOnlineStatus{
+			UserID:     r.UserID,
+			DeviceID:   r.DeviceID,
+			ConnID:     r.ConnID,
+			PlatformID: int32(r.PlatformID),
+			LastSeenAt: r.LastSeenAt.UnixMilli(),
+		})
+	}
+	return &pbuser.GetStaleOnlineStatusesResp{Status: statusList}, nil
 }
 
 // notifyUserStatusChanged 向订阅了该用户在线状态的所有订阅者投递 1304 通知。

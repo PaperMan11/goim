@@ -133,6 +133,10 @@ func (s *stubUserModel) SetUserOnlineStatus(_ context.Context, statuses []*model
 
 func (s *stubUserModel) GetAllOnlineUsers(context.Context) ([]string, error) { return nil, nil }
 
+func (s *stubUserModel) GetStaleOnlineStatuses(context.Context, time.Time, int64) ([]*model.UserStatus, error) {
+	return nil, nil
+}
+
 func (s *stubUserModel) SubscribeUsersStatus(context.Context, string, []string, bool) error {
 	panic("not implemented")
 }

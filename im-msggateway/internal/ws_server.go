@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/PaperMan11/goim/pkg/apiresp"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
@@ -48,7 +50,12 @@ type wsServer struct {
 	userService     userservice.UserService
 	messagePipeline *MessagePipeline
 	webhookManager  *webhooks.Manager
+	stopCh          chan struct{}
+	stopOnce        sync.Once
 }
+
+// statusHeartbeatBatchSize 单次心跳续期 RPC 携带的最大连接数，避免单请求过大。
+const statusHeartbeatBatchSize = 200
 
 func NewWsServer(config *WsServerConf, pipeline *MessagePipeline, webhookManager *webhooks.Manager,
 	authService authservice.AuthService,
@@ -67,6 +74,7 @@ func NewWsServer(config *WsServerConf, pipeline *MessagePipeline, webhookManager
 		userService:     userService,
 		messagePipeline: pipeline,
 		webhookManager:  webhookManager,
+		stopCh:          make(chan struct{}),
 	}
 	s.connManager = NewConnManager(config.MaxConns, config.LoginStrategy,
 		WithOnRemove(s.onConnRemove),
@@ -84,11 +92,13 @@ func (s *wsServer) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.Config().Host, s.Config().Port)
 	s.server = &http.Server{Addr: addr, Handler: mux}
 	s.webhookManager.Start()
+	go s.statusHeartbeatLoop()
 	logx.Infof("WebSocket server starting on %s:%d", s.Config().Host, s.Config().Port)
 	return s.server.ListenAndServe()
 }
 
 func (s *wsServer) Stop() (err error) {
+	s.stopOnce.Do(func() { close(s.stopCh) })
 	s.connManager.CloseAll()
 	s.connManager.Stop()
 	s.webhookManager.Stop()
@@ -97,6 +107,69 @@ func (s *wsServer) Stop() (err error) {
 		err = s.server.Shutdown(context.Background())
 	}
 	return err
+}
+
+// statusHeartbeatLoop 周期性把本网关存活连接对应的用户在线状态写回 user-rpc。
+// 作用：刷新 Mongo 的 last_seen_at 与 Redis score，使得进程异常退出（kill -9、OOM）
+// 后状态能在 ZombieThresholdMs 内自动判定为离线，而不是长期"幽灵在线"。
+func (s *wsServer) statusHeartbeatLoop() {
+	interval := s.config.StatusHeartbeatSeconds
+	if interval <= 0 || s.userService == nil {
+		return
+	}
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.refreshOnlineStatus()
+		}
+	}
+}
+
+func (s *wsServer) refreshOnlineStatus() {
+	conns := s.connManager.GetAll()
+	if len(conns) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	batch := make([]*pbuser.UserOnlineStatus, 0, statusHeartbeatBatchSize)
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		_, err := s.userService.SetUserOnlineStatus(ctx, &pbuser.SetUserOnlineStatusReq{
+			Status: batch,
+			Silent: true,
+		})
+		if err != nil {
+			logx.Errorf("refresh online status failed, connCount: %d, err: %v", len(batch), err)
+		}
+		batch = make([]*pbuser.UserOnlineStatus, 0, statusHeartbeatBatchSize)
+	}
+
+	for _, conn := range conns {
+		handshakeInfo := conn.Context().HandshakeInfo()
+		userID := handshakeInfo.GetUserID()
+		if userID == "" {
+			continue
+		}
+		batch = append(batch, &pbuser.UserOnlineStatus{
+			UserID:   userID,
+			ConnID:   conn.ID(),
+			DeviceID: handshakeInfo.GetDeviceID(),
+			Online:   []int32{handshakeInfo.GetPlatformID()},
+		})
+		if len(batch) >= statusHeartbeatBatchSize {
+			flush()
+		}
+	}
+	flush()
 }
 
 func (s *wsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {

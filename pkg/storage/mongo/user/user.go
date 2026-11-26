@@ -7,6 +7,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/protocol/constant"
 	"github.com/PaperMan11/goim/pkg/storage/model"
+	"github.com/PaperMan11/goim/pkg/utils/timex"
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/stores/mon"
 	"github.com/zeromicro/go-zero/core/syncx"
@@ -45,6 +46,9 @@ type UserModel interface {
 	// SetUserOnlineStatus 批量 upsert 用户在线状态快照。
 	SetUserOnlineStatus(ctx context.Context, statuses []*model.UserStatus) error
 	GetAllOnlineUsers(ctx context.Context) ([]string, error)
+	// GetStaleOnlineStatuses 返回 last_seen_at 早于指定时间点的在线行（僵尸连接），
+	// 供兜底清扫任务将它们置为离线。
+	GetStaleOnlineStatuses(ctx context.Context, lastSeenBefore time.Time, limit int64) ([]*model.UserStatus, error)
 
 	// SubscribeUsersStatus 订阅/取消订阅目标用户的在线状态。
 	SubscribeUsersStatus(ctx context.Context, subscriberUserID string, targetUserIDs []string, subscribe bool) error
@@ -537,8 +541,21 @@ func (m *defaultUserModel) UpdateUserStatus(ctx context.Context, userID string, 
 }
 
 func (m *defaultUserModel) GetUserStatus(ctx context.Context, userIDs []string) ([]*model.UserStatus, error) {
+	if len(userIDs) == 0 {
+		return []*model.UserStatus{}, nil
+	}
+	// 在线行必须同时满足"status=1 且 recently heartbeat"：
+	// 服务进程异常退出后心跳停止，Redis 缓存过期，此处若仍按 status=1 返回，
+	// 幽灵在线会一直持续到 expire_at 被 TTL 索引删除。离线行不受时间约束。
+	filter := bson.M{
+		"user_id": bson.M{"$in": userIDs},
+		"$or": []bson.M{
+			{"status": bson.M{"$ne": 1}},
+			{"last_seen_at": bson.M{"$gte": staleStatusCutoff(timex.Now())}},
+		},
+	}
 	var statuses []*model.UserStatus
-	cursor, err := m.statusMod.Collection.Find(ctx, bson.M{"user_id": bson.M{"$in": userIDs}})
+	cursor, err := m.statusMod.Collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -620,11 +637,14 @@ func (m *defaultUserModel) SetUserOnlineStatus(ctx context.Context, statuses []*
 
 // GetAllOnlineUsers 返回当前所有「在线」用户 ID（去重后）。
 //
-// 注意：这里只看 status==1 的快照行。如果服务进程异常崩溃导致状态行未及时清理，
-// 引入定时任务 TTL/心跳机制自动清理僵尸「假在线」记录。
+// 只统计 status==1 且最近有心跳的记录：服务进程异常退出时心跳中断，
+// 超过 ZombieThresholdMs 的快照行不再算在线，避免长期幽灵在线。
 func (m *defaultUserModel) GetAllOnlineUsers(ctx context.Context) ([]string, error) {
 	var statuses []*model.UserStatus
-	cursor, err := m.statusMod.Collection.Find(ctx, bson.M{"status": 1})
+	cursor, err := m.statusMod.Collection.Find(ctx, bson.M{
+		"status":       1,
+		"last_seen_at": bson.M{"$gte": staleStatusCutoff(timex.Now())},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -643,6 +663,41 @@ func (m *defaultUserModel) GetAllOnlineUsers(ctx context.Context) ([]string, err
 		userIDs = append(userIDs, s.UserID)
 	}
 	return userIDs, nil
+}
+
+// GetStaleOnlineStatuses 返回 last_seen_at 早于 lastSeenBefore 的在线行（僵尸连接）。
+// 按 last_seen_at 升序返回，方便兜底任务从最老的记录开始清理。
+func (m *defaultUserModel) GetStaleOnlineStatuses(ctx context.Context, lastSeenBefore time.Time, limit int64) ([]*model.UserStatus, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	cursor, err := m.statusMod.Collection.Find(ctx,
+		bson.M{
+			"status": 1,
+			"$or": []bson.M{
+				{"last_seen_at": bson.M{"$lt": lastSeenBefore}},
+				{"last_seen_at": bson.M{"$exists": false}},
+			},
+		},
+		options.Find().
+			SetSort(bson.D{{Key: "last_seen_at", Value: 1}}).
+			SetLimit(limit),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var statuses []*model.UserStatus
+	if err := cursor.All(ctx, &statuses); err != nil {
+		return nil, err
+	}
+	return statuses, nil
+}
+
+// staleStatusCutoff 返回判定在线行是否已失去心跳的时间下界。
+func staleStatusCutoff(now time.Time) time.Time {
+	return now.Add(-time.Duration(ZombieThresholdMs) * time.Millisecond)
 }
 
 // SubscribeUsersStatus 写入/删除订阅关系（Redis 双向集合，便于按被订阅人查订阅者、按订阅人查订阅列表）。
