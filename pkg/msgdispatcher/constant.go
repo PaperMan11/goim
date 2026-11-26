@@ -110,7 +110,9 @@ func BuildContentTypeMap(n *Notification) map[int32]*NotificationConfig {
 		constant.ConversationChangeNotification:           &n.ConversationChanged,
 		constant.ConversationUnreadNotification:           &n.ConversationChanged,
 		constant.ConversationPrivateChatNotification:      &n.ConversationSetPrivate,
-		// 撤回/删除通知需落库：客户端依赖它更新本地已缓存消息的撤回/删除状态。
+		// 撤回/删除通知需持久化以支持离线补拉，但落在独立通知会话（n_）：
+		// 原消息槽位上的 Revoke/Deleted 是事实源，通知只是可重放的状态变更信号；
+		// 独立会话有自己的 seq，不占聊天会话 seq、不进聊天历史与会话摘要。
 		constant.MsgRevokeNotification:  {IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
 		constant.DeleteMsgsNotification: {IsSendMsg: false, ReliabilityLevel: constant.ReliableNotificationNoMsg, UnreadCount: false},
 		// 已读回执不落库：已读位置已记录在 SeqUser 上，客户端可直接查询；

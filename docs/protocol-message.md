@@ -568,6 +568,8 @@
 {"userID":"user_001","conversationID":"si_user_001_user_002","seqs":[41,42]}
 ```
 
+2101/2102 作为状态变更信号持久化在独立通知会话（`n_<会话>`）中，有自己的 seq，不占聊天会话 seq、不进聊天历史与会话摘要。`GetMaxSeq` 会同时返回通知会话的 maxSeq，客户端同步时补拉 `NotificationMsgs`，并按 `seq`/`clientMsgID` 就地更新已有消息；已撤回/已删除的原消息在拉取聊天历史时也会被服务端改写为对应状态（撤回为 2101 + `MessageRevokedContent`）。
+
 **2200 已读回执** — MarkAsReadTips：
 
 ```json

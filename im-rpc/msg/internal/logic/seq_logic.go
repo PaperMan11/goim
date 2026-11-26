@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 
+	"github.com/PaperMan11/goim/pkg/msgprocessor"
 	pbconv "github.com/PaperMan11/goim/pkg/protocol/conversation"
 	pbmsg "github.com/PaperMan11/goim/pkg/protocol/msg"
 	"github.com/PaperMan11/goim/pkg/protocol/sdkws"
@@ -20,6 +21,31 @@ func (l *Logic) GetMaxSeq(ctx context.Context, req *sdkws.GetMaxSeqReq) (*sdkws.
 		return nil, err
 	}
 	conversationIDs := resp.ConversationIDs
+	// 撤回/删除等状态通知持久化在独立通知会话（n_）中，必须一并返回其 maxSeq，
+	// 客户端增量同步才能补拉掉线期间错过的通知；通知会话不进入会话列表。
+	selfNotifyConvID := msgprocessor.GetSelfNotificationConversationID(req.UserID)
+	convIDSet := make(map[string]struct{}, len(conversationIDs)*2+1)
+	syncConvIDs := make([]string, 0, len(conversationIDs)*2+1)
+	addConvID := func(convID string) {
+		if convID == "" {
+			return
+		}
+		if _, ok := convIDSet[convID]; ok {
+			return
+		}
+		convIDSet[convID] = struct{}{}
+		syncConvIDs = append(syncConvIDs, convID)
+	}
+	for _, convID := range conversationIDs {
+		addConvID(convID)
+	}
+	for _, convID := range conversationIDs {
+		addConvID(msgprocessor.GetNotificationConversationID(convID))
+	}
+	// 仅对自己可见的删除通知以 sendID == recvID 发出，统一落在 n_<uid>_<uid>，
+	// 它不属于任何聊天会话、也无法从会话列表反推，必须显式补充，否则离线期间拉不到。
+	addConvID(selfNotifyConvID)
+	conversationIDs = syncConvIDs
 	if len(conversationIDs) == 0 {
 		return &sdkws.GetMaxSeqResp{
 			MaxSeqs: map[string]int64{},
@@ -49,7 +75,13 @@ func (l *Logic) GetMaxSeq(ctx context.Context, req *sdkws.GetMaxSeqReq) (*sdkws.
 		if us := userSeqs[convID]; us != nil {
 			userMax, userMin = us.MaxSeq, us.MinSeq
 		}
-		maxSeqs[convID] = sequser.EffectiveMaxSeq(userMax, convMax)
+		maxSeq := sequser.EffectiveMaxSeq(userMax, convMax)
+		// 自同步通知会话在产生第一条通知前没有任何 seq，不下发，
+		// 避免客户端为一个空的 n_ 会话建立本地记录。
+		if convID == selfNotifyConvID && maxSeq <= 0 {
+			continue
+		}
+		maxSeqs[convID] = maxSeq
 		minSeqs[convID] = sequser.EffectiveMinSeq(userMin, convMin)
 	}
 	return &sdkws.GetMaxSeqResp{

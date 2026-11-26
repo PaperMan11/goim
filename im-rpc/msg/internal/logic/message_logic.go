@@ -87,13 +87,15 @@ func (l *Logic) sendSingleChatMsg(ctx context.Context, msgData *sdkws.MsgData) e
 		return err
 	}
 
-	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
-	isAllowed, err := l.isRecvMsgAllowed(ctx, msgData.RecvID, conversationID, msgData)
-	if err != nil {
-		return err
-	}
-	if !isAllowed {
-		return fmt.Errorf("user %s is not allowed to send message to user %s", msgData.SendID, msgData.RecvID)
+	conversationID := msgprocessor.GetRoutingConversationID(msgData)
+	if !msgprocessor.IsNotification(conversationID) {
+		isAllowed, err := l.isRecvMsgAllowed(ctx, msgData.RecvID, conversationID, msgData)
+		if err != nil {
+			return err
+		}
+		if !isAllowed {
+			return fmt.Errorf("user %s is not allowed to send message to user %s", msgData.SendID, msgData.RecvID)
+		}
 	}
 
 	return l.dispatchUserMsg(ctx, conversationID, msgData)
@@ -104,7 +106,7 @@ func (l *Logic) sendReadGroupChatMsg(ctx context.Context, msgData *sdkws.MsgData
 		return err
 	}
 
-	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
+	conversationID := msgprocessor.GetRoutingConversationID(msgData)
 	return l.dispatchUserMsg(ctx, conversationID, msgData)
 }
 
@@ -155,8 +157,11 @@ func (l *Logic) commitUserMsgSync(ctx context.Context, conversationID string, ms
 	if err := l.insertMsgIdempotent(ctx, conversationID, msgData); err != nil {
 		return err
 	}
-	if err := l.ensureConversationsForMsgs(ctx, conversationID, []*sdkws.MsgData{msgData}); err != nil {
-		return err
+	// 通知会话（n_）只承载状态变更，不写入用户会话列表，跳过会话创建。
+	if !msgprocessor.IsNotification(conversationID) {
+		if err := l.ensureConversationsForMsgs(ctx, conversationID, []*sdkws.MsgData{msgData}); err != nil {
+			return err
+		}
 	}
 	if err := l.advanceConversationCursor(ctx, conversationID, []*sdkws.MsgData{msgData}); err != nil {
 		return errx.DatabaseError.WrapWithError(err)
@@ -568,34 +573,43 @@ func (l *Logic) handleDeletedAndRevoked(userID string, msgs []*model.MsgInfoMode
 			continue
 		}
 		if msg.Revoke != nil {
-			msg.Msg.ContentType = constant.MsgRevokeNotification
-			revokeContent := &sdkws.MessageRevokedContent{
-				RevokerID:                   msg.Revoke.UserID,
-				RevokerRole:                 msg.Revoke.Role,
-				ClientMsgID:                 msg.Msg.ClientMsgID,
-				RevokerNickname:             msg.Revoke.Nickname,
-				RevokeTime:                  msg.Revoke.Time,
-				SourceMessageSendTime:       msg.Msg.SendTime,
-				SourceMessageSendID:         msg.Msg.SendID,
-				SourceMessageSenderNickname: msg.Msg.SenderNickname,
-				SessionType:                 msg.Msg.SessionType,
-				Seq:                         msg.Msg.Seq,
-				Ex:                          msg.Msg.Ex,
-			}
-			revokeContentJson, err := json.Marshal(revokeContent)
+			msg.Msg.ContentType = constant.Revoke
+			msg.Msg.Status = constant.MsgStatusHasDeleted
+			content, err := buildRevokeNotificationContent(msg)
 			if err != nil {
-				l.Errorf("marshal revoke content failed, err: %v, revokeContent: %+v", err, revokeContent)
+				l.Errorf("marshal revoke notification failed, err: %v, seq: %d", err, msg.Msg.Seq)
 				continue
 			}
-			elem := &sdkws.NotificationElem{Detail: string(revokeContentJson)}
-			jsonStr, err := json.Marshal(elem)
-			if err != nil {
-				l.Errorf("marshal notification elem failed, err: %v, elem: %+v", err, elem)
-				continue
-			}
-			msg.Msg.Content = string(jsonStr)
+			msg.Msg.Content = content
 		}
 	}
+}
+
+// buildRevokeNotificationContent 把撤回信息组装为 2101 通知内容（NotificationElem.detail）。
+// 拉取历史与会话摘要共用同一结构，客户端只需一套解析逻辑。
+func buildRevokeNotificationContent(msg *model.MsgInfoModel) (string, error) {
+	revokeContent := &sdkws.MessageRevokedContent{
+		RevokerID:                   msg.Revoke.UserID,
+		RevokerRole:                 msg.Revoke.Role,
+		ClientMsgID:                 msg.Msg.ClientMsgID,
+		RevokerNickname:             msg.Revoke.Nickname,
+		RevokeTime:                  msg.Revoke.Time,
+		SourceMessageSendTime:       msg.Msg.SendTime,
+		SourceMessageSendID:         msg.Msg.SendID,
+		SourceMessageSenderNickname: msg.Msg.SenderNickname,
+		SessionType:                 msg.Msg.SessionType,
+		Seq:                         msg.Msg.Seq,
+		Ex:                          msg.Msg.Ex,
+	}
+	detail, err := json.Marshal(revokeContent)
+	if err != nil {
+		return "", err
+	}
+	encoded, err := json.Marshal(&sdkws.NotificationElem{Detail: string(detail)})
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
 }
 
 // handleQuote 处理引用消息：若被引用消息已被撤回，把引用体改写为撤回通知，
@@ -722,9 +736,18 @@ func (l *Logic) GetMsgByConversationIDs(ctx context.Context, req *pbmsg.GetMsgBy
 			}
 			if dbMsg != nil {
 				sdkMsg := mconvert.ModelToPbMsgData(dbMsg.Msg)
-				if dbMsg.Deleted {
+				switch {
+				case dbMsg.Deleted:
 					sdkMsg.Content = ""
 					sdkMsg.Status = constant.MsgStatusHasDeleted
+				case dbMsg.Revoke != nil:
+					// 末条消息被撤回时，摘要同步改写为撤回提示，避免会话列表继续展示原内容。
+					sdkMsg.ContentType = constant.MsgRevokeNotification
+					if content, err := buildRevokeNotificationContent(dbMsg); err != nil {
+						l.Errorf("marshal revoke notification failed, err: %v, seq: %d", err, maxSeq)
+					} else {
+						sdkMsg.Content = content
+					}
 				}
 				msgDatas[convID] = sdkMsg
 			}

@@ -66,7 +66,7 @@ func (mt *MsgTransfer) consumeMsg(ctx context.Context, msg queuex.Message) error
 	// push 不进攒批：toPushTopic 本就逐条投递，攒批对 push 零收益纯延迟，
 	// 且 push 不应被落库路径（RPC/produce）阻塞。msg-transfer-topic 按会话 key
 	// 哈希分区，同会话消息串行到达，此处直接推送可保证同会话推送顺序。
-	conversationID := msgprocessor.GetChatConversationIDByMsg(msgData)
+	conversationID := msgprocessor.GetRoutingConversationID(msgData)
 	fixNotifyOptions(msgData)
 
 	// seq 必须在 push 前分配，推送消息才能携带 seq，且分配顺序与推送顺序、
@@ -103,7 +103,7 @@ func fixNotifyOptions(msg *sdkws.MsgData) {
 
 func (mt *MsgTransfer) batchHandleMsg(conversationID string, msgs []*sdkws.MsgData) {
 	ctx := withOperationID(context.Background(), "")
- 	// 用户消息已改为 msg.rpc 发送路径同步落库（写通），不再经过本服务；
+	// 用户消息已改为 msg.rpc 发送路径同步落库（写通），不再经过本服务；
 	// 到达这里的仅剩通知消息与 typing 等非持久化用户消息。
 	// read receipt 以非持久化消息发出，仍走本管道处理
 	mt.handleReadReceipt(ctx, msgs)
