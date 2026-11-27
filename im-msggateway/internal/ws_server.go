@@ -10,6 +10,7 @@ import (
 
 	"github.com/PaperMan11/goim/pkg/apiresp"
 	"github.com/PaperMan11/goim/pkg/apiresp/errx"
+	"github.com/PaperMan11/goim/pkg/mcontext"
 	"github.com/PaperMan11/goim/pkg/metrics"
 	pbauth "github.com/PaperMan11/goim/pkg/protocol/auth"
 	pbuser "github.com/PaperMan11/goim/pkg/protocol/user"
@@ -135,7 +136,8 @@ func (s *wsServer) refreshOnlineStatus() {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	operationID := mcontext.NewOperationID("ws_status_heartbeat")
+	ctx, cancel := context.WithTimeout(mcontext.SetOperationIDInContext(context.Background(), operationID), 10*time.Second)
 	defer cancel()
 
 	batch := make([]*pbuser.UserOnlineStatus, 0, statusHeartbeatBatchSize)

@@ -182,10 +182,10 @@ func (s *CronServer) ReconcileOnlineUsers() {
 func (s *CronServer) MarkStaleUsersOffline() {
 	now := timex.Now()
 	cutoff := now.Add(-time.Duration(usermodel.ZombieThresholdMs) * time.Millisecond)
-	ctx := context.Background()
-
 	total := 0
+	operationID := mcontext.NewOperationID("cron_mark_stale_users_offline")
 	for round := 0; round < staleStatusSweepRounds; round++ {
+		ctx := mcontext.SetOperationIDInContext(context.Background(), fmt.Sprintf("%s:%d", operationID, round))
 		resp, err := s.userService.GetStaleOnlineStatuses(ctx, &pbuser.GetStaleOnlineStatusesReq{
 			LastSeenBefore: cutoff.UnixMilli(),
 			Limit:          staleStatusSweepBatch,
