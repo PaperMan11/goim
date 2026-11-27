@@ -616,6 +616,8 @@
 | 仅在线自定义 | false | false | false | false | false | false |
 | 系统通知（可靠） | true | true | true | false | true | false |
 
+> 撤回/删除（2101/2102）使用 `ReliableNotificationNoMsg`（history=true、persistent=true）保证可补拉，但消息会路由到独立通知会话 `n_<会话>`，不计入聊天会话历史、摘要与未读；客户端按 tips 就地更新原消息。
+
 ---
 
 ## 6. 场景完整示例

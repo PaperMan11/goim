@@ -344,6 +344,7 @@ message PushMessages {
 
 - 普通消息放入 `msgs`，通知消息（会话 ID 前缀 `n_`）放入 `notificationMsgs`；
 - 每条推送可携带多条 `MsgData`；
+- 撤回/删除 tips（2101/2102）持久化在 `n_` 通知会话，客户端须按 tips 携带的原会话 ID / seq / clientMsgID 就地更新，不能追加为新消息；
 - 推送无需客户端应答，客户端按本地 seq 校验缺口后触发 1002 拉取补齐。
 
 #### 2002 WSKickOnlineMsg — 踢下线

@@ -124,3 +124,38 @@ return nil
 | `im-rpc/conversation/internal/logic/conversation_logic.go` | `CreateSingleChatConversations` 等通知触发点 |
 | `im-rpc/msg/internal/logic/message_logic.go` | `SendMsg`/`requireSelfOrAdmin`、首聊建会话调用点 |
 | `im-rpc/msg/internal/svc/service_context.go` | seq 分配器（`GetMaxSeqFn` 兜底） |
+| `pkg/msgprocessor/conversation.go` | 通知会话 ID 映射与 2101/2102 路由（`GetRoutingConversationID`） |
+| `im-rpc/msg/internal/logic/seq_logic.go` | `GetMaxSeq` 附带 `n_` 通知会话的 maxSeq |
+
+## 7. 消息状态通知的落点（2026-11-27）
+
+### 7.1 背景
+
+撤回/删除（2101/2102）原实现按原会话类型走普通消息链路，占用聊天会话 seq，并在接收方形成“通知消息 + 原消息改写”两条气泡；改为不落库后，又出现“已同步过原消息、掉线期间撤回”无法补拉的可靠性缺口。
+
+### 7.2 决策
+
+采用 OpenIM 式**独立通知会话**：
+
+| 决策点 | 选择 |
+|---|---|
+| 落库 | 保留 `ReliableNotificationNoMsg`（必须可补拉），但落点是 `n_<会话>`，不是聊天会话 |
+| 会话映射 | `si_a_b → n_a_b`、`g_x/sg_x → n_x`（`GetNotificationConversationID`） |
+| 路由 | 仅 2101/2102 使用 `GetRoutingConversationID` 走 `n_`，其余通知保持原会话不变 |
+| 会话列表 | `commitUserMsgSync` 对 `n_` 跳过建会话，只分配 seq、落库、推进游标 |
+| 同步 | `GetMaxSeq` 追加 `n_` 的 maxSeq/minSeq；客户端拉取 `NotificationMsgs`，解析 tips 后就地标记撤回/删除 |
+| 历史 | 拉取聊天历史时仍由 `handleDeletedAndRevoked` 把原消息改写为 2101 / 已删除，冷启动可收敛 |
+
+### 7.3 为什么不直接落聊天会话
+
+- 占用聊天 seq、污染会话历史与会话摘要；
+- 接收方会同时看到“通知气泡”和“原消息已撤回”，必须依赖客户端去重；
+- 落 `n_` 后通知仍有独立 seq 可补拉，同时聊天会话的 seq / 摘要只由真实消息推进。
+
+### 7.4 验证
+
+- 在线：撤回后只收到 1 条状态更新，无通知气泡；
+- 离线：接收方已同步原消息后断线，撤回发生，重连同步应把原消息标记为已撤回；
+- 会话摘要：末条消息被撤回后，会话列表展示撤回提示；
+- `GetMaxSeq` 返回值应包含对应 `n_` 会话（seq 为 0 的会话可忽略）。
+
