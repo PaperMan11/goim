@@ -126,9 +126,11 @@ func (x *GetAdminTokenResp) GetExpireTimeSeconds() int64 {
 }
 
 type ForceLogoutReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlatformID    int32                  `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
-	UserID        string                 `protobuf:"bytes,2,opt,name=userID,proto3" json:"userID,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	PlatformID int32                  `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
+	UserID     string                 `protobuf:"bytes,2,opt,name=userID,proto3" json:"userID,omitempty"`
+	// 设备ID列表；非空时只踢这些设备的连接
+	DeviceIDs     []string `protobuf:"bytes,3,rep,name=deviceIDs,proto3" json:"deviceIDs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -175,6 +177,13 @@ func (x *ForceLogoutReq) GetUserID() string {
 		return x.UserID
 	}
 	return ""
+}
+
+func (x *ForceLogoutReq) GetDeviceIDs() []string {
+	if x != nil {
+		return x.DeviceIDs
+	}
+	return nil
 }
 
 type ForceLogoutResp struct {
@@ -703,12 +712,13 @@ const file_auth_auth_proto_rawDesc = "" +
 	"\x06userID\x18\x03 \x01(\tR\x06userID\"W\n" +
 	"\x11getAdminTokenResp\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12,\n" +
-	"\x11expireTimeSeconds\x18\x03 \x01(\x03R\x11expireTimeSeconds\"H\n" +
+	"\x11expireTimeSeconds\x18\x03 \x01(\x03R\x11expireTimeSeconds\"f\n" +
 	"\x0eforceLogoutReq\x12\x1e\n" +
 	"\n" +
 	"platformID\x18\x01 \x01(\x05R\n" +
 	"platformID\x12\x16\n" +
-	"\x06userID\x18\x02 \x01(\tR\x06userID\"\x11\n" +
+	"\x06userID\x18\x02 \x01(\tR\x06userID\x12\x1c\n" +
+	"\tdeviceIDs\x18\x03 \x03(\tR\tdeviceIDs\"\x11\n" +
 	"\x0fforceLogoutResp\"%\n" +
 	"\rparseTokenReq\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"v\n" +

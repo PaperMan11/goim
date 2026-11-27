@@ -16,6 +16,8 @@ message getAdminTokenResp {
 message forceLogoutReq {
   int32 platformID = 1;
   string userID = 2;
+  // 设备ID列表；非空时只踢这些设备的连接
+  repeated string deviceIDs = 3;
 }
 
 message forceLogoutResp {}

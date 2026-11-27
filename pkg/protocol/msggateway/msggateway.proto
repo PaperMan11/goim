@@ -121,6 +121,8 @@ message KickUserOfflineReq {
   int32 platformID = 1;
   // 要踢下线的用户ID列表
   repeated string kickUserIDList = 2;
+  // 设备ID列表；非空时只踢这些设备的连接（与 platformID 同时生效）
+  repeated string deviceIDs = 3;
 }
 
 // 踢用户下线响应

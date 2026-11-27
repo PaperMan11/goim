@@ -218,18 +218,31 @@ func (h *HubServer) SuperGroupOnlineBatchPushOneMsg(ctx context.Context, req *pb
 }
 
 func (h *HubServer) KickUserOffline(ctx context.Context, req *pbmsggateway.KickUserOfflineReq) (*pbmsggateway.KickUserOfflineResp, error) {
+	devices := make(map[string]struct{}, len(req.DeviceIDs))
+	for _, deviceID := range req.DeviceIDs {
+		if deviceID != "" {
+			devices[deviceID] = struct{}{}
+		}
+	}
 	totalKicked := 0
 	for _, userID := range req.KickUserIDList {
 		userConns := h.wsServer.GetUserConnections(userID)
 		for _, conn := range userConns {
-			if req.PlatformID == 0 || conn.Context().HandshakeInfo().GetPlatformID() == req.PlatformID {
-				h.wsServer.Kick(conn)
-				totalKicked++
+			if req.PlatformID != 0 && conn.Context().HandshakeInfo().GetPlatformID() != req.PlatformID {
+				continue
 			}
+			// 指定设备时只踢匹配的连接，避免误伤同平台其他设备。
+			if len(devices) > 0 {
+				if _, ok := devices[conn.Context().HandshakeInfo().GetDeviceID()]; !ok {
+					continue
+				}
+			}
+			h.wsServer.Kick(conn)
+			totalKicked++
 		}
 	}
-	logc.Infof(ctx, "kick user offline success, userCount: %d, platformID: %d, kickedConns: %d",
-		len(req.KickUserIDList), req.PlatformID, totalKicked)
+	logc.Infof(ctx, "kick user offline success, userCount: %d, platformID: %d, deviceCount: %d, kickedConns: %d",
+		len(req.KickUserIDList), req.PlatformID, len(devices), totalKicked)
 	return &pbmsggateway.KickUserOfflineResp{}, nil
 }
 

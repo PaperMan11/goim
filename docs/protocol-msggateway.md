@@ -407,7 +407,7 @@ MsgGateway              Client B
 | `replace` | 替换登录 | 新连接替换所有旧连接 |
 | `replace_same_platform` | 同平台替换 | 仅踢掉相同 platformID 的旧连接 |
 
-被踢连接收到 `2002 WSKickOnlineMsg` 后被移除。管理端也可通过 msggateway RPC `KickUserOffline`（可指定 platformID，0 表示全部平台）主动踢人。
+被踢连接收到 `2002 WSKickOnlineMsg` 后被移除。管理端也可通过 msggateway RPC `KickUserOffline`（可指定 platformID，0 表示全部平台；可指定 deviceIDs，非空时只踢匹配设备）主动踢人。
 
 平台互斥分组见附录 A（Mobile / PC / Pad 等终端类型）。
 

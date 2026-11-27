@@ -8460,6 +8460,13 @@
             "format": "int32",
             "description": "平台ID"
           },
+          "deviceIDs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "设备ID列表；非空时只踢这些设备的连接"
+          },
           "userID": {
             "type": "string",
             "description": "用户ID"

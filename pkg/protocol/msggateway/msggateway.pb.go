@@ -588,8 +588,10 @@ type KickUserOfflineReq struct {
 	PlatformID int32 `protobuf:"varint,1,opt,name=platformID,proto3" json:"platformID,omitempty"`
 	// 要踢下线的用户ID列表
 	KickUserIDList []string `protobuf:"bytes,2,rep,name=kickUserIDList,proto3" json:"kickUserIDList,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 设备ID列表；非空时只踢这些设备的连接（与 platformID 同时生效）
+	DeviceIDs     []string `protobuf:"bytes,3,rep,name=deviceIDs,proto3" json:"deviceIDs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *KickUserOfflineReq) Reset() {
@@ -632,6 +634,13 @@ func (x *KickUserOfflineReq) GetPlatformID() int32 {
 func (x *KickUserOfflineReq) GetKickUserIDList() []string {
 	if x != nil {
 		return x.KickUserIDList
+	}
+	return nil
+}
+
+func (x *KickUserOfflineReq) GetDeviceIDs() []string {
+	if x != nil {
+		return x.DeviceIDs
 	}
 	return nil
 }
@@ -1011,12 +1020,13 @@ const file_msggateway_msggateway_proto_rawDesc = "" +
 	"platformID\x18\x01 \x01(\x05R\n" +
 	"platformID\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x14\n" +
-	"\x05token\x18\x03 \x03(\tR\x05token\"\\\n" +
+	"\x05token\x18\x03 \x03(\tR\x05token\"z\n" +
 	"\x12KickUserOfflineReq\x12\x1e\n" +
 	"\n" +
 	"platformID\x18\x01 \x01(\x05R\n" +
 	"platformID\x12&\n" +
-	"\x0ekickUserIDList\x18\x02 \x03(\tR\x0ekickUserIDList\"\x15\n" +
+	"\x0ekickUserIDList\x18\x02 \x03(\tR\x0ekickUserIDList\x12\x1c\n" +
+	"\tdeviceIDs\x18\x03 \x03(\tR\tdeviceIDs\"\x15\n" +
 	"\x13KickUserOfflineResp\"j\n" +
 	"\x1aMultiTerminalLoginCheckReq\x12\x16\n" +
 	"\x06userID\x18\x01 \x01(\tR\x06userID\x12\x1e\n" +

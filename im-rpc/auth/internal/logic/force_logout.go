@@ -29,10 +29,13 @@ func (l *ForceLogoutLogic) ForceLogout(req *auth.ForceLogoutReq) (*auth.ForceLog
 		return nil, err
 	}
 
-	// kick user offline
+	// kick user offline（可按设备精确踢）
+	// deviceIDs 非空时只断开这些设备的连接；token 仍按 platformID 整体失效，
+	// 因此同平台其他设备连接不断，但重连时需重新换取 token。
 	_, err := l.svcCtx.MsgGatewayService.KickUserOffline(l.ctx, &pbmsggateway.KickUserOfflineReq{
 		PlatformID:     req.PlatformID,
 		KickUserIDList: []string{req.UserID},
+		DeviceIDs:      req.DeviceIDs,
 	})
 	if err != nil {
 		l.Errorf("failed to kick user offline, platformID: %s, userID: %s, err: %v", req.PlatformID, req.UserID, err)
@@ -46,6 +49,6 @@ func (l *ForceLogoutLogic) ForceLogout(req *auth.ForceLogoutReq) (*auth.ForceLog
 		return nil, err
 	}
 
-	l.Infof("force logout success, platformID: %s, userID: %s", req.PlatformID, req.UserID)
+	l.Infof("force logout success, platformID: %d, userID: %s, deviceIDs: %v", req.PlatformID, req.UserID, req.DeviceIDs)
 	return &auth.ForceLogoutResp{}, nil
 }
