@@ -73,6 +73,7 @@ var (
 	MutedInGroup          = NewErrInfo(ErrCodeMutedInGroup, "member muted in the group")
 	MutedGroup            = NewErrInfo(ErrCodeMutedGroup, "group is muted")
 	MessageAlreadyRevoke  = NewErrInfo(ErrCodeMsgAlreadyRevoke, "message already revoked")
+	MessageRevokeExpired  = NewErrInfo(ErrCodeMsgRevokeExpired, "revoke window exceeded")
 
 	// Token error codes.
 	TokenExpiredError     = NewErrInfo(ErrCodeTokenExpiredError, "token expired")

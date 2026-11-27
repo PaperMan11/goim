@@ -779,6 +779,18 @@ func (l *Logic) GetLastMessage(ctx context.Context, req *pbmsg.GetLastMessageReq
 	}, nil
 }
 
+// revokeWindow 本人撤回自己消息的时间窗口（微信同款 2 分钟）。
+// 管理员/群主代撤他人消息不受此限制，由 RevokeMsg 的角色校验单独把关。
+const revokeWindow = 2 * time.Minute
+
+// checkRevokeWindow 校验本人撤回时限；sendTime 缺失（历史数据）时不拦截。
+func checkRevokeWindow(sendTime, now int64) error {
+	if sendTime <= 0 || now-sendTime <= revokeWindow.Milliseconds() {
+		return nil
+	}
+	return errx.MessageRevokeExpired.Wrap("only messages sent within 2 minutes can be revoked")
+}
+
 func (l *Logic) RevokeMsg(ctx context.Context, req *pbmsg.RevokeMsgReq) (*pbmsg.RevokeMsgResp, error) {
 	if err := l.requireSelfOrAdmin(req.UserID); err != nil {
 		l.Errorf("require self or admin failed, err: %v, userID: %s, conversationID: %s",
@@ -799,6 +811,15 @@ func (l *Logic) RevokeMsg(ctx context.Context, req *pbmsg.RevokeMsgReq) (*pbmsg.
 	if err != nil {
 		l.Errorf("find msg by seq failed, err: %v, conversationID: %s, seq: %d", err, req.ConversationID, req.Seq)
 		return nil, err
+	}
+
+	// 本人撤回自己的消息需在 2 分钟内；管理员/群主代撤他人消息豁免时限
+	if req.UserID == dbMsg.SendID {
+		if err := checkRevokeWindow(dbMsg.SendTime, timex.UnixMilli()); err != nil {
+			l.Errorf("revoke window exceeded, err: %v, userID: %s, conversationID: %s, seq: %d, sendTime: %d",
+				err, req.UserID, req.ConversationID, req.Seq, dbMsg.SendTime)
+			return nil, err
+		}
 	}
 
 	var role int32

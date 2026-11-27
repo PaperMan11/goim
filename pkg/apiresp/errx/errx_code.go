@@ -73,6 +73,7 @@ const (
 	ErrCodeMutedInGroup          = 1402 // Member muted in the group
 	ErrCodeMutedGroup            = 1403 // Group is muted
 	ErrCodeMsgAlreadyRevoke      = 1404 // Message already revoked
+	ErrCodeMsgRevokeExpired      = 1405 // Revoke window exceeded
 
 	// Token error codes.
 	ErrCodeTokenExpiredError     = 1501

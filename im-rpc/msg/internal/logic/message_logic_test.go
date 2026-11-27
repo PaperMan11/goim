@@ -382,3 +382,21 @@ func TestSendMsgRespCarriesSeqAndConversationID(t *testing.T) {
 		t.Fatalf("resp.ConversationID = %q, want %q", resp.GetConversationID(), want)
 	}
 }
+
+// 撤回时限：本人 2 分钟内可撤，超时返回 1405；sendTime 缺失（历史数据）放行
+func TestCheckRevokeWindow(t *testing.T) {
+	now := int64(1_700_000_000_000)
+	window := revokeWindow.Milliseconds()
+
+	if err := checkRevokeWindow(now-window, now); err != nil {
+		t.Fatalf("恰好 2 分钟边界应允许撤回，err: %v", err)
+	}
+	if err := checkRevokeWindow(now-window-1, now); err == nil {
+		t.Fatal("超过 2 分钟应拒绝撤回")
+	} else if got := errx.ParseError(err).Code; got != errx.ErrCodeMsgRevokeExpired {
+		t.Fatalf("errCode = %d, want %d (MsgRevokeExpired)", got, errx.ErrCodeMsgRevokeExpired)
+	}
+	if err := checkRevokeWindow(0, now); err != nil {
+		t.Fatalf("sendTime 缺失时不应拦截，err: %v", err)
+	}
+}
